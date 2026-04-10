@@ -1,0 +1,5 @@
+{
+  "name": "Grand Slam Bracket Manager",
+  "description": "Interactive mobile-first tournament bracket manager for the four tennis majors (Australian Open, French Open, Wimbledon, US Open).",
+  "requestFramePermissions": []
+}
