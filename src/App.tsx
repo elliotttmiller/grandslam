@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo, useRef, useCallback, PointerEvent, TouchEvent } from 'react';
 import { tournaments } from './lib/mock-data';
-import { fetchTournamentPlayers } from './services/geminiService';
+import { fetchTournamentPlayers, clearPlayerCache } from './services/geminiService';
 import { generateBracket, advancePlayer, Match, Player } from './lib/bracket-utils';
+import { assetUrl, APP_BACKGROUND_COLOR } from './lib/utils';
 import { BracketTree } from './components/Bracket';
 import { Button } from './components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import {
   RefreshCw, ZoomIn, ZoomOut, Share2, Download,
-  ChevronLeft, ChevronRight, MoreHorizontal, Menu, X, Trophy
+  ChevronLeft, ChevronRight, MoreHorizontal, Menu, X, Trophy, RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -37,10 +38,18 @@ function LoadingState() {
 export default function App() {
   const [selectedTournament, setSelectedTournament] = useState(tournaments[0].id);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // `players` holds the last successfully fetched/cached player list.
+  // Keeping it in state lets "Reset Picks" regenerate the bracket without any
+  // network round-trip.
+  const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [zoom, setZoom] = useState(0.75);
   const [loading, setLoading] = useState(false);
-  const [resetKey, setResetKey] = useState(0);
+  // Incremented only on an explicit "Refresh Players" user action.
+  // Normal tournament switches use the cache.
+  const [fetchKey, setFetchKey] = useState(0);
+  // When true, the next fetch should bypass the cache (user triggered a refresh).
+  const forceRefreshRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const bracketRef = useRef<HTMLDivElement>(null);
 
@@ -123,32 +132,45 @@ export default function App() {
   }, []);
 
   // ─── Load bracket ─────────────────────────────────────────────────────────
+  // Triggered by tournament switch OR explicit user refresh (fetchKey increment).
+  // For tournament switches the service returns cached data immediately (no AI
+  // call). Only a forceRefresh bypasses the cache.
   useEffect(() => {
     let cancelled = false;
     async function initBracket() {
       setLoading(true);
+
+      // Consume the forceRefresh flag atomically so subsequent renders don't
+      // re-trigger a fresh fetch accidentally.
+      const doForceRefresh = forceRefreshRef.current;
+      forceRefreshRef.current = false;
+
       try {
         const tournament = tournaments.find(t => t.id === selectedTournament);
-        const aiPlayers = await fetchTournamentPlayers(tournament?.name ?? 'Tennis Tournament');
+        const tournamentName = tournament?.name ?? 'Tennis Tournament';
+
+        const aiPlayers = await fetchTournamentPlayers(tournamentName, {
+          forceRefresh: doForceRefresh,
+        });
         if (cancelled) return;
 
-        const players: Player[] = aiPlayers.map((p: any, i: number) => ({
+        const fetchedPlayers: Player[] = aiPlayers.map((p, i) => ({
           id: `p${i + 1}`,
           name: p.name,
           seed: p.seed,
           country: p.country,
         }));
 
-        // Fill up to 128
-        for (let i = players.length; i < 128; i++) {
-          players.push({ id: `p${i + 1}`, name: `Qualifier ${i - 31}` });
+        // Fill up to 128 with qualifiers
+        for (let i = fetchedPlayers.length; i < 128; i++) {
+          fetchedPlayers.push({ id: `p${i + 1}`, name: `Qualifier ${i - 31}` });
         }
 
-        const initialMatches = generateBracket(players);
-        setMatches(initialMatches);
+        setPlayers(fetchedPlayers);
+        setMatches(generateBracket(fetchedPlayers));
         setZoom(0.75);
 
-        // Auto-scroll to center after render
+        // Auto-scroll bracket to centre after render
         requestAnimationFrame(() => {
           if (containerRef.current && bracketRef.current) {
             const bw = bracketRef.current.scrollWidth * 0.75;
@@ -164,16 +186,39 @@ export default function App() {
     }
     initBracket();
     return () => { cancelled = true; };
-  }, [selectedTournament, resetKey]);
+  // fetchKey is included so that an explicit refresh triggers a re-run even
+  // when the selected tournament hasn't changed.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTournament, fetchKey]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
   const handleSelectWinner = useCallback((matchId: string, winnerId: string) => {
     setMatches(prev => advancePlayer(prev, matchId, winnerId));
   }, []);
 
-  const handleReset = useCallback(() => {
-    setResetKey(k => k + 1);
-  }, []);
+  /**
+   * Reset Picks — clears all winner selections and regenerates the bracket from
+   * the already-cached player list.  No network call is made.
+   */
+  const handleResetPicks = useCallback(() => {
+    if (players.length > 0) {
+      setMatches(generateBracket(players));
+    }
+  }, [players]);
+
+  /**
+   * Refresh Players — clears the cache for the current tournament and re-fetches
+   * live data from Gemini.  Only this action should trigger a real AI call after
+   * the initial load.
+   */
+  const handleRefreshPlayers = useCallback(() => {
+    const tournament = tournaments.find(t => t.id === selectedTournament);
+    if (tournament) {
+      clearPlayerCache(tournament.name);
+    }
+    forceRefreshRef.current = true;
+    setFetchKey(k => k + 1);
+  }, [selectedTournament]);
 
   const handleShare = useCallback(() => {
     const encoded = btoa(JSON.stringify(matches));
@@ -191,7 +236,7 @@ export default function App() {
         import('html2canvas'),
         import('jspdf'),
       ]);
-      const canvas = await html2canvas(bracketRef.current, { scale: 2, backgroundColor: '#0d0d0d' });
+      const canvas = await html2canvas(bracketRef.current, { scale: 2, backgroundColor: APP_BACKGROUND_COLOR });
       if (format === 'image') {
         const link = document.createElement('a');
         link.download = 'bracket.png';
@@ -241,7 +286,7 @@ export default function App() {
           {/* Centre — Logos */}
           <div className="flex items-center gap-3 sm:gap-6 flex-1 justify-center min-w-0">
             <img
-              src={`${import.meta.env.BASE_URL}logos/tennis.svg`}
+              src={assetUrl('logos/tennis.svg')}
               alt="Grand Slam"
               className="h-9 sm:h-12 w-auto transition-transform duration-500 hover:scale-110 shrink-0"
             />
@@ -249,7 +294,7 @@ export default function App() {
               {currentTournament?.logo && (
                 <motion.img
                   key={currentTournament.id}
-                  src={`${import.meta.env.BASE_URL}${currentTournament.logo.replace(/^\//, '')}`}
+                  src={assetUrl(currentTournament.logo)}
                   alt={currentTournament.name}
                   className="h-8 sm:h-11 w-auto max-w-[140px] sm:max-w-[220px] object-contain"
                   initial={{ opacity: 0, y: -8 }}
@@ -273,9 +318,12 @@ export default function App() {
                 <MoreHorizontal className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} className="w-44">
-              <DropdownMenuItem onClick={handleReset}>
-                <RefreshCw className="mr-2 h-4 w-4" /> Reset Bracket
+            <DropdownMenuContent align="end" sideOffset={8} className="w-48">
+              <DropdownMenuItem onClick={handleResetPicks}>
+                <RotateCcw className="mr-2 h-4 w-4" /> Reset Picks
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleRefreshPlayers}>
+                <RefreshCw className="mr-2 h-4 w-4" /> Refresh Players
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleShare}>
                 <Share2 className="mr-2 h-4 w-4" /> Share Link
@@ -356,7 +404,7 @@ export default function App() {
                   >
                     {t.logo && (
                       <img
-                        src={`${import.meta.env.BASE_URL}${t.logo.replace(/^\//, '')}`}
+                        src={assetUrl(t.logo)}
                         alt={t.name}
                         className="h-10 w-10 object-contain shrink-0"
                       />

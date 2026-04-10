@@ -33,9 +33,11 @@ jobs:
 
       - name: Build
         env:
-          # Set the base path to the repository name for GitHub Pages
-          VITE_BASE_PATH: /grandslam/
-          # GEMINI_API_KEY is optional — the app falls back to mock data
+          # Derive the base path from the actual repository name so this workflow
+          # works correctly even if the repository is renamed or forked.
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+          # GEMINI_API_KEY is injected from the repository secret at build time.
+          # The compiled bundle uses this key to call the Gemini API client-side.
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: npm run build
 
