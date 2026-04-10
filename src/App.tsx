@@ -170,12 +170,10 @@ export default function App() {
         setMatches(generateBracket(fetchedPlayers));
         setZoom(0.75);
 
-        // Auto-scroll bracket to centre after render
+        // Scroll to round 1 (leftmost) after render
         requestAnimationFrame(() => {
-          if (containerRef.current && bracketRef.current) {
-            const bw = bracketRef.current.scrollWidth * 0.75;
-            const vw = containerRef.current.clientWidth;
-            containerRef.current.scrollLeft = Math.max(0, (bw - vw) / 2);
+          if (containerRef.current) {
+            containerRef.current.scrollLeft = 0;
           }
         });
       } catch (error) {
@@ -289,21 +287,23 @@ export default function App() {
               src={assetUrl('logos/tennis.svg')}
               alt="Grand Slam"
               className="h-9 sm:h-12 w-auto transition-transform duration-500 hover:scale-110 shrink-0"
+              loading="eager"
             />
-            <AnimatePresence mode="wait">
+            <AnimatePresence mode="popLayout">
               {currentTournament?.logo && (
                 <motion.div
                   key={currentTournament.id}
-                  initial={{ opacity: 0, y: -8 }}
+                  initial={{ opacity: 0.01, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={{ duration: 0.3 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  transition={{ duration: 0.25 }}
                   className="flex items-center"
                 >
                   <img
                     src={assetUrl(currentTournament.logo)}
                     alt={currentTournament.name}
                     className="h-8 sm:h-11 w-auto max-w-[140px] sm:max-w-[220px] object-contain"
+                    loading="eager"
                   />
                 </motion.div>
               )}
@@ -411,6 +411,7 @@ export default function App() {
                         src={assetUrl(t.logo)}
                         alt={t.name}
                         className="h-10 w-10 object-contain shrink-0"
+                        loading="eager"
                       />
                     )}
                     <div className="flex flex-col min-w-0">
