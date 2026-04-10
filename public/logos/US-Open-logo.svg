@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 150">
+  <!-- US Open - Blue/Yellow theme -->
+  <rect width="300" height="150" fill="#002b5c" rx="10"/>
+  <rect x="5" y="5" width="290" height="140" fill="none" stroke="#f0c040" stroke-width="4" rx="8"/>
+  <text x="150" y="62" font-family="Arial, sans-serif" font-size="30" font-weight="bold" fill="white" text-anchor="middle">US OPEN</text>
+  <text x="150" y="102" font-family="Arial, sans-serif" font-size="18" fill="#f0c040" text-anchor="middle">TENNIS</text>
+  <text x="150" y="130" font-family="Arial, sans-serif" font-size="13" fill="#aac4e8" text-anchor="middle">New York · August–September</text>
+</svg>

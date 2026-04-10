@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 225">
+  <!-- Australian Open - Blue theme -->
+  <rect width="360" height="225" fill="#0057a8" rx="12"/>
+  <text x="180" y="90" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="white" text-anchor="middle">AUSTRALIAN</text>
+  <text x="180" y="130" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="white" text-anchor="middle">OPEN</text>
+  <text x="180" y="175" font-family="Arial, sans-serif" font-size="18" fill="#7ec8e3" text-anchor="middle">Melbourne · January</text>
+</svg>
