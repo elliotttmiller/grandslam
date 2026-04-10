@@ -1,6 +1,13 @@
 import { useState, useEffect, useMemo, useRef, useCallback, PointerEvent, TouchEvent } from 'react';
 import { tournaments } from './lib/mock-data';
-import { fetchTournamentPlayers, clearPlayerCache } from './services/geminiService';
+import {
+  fetchTournamentPlayers,
+  fetchTournamentSchedule,
+  getCachedSchedule,
+  clearPlayerCache,
+  clearScheduleCache,
+  TournamentScheduleEntry,
+} from './services/geminiService';
 import { generateBracket, advancePlayer, Match, Player } from './lib/bracket-utils';
 import { assetUrl, APP_BACKGROUND_COLOR } from './lib/utils';
 import { BracketTree } from './components/Bracket';
@@ -8,9 +15,77 @@ import { Button } from './components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import {
   RefreshCw, ZoomIn, ZoomOut, Share2, Download,
-  ChevronLeft, ChevronRight, MoreHorizontal, Menu, X, Trophy, RotateCcw
+  ChevronLeft, ChevronRight, MoreHorizontal, Menu, X, Trophy, RotateCcw, AlertCircle, Calendar,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+// ─── Bracket localStorage helpers ────────────────────────────────────────────
+const BRACKET_KEY_PREFIX = 'grandslam_bracket_';
+const LAST_TOURNAMENT_KEY = 'grandslam_last_tournament';
+
+interface PersistedBracket {
+  players: Player[];
+  matches: Match[];
+  savedAt: number;
+}
+
+function bracketStorageKey(tournamentId: string): string {
+  return `${BRACKET_KEY_PREFIX}${tournamentId}_${new Date().getFullYear()}`;
+}
+
+function loadPersistedBracket(tournamentId: string): PersistedBracket | null {
+  try {
+    const raw = localStorage.getItem(bracketStorageKey(tournamentId));
+    if (!raw) return null;
+    return JSON.parse(raw) as PersistedBracket;
+  } catch {
+    return null;
+  }
+}
+
+function persistBracket(tournamentId: string, players: Player[], matches: Match[]): void {
+  try {
+    const data: PersistedBracket = { players, matches, savedAt: Date.now() };
+    localStorage.setItem(bracketStorageKey(tournamentId), JSON.stringify(data));
+  } catch { /* localStorage quota — ignore */ }
+}
+
+function clearPersistedBracket(tournamentId: string): void {
+  try {
+    localStorage.removeItem(bracketStorageKey(tournamentId));
+  } catch { /* ignore */ }
+}
+
+// ─── Tournament sorting helpers ───────────────────────────────────────────────
+/**
+ * Given a schedule entry, compute the date of the next occurrence from today.
+ * If the tournament has already started this year, next occurrence = same
+ * month/day next year (approximate).
+ */
+function nextOccurrence(entry: TournamentScheduleEntry): Date {
+  const today = new Date();
+  const start = new Date(entry.startDate + 'T00:00:00');
+  // If the tournament already ended this year, treat next occurrence as ~1 year out
+  const end = new Date(entry.endDate + 'T23:59:59');
+  if (end < today) {
+    return new Date(start.getFullYear() + 1, start.getMonth(), start.getDate());
+  }
+  return start;
+}
+
+function isInProgress(entry: TournamentScheduleEntry): boolean {
+  const today = new Date();
+  const start = new Date(entry.startDate + 'T00:00:00');
+  const end   = new Date(entry.endDate   + 'T23:59:59');
+  return today >= start && today <= end;
+}
+
+function formatDateRange(startDate: string, endDate: string): string {
+  const fmt = (d: string) =>
+    new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const endFull = new Date(endDate + 'T00:00:00');
+  return `${fmt(startDate)} – ${fmt(endDate)}, ${endFull.getFullYear()}`;
+}
 
 // ─── Loading Skeleton ──────────────────────────────────────────────────────────
 function LoadingState() {
@@ -34,9 +109,23 @@ function LoadingState() {
   );
 }
 
+// ─── Error state ──────────────────────────────────────────────────────────────
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground select-none px-6 text-center">
+      <AlertCircle className="h-10 w-10 text-destructive/70" />
+      <p className="text-sm font-semibold text-destructive/80">Failed to load bracket</p>
+      <p className="text-xs max-w-xs opacity-70">{message}</p>
+    </div>
+  );
+}
+
 // ─── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [selectedTournament, setSelectedTournament] = useState(tournaments[0].id);
+  // Restore last viewed tournament from localStorage; fall back to first entry.
+  const [selectedTournament, setSelectedTournament] = useState(
+    () => localStorage.getItem(LAST_TOURNAMENT_KEY) ?? tournaments[0].id
+  );
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // `players` holds the last successfully fetched/cached player list.
   // Keeping it in state lets "Reset Picks" regenerate the bracket without any
@@ -45,6 +134,13 @@ export default function App() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [zoom, setZoom] = useState(0.75);
   const [loading, setLoading] = useState(false);
+  const [bracketError, setBracketError] = useState<string | null>(null);
+  // Tournament schedule (real dates from Gemini), sorted soonest-first.
+  const [schedule, setSchedule] = useState<TournamentScheduleEntry[]>(
+    // Warm from localStorage immediately so the sidebar renders dates on first paint.
+    () => getCachedSchedule() ?? []
+  );
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   // Incremented only on an explicit "Refresh Players" user action.
   // Normal tournament switches use the cache.
   const [fetchKey, setFetchKey] = useState(0);
@@ -131,20 +227,54 @@ export default function App() {
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
+  // ─── Persist selected tournament ────────────────────────────────────────────
+  useEffect(() => {
+    try { localStorage.setItem(LAST_TOURNAMENT_KEY, selectedTournament); } catch { /* ignore */ }
+  }, [selectedTournament]);
+
+  // ─── Load tournament schedule (real dates from Gemini) ─────────────────────
+  useEffect(() => {
+    // Only fetch if we don't already have cached data (getCachedSchedule was
+    // checked synchronously in useState initializer; if schedule is already
+    // populated we still refresh in the background so it stays up to date).
+    setScheduleLoading(true);
+    fetchTournamentSchedule()
+      .then(s => setSchedule(s))
+      .catch(err => console.warn('[App] Schedule fetch failed:', err))
+      .finally(() => setScheduleLoading(false));
+  // Run once on mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ─── Load bracket ─────────────────────────────────────────────────────────
   // Triggered by tournament switch OR explicit user refresh (fetchKey increment).
-  // For tournament switches the service returns cached data immediately (no AI
-  // call). Only a forceRefresh bypasses the cache.
   useEffect(() => {
     let cancelled = false;
-    async function initBracket() {
-      setLoading(true);
+    setBracketError(null);
 
+    async function initBracket() {
       // Consume the forceRefresh flag atomically so subsequent renders don't
       // re-trigger a fresh fetch accidentally.
       const doForceRefresh = forceRefreshRef.current;
       forceRefreshRef.current = false;
 
+      // ── Fast path: restore from localStorage ──────────────────────────────
+      if (!doForceRefresh) {
+        const saved = loadPersistedBracket(selectedTournament);
+        if (saved) {
+          if (cancelled) return;
+          setPlayers(saved.players);
+          setMatches(saved.matches);
+          setZoom(0.75);
+          requestAnimationFrame(() => {
+            if (containerRef.current) containerRef.current.scrollLeft = 0;
+          });
+          return;
+        }
+      }
+
+      // ── Slow path: fetch from Gemini ──────────────────────────────────────
+      setLoading(true);
       try {
         const tournament = tournaments.find(t => t.id === selectedTournament);
         const tournamentName = tournament?.name ?? 'Tennis Tournament';
@@ -166,18 +296,24 @@ export default function App() {
           fetchedPlayers.push({ id: `p${i + 1}`, name: `Qualifier ${i - 31}` });
         }
 
+        const newMatches = generateBracket(fetchedPlayers);
         setPlayers(fetchedPlayers);
-        setMatches(generateBracket(fetchedPlayers));
+        setMatches(newMatches);
+        // Persist so the next visit skips the Gemini call.
+        persistBracket(selectedTournament, fetchedPlayers, newMatches);
         setZoom(0.75);
 
         // Scroll to round 1 (leftmost) after render
         requestAnimationFrame(() => {
-          if (containerRef.current) {
-            containerRef.current.scrollLeft = 0;
-          }
+          if (containerRef.current) containerRef.current.scrollLeft = 0;
         });
       } catch (error) {
         console.error('Failed to generate bracket:', error);
+        if (!cancelled) {
+          setBracketError(
+            error instanceof Error ? error.message : 'Failed to load bracket data.'
+          );
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -191,8 +327,12 @@ export default function App() {
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
   const handleSelectWinner = useCallback((matchId: string, winnerId: string | null) => {
-    setMatches(prev => advancePlayer(prev, matchId, winnerId));
-  }, []);
+    setMatches(prev => {
+      const updated = advancePlayer(prev, matchId, winnerId);
+      persistBracket(selectedTournament, players, updated);
+      return updated;
+    });
+  }, [selectedTournament, players]);
 
   /**
    * Reset Picks — clears all winner selections and regenerates the bracket from
@@ -200,20 +340,23 @@ export default function App() {
    */
   const handleResetPicks = useCallback(() => {
     if (players.length > 0) {
-      setMatches(generateBracket(players));
+      const newMatches = generateBracket(players);
+      setMatches(newMatches);
+      persistBracket(selectedTournament, players, newMatches);
     }
-  }, [players]);
+  }, [players, selectedTournament]);
 
   /**
-   * Refresh Players — clears the cache for the current tournament and re-fetches
-   * live data from Gemini.  Only this action should trigger a real AI call after
-   * the initial load.
+   * Refresh Players — clears all caches for the current tournament and re-fetches
+   * live data from Gemini.  Only this action triggers a real AI call after first load.
    */
   const handleRefreshPlayers = useCallback(() => {
     const tournament = tournaments.find(t => t.id === selectedTournament);
     if (tournament) {
       clearPlayerCache(tournament.name);
     }
+    clearPersistedBracket(selectedTournament);
+    clearScheduleCache();
     forceRefreshRef.current = true;
     setFetchKey(k => k + 1);
   }, [selectedTournament]);
@@ -258,6 +401,21 @@ export default function App() {
     if (!finalMatch?.winnerId) return null;
     return finalMatch.player1?.id === finalMatch.winnerId ? finalMatch.player1 : finalMatch.player2;
   }, [finalMatch]);
+
+  // Sort tournaments by soonest next occurrence using real Gemini-fetched dates.
+  const sortedTournaments = useMemo(() => {
+    if (schedule.length === 0) return tournaments;
+    return [...tournaments]
+      .map(t => {
+        const entry = schedule.find(s => s.id === t.id);
+        return { ...t, scheduleEntry: entry ?? null };
+      })
+      .sort((a, b) => {
+        if (!a.scheduleEntry) return 1;
+        if (!b.scheduleEntry) return -1;
+        return nextOccurrence(a.scheduleEntry).getTime() - nextOccurrence(b.scheduleEntry).getTime();
+      });
+  }, [schedule]);
 
   const scroll = (dir: 'left' | 'right') => {
     if (!containerRef.current) return;
@@ -399,32 +557,52 @@ export default function App() {
               </div>
 
               <nav className="flex flex-col gap-2">
-                {tournaments.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => { setSelectedTournament(t.id); setIsSidebarOpen(false); }}
-                    className={`flex items-center gap-4 p-4 rounded-xl text-left transition-all duration-200 ${
-                      selectedTournament === t.id
-                        ? 'bg-white/10 ring-1 ring-white/20'
-                        : 'hover:bg-white/5 active:bg-white/10'
-                    }`}
-                  >
-                    {t.logo && (
-                      <img
-                        src={assetUrl(t.logo)}
-                        alt={t.name}
-                        className="h-10 w-10 object-contain shrink-0"
-                        loading="eager"
-                      />
-                    )}
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-bold text-base truncate">{t.name}</span>
-                      {selectedTournament === t.id && (
-                        <span className="text-xs text-muted-foreground">Currently viewing</span>
+                {sortedTournaments.map(t => {
+                  const se = t.scheduleEntry;
+                  const active = se ? isInProgress(se) : false;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => { setSelectedTournament(t.id); setIsSidebarOpen(false); }}
+                      className={`flex items-center gap-4 p-4 rounded-xl text-left transition-all duration-200 ${
+                        selectedTournament === t.id
+                          ? 'bg-white/10 ring-1 ring-white/20'
+                          : 'hover:bg-white/5 active:bg-white/10'
+                      }`}
+                    >
+                      {t.logo && (
+                        <img
+                          src={assetUrl(t.logo)}
+                          alt={t.name}
+                          className="h-10 w-10 object-contain shrink-0"
+                          loading="eager"
+                        />
                       )}
-                    </div>
-                  </button>
-                ))}
+                      <div className="flex flex-col min-w-0 gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-base truncate">{t.name}</span>
+                          {active && (
+                            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full border border-green-500/30">
+                              Live
+                            </span>
+                          )}
+                        </div>
+                        {se ? (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            {formatDateRange(se.startDate, se.endDate)}
+                            {se.location ? ` · ${se.location}` : ''}
+                          </span>
+                        ) : scheduleLoading ? (
+                          <span className="text-xs text-muted-foreground/50 italic">Loading dates…</span>
+                        ) : null}
+                        {selectedTournament === t.id && (
+                          <span className="text-xs text-primary/70 font-medium">Currently viewing</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </nav>
             </motion.aside>
           </>
@@ -489,6 +667,8 @@ export default function App() {
         >
           {loading ? (
             <LoadingState />
+          ) : bracketError ? (
+            <ErrorState message={bracketError} />
           ) : finalMatch ? (
             <div
               className="p-6 sm:p-10 inline-block"
