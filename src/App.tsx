@@ -10,7 +10,7 @@ import {
   RefreshCw, ZoomIn, ZoomOut, Share2, Download,
   ChevronLeft, ChevronRight, MoreHorizontal, Menu, X, Trophy, RotateCcw
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 
 // ─── Loading Skeleton ──────────────────────────────────────────────────────────
 function LoadingState() {
@@ -192,7 +192,7 @@ export default function App() {
   }, [selectedTournament, fetchKey]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
-  const handleSelectWinner = useCallback((matchId: string, winnerId: string) => {
+  const handleSelectWinner = useCallback((matchId: string, winnerId: string | null) => {
     setMatches(prev => advancePlayer(prev, matchId, winnerId));
   }, []);
 
@@ -292,16 +292,20 @@ export default function App() {
             />
             <AnimatePresence mode="wait">
               {currentTournament?.logo && (
-                <motion.img
+                <motion.div
                   key={currentTournament.id}
-                  src={assetUrl(currentTournament.logo)}
-                  alt={currentTournament.name}
-                  className="h-8 sm:h-11 w-auto max-w-[140px] sm:max-w-[220px] object-contain"
                   initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
                   transition={{ duration: 0.3 }}
-                />
+                  className="flex items-center"
+                >
+                  <img
+                    src={assetUrl(currentTournament.logo)}
+                    alt={currentTournament.name}
+                    className="h-8 sm:h-11 w-auto max-w-[140px] sm:max-w-[220px] object-contain"
+                  />
+                </motion.div>
               )}
             </AnimatePresence>
           </div>

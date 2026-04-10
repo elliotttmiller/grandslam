@@ -5,7 +5,7 @@ import { motion } from 'motion/react';
 
 interface MatchCardProps {
   match: Match;
-  onSelectWinner: (matchId: string, winnerId: string) => void;
+  onSelectWinner: (matchId: string, winnerId: string | null) => void;
 }
 
 const PlayerRow = memo(function PlayerRow({
@@ -26,7 +26,7 @@ const PlayerRow = memo(function PlayerRow({
   return (
     <button
       type="button"
-      disabled={!canSelect && !isWinner}
+      disabled={!canSelect}
       onClick={onClick}
       className={cn(
         'flex w-full items-center justify-between px-3 py-2.5 text-sm transition-all duration-200 text-left',
@@ -63,11 +63,13 @@ const PlayerRow = memo(function PlayerRow({
 });
 
 export const MatchCard = memo(function MatchCard({ match, onSelectWinner }: MatchCardProps) {
-  const canSelect = Boolean(match.player1 && match.player2 && !match.winnerId);
+  const canSelect = Boolean(match.player1 && match.player2);
 
   const handleClick = (player: Player | null) => {
     if (!player || !canSelect) return;
-    onSelectWinner(match.id, player.id);
+    // Clicking the current winner unselects it; clicking the other player changes the selection
+    const newWinnerId = player.id === match.winnerId ? null : player.id;
+    onSelectWinner(match.id, newWinnerId);
   };
 
   return (
@@ -121,7 +123,7 @@ function Connector() {
 interface BracketTreeProps {
   matchId: string;
   matches: Match[];
-  onSelectWinner: (matchId: string, winnerId: string) => void;
+  onSelectWinner: (matchId: string, winnerId: string | null) => void;
 }
 
 export function BracketTree({ matchId, matches, onSelectWinner }: BracketTreeProps) {
