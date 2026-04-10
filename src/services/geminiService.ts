@@ -156,13 +156,16 @@ function extractJsonArray(text: string): unknown[] | null {
 
 /**
  * Current date string for use in prompts, e.g. "April 10, 2026".
+ * Computed once at module load time.
  */
+const TODAY_STR = new Date().toLocaleDateString("en-US", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+
 function todayStr(): string {
-  return new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  return TODAY_STR;
 }
 
 /**
@@ -203,7 +206,7 @@ async function fetchPlayersGrounded(
 
     const text = response.text ?? "";
     const parsed = extractJsonArray(text);
-    if (parsed && parsed.length >= 16) {
+    if (parsed && parsed.length === 32) {
       return parsed as PlayerData[];
     }
     console.warn("[GeminiService] Grounded response did not contain a valid player array");
@@ -360,7 +363,7 @@ export async function fetchTournamentPlayers(
   // ── 2a. Grounded search (real-time) ───────────────────────────────────────
   console.info(`[GeminiService] Fetching "${tournamentName}" players via grounded search…`);
   const groundedPlayers = await fetchPlayersGrounded(ai, tournamentName, currentYear);
-  if (groundedPlayers && groundedPlayers.length >= 16) {
+  if (groundedPlayers && groundedPlayers.length === 32) {
     const players = groundedPlayers;
     const entry: PlayerCacheEntry = { players, fetchedAt: Date.now() };
     const key = tournamentName.toLowerCase();
