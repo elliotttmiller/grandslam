@@ -34,6 +34,8 @@ interface ScheduleCacheEntry {
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PRIMARY_MODEL = "gemini-2.5-flash-preview-04-17";
 const FALLBACK_MODEL = "gemini-2.0-flash";
+/** Model used for grounding searches (must support googleSearch tool). */
+const GROUNDING_MODEL = "gemini-2.0-flash";
 
 const PLAYER_KEY_PREFIX  = "grandslam_players_";
 const SCHEDULE_KEY       = "grandslam_schedule";
@@ -136,6 +138,85 @@ function requireApiKey(): string {
   return key;
 }
 
+/**
+ * Robustly extracts the first JSON array found anywhere in a text response.
+ * Handles markdown code fences, leading prose, etc.
+ */
+function extractJsonArray(text: string): unknown[] | null {
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(text.slice(start, end + 1));
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Current date string for use in prompts, e.g. "April 10, 2026".
+ * Computed once at module load time.
+ */
+const TODAY_STR = new Date().toLocaleDateString("en-US", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+
+function todayStr(): string {
+  return TODAY_STR;
+}
+
+/**
+ * Attempt to fetch players using a Google Search–grounded Gemini call so the
+ * model can retrieve real-time standings and seedings.  Returns null on any
+ * failure so the caller can fall back to structured-output mode.
+ */
+async function fetchPlayersGrounded(
+  ai: GoogleGenAI,
+  tournamentName: string,
+  currentYear: number
+): Promise<PlayerData[] | null> {
+  try {
+    const prompt =
+      `Today is ${todayStr()}. You are a professional tennis data analyst. ` +
+      `Your task: provide the 32 seeded players for the ${tournamentName} ${currentYear}.\n\n` +
+      `INSTRUCTIONS:\n` +
+      `1. Search for the official ${currentYear} ${tournamentName} draw or seedings if they have been announced.\n` +
+      `2. If official seedings are NOT yet available, use current ATP/WTA world rankings ` +
+      `(as of today) to produce a professional pre-tournament predicted bracket. ` +
+      `Base seedings strictly on current ranking order, noting that Grand Slam ` +
+      `seedings follow world rankings with minor surface-specific adjustments.\n` +
+      `3. Use only real, currently-active professional tennis players.\n\n` +
+      `Return ONLY a valid JSON array — no prose, no markdown fences. ` +
+      `Exactly 32 objects, each with:\n` +
+      `  "name"    — full player name (string)\n` +
+      `  "seed"    — integer 1–32\n` +
+      `  "country" — 3-letter IOC country code (string)\n` +
+      `Order the array by seed 1 through 32.`;
+
+    const response = await ai.models.generateContent({
+      model: GROUNDING_MODEL,
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+      },
+    });
+
+    const text = response.text ?? "";
+    const parsed = extractJsonArray(text);
+    if (parsed && parsed.length === 32) {
+      return parsed as PlayerData[];
+    }
+    console.warn("[GeminiService] Grounded response did not contain a valid player array");
+    return null;
+  } catch (err) {
+    console.warn("[GeminiService] Grounded player fetch failed:", err);
+    return null;
+  }
+}
+
 // ─── Tournament schedule ──────────────────────────────────────────────────────
 /**
  * Fetch the official start/end dates for all four Grand Slams in the current year.
@@ -156,9 +237,10 @@ export async function fetchTournamentSchedule(
   const ai = new GoogleGenAI({ apiKey });
   const currentYear = new Date().getFullYear();
 
-  const prompt =
-    `You are a tennis data expert. Provide the official, confirmed start and end dates ` +
-    `for all four Grand Slam tennis tournaments in ${currentYear}. ` +
+  const promptText =
+    `Today is ${todayStr()}. You are a tennis data expert. ` +
+    `Provide the official, confirmed start and end dates for all four Grand Slam ` +
+    `tennis tournaments in ${currentYear}. ` +
     `Return a JSON array of exactly 4 objects. Each object must have: ` +
     `"id" (exactly one of "ao", "rg", "wim", "uso"), ` +
     `"name" (full official tournament name), ` +
@@ -183,12 +265,37 @@ export async function fetchTournamentSchedule(
     },
   };
 
+  // ── Try grounded search first for real-time date accuracy ────────────────
+  try {
+    console.info("[GeminiService] Fetching schedule via grounded search…");
+    const groundedResponse = await ai.models.generateContent({
+      model: GROUNDING_MODEL,
+      contents: promptText + " Return ONLY a JSON array — no prose, no markdown fences.",
+      config: {
+        tools: [{ googleSearch: {} }],
+      },
+    });
+    const text = groundedResponse.text ?? "";
+    const parsed = extractJsonArray(text);
+    if (Array.isArray(parsed) && parsed.length === 4) {
+      const schedule = parsed as TournamentScheduleEntry[];
+      const entry: ScheduleCacheEntry = { schedule, fetchedAt: Date.now(), year: currentYear };
+      saveScheduleToStorage(entry);
+      console.info("[GeminiService] Schedule fetched & cached (grounded)");
+      return schedule;
+    }
+    console.warn("[GeminiService] Grounded schedule response was not 4 entries");
+  } catch (err) {
+    console.warn("[GeminiService] Grounded schedule fetch failed:", err);
+  }
+
+  // ── Fall back to structured JSON mode ─────────────────────────────────────
   for (const model of [PRIMARY_MODEL, FALLBACK_MODEL]) {
     try {
       console.info(`[GeminiService] Fetching schedule via ${model}…`);
       const response = await ai.models.generateContent({
         model,
-        contents: prompt,
+        contents: promptText,
         config: { responseMimeType: "application/json", responseSchema },
       });
       const parsed: unknown = JSON.parse(response.text ?? "[]");
@@ -214,12 +321,17 @@ export async function fetchTournamentSchedule(
 
 // ─── Player fetch ─────────────────────────────────────────────────────────────
 /**
- * Fetch the top-32 seeded players for a Grand Slam tournament from Gemini.
+ * Fetch the top-32 seeded players for a Grand Slam tournament.
+ *
+ * Strategy (most to least accurate):
+ *  1. Google Search–grounded call  → real-time seedings or predicted rankings
+ *  2. Structured JSON call (primary model) → well-formed predicted bracket
+ *  3. Structured JSON call (fallback model) → same as above
  *
  * Results are cached in memory AND localStorage (24 h TTL).
  * Pass `forceRefresh: true` only when the user explicitly triggers a refresh.
  *
- * Throws if the API key is missing or all models fail — no mock fallback.
+ * Throws if the API key is missing or all approaches fail — no mock fallback.
  */
 export async function fetchTournamentPlayers(
   tournamentName: string,
@@ -248,13 +360,33 @@ export async function fetchTournamentPlayers(
   const ai = new GoogleGenAI({ apiKey });
   const currentYear = new Date().getFullYear();
 
-  const prompt =
-    `You are a tennis data expert. List the top 32 seeded players for the ` +
-    `${tournamentName} ${currentYear} tournament. ` +
-    `If ${currentYear} seedings are not yet published, use the most recently announced seedings. ` +
-    `Return a JSON array of exactly 32 objects ordered by seed (1 = top seed). ` +
-    `Each object must have: "name" (full player name), "seed" (integer 1–32), ` +
-    `"country" (3-letter IOC country code).`;
+  // ── 2a. Grounded search (real-time) ───────────────────────────────────────
+  console.info(`[GeminiService] Fetching "${tournamentName}" players via grounded search…`);
+  const groundedPlayers = await fetchPlayersGrounded(ai, tournamentName, currentYear);
+  if (groundedPlayers && groundedPlayers.length === 32) {
+    const players = groundedPlayers;
+    const entry: PlayerCacheEntry = { players, fetchedAt: Date.now() };
+    const key = tournamentName.toLowerCase();
+    memCache.set(key, entry);
+    savePlayerToStorage(tournamentName, entry);
+    console.info(
+      `[GeminiService] Fetched & cached ${players.length} players for "${tournamentName}" (grounded)`
+    );
+    return players;
+  }
+
+  // ── 2b. Structured JSON mode (fallback) ───────────────────────────────────
+  const fallbackPrompt =
+    `Today is ${todayStr()}. You are a professional tennis data analyst. ` +
+    `Provide the 32 seeded players for the ${tournamentName} ${currentYear}.\n\n` +
+    `RULES:\n` +
+    `- If the official ${currentYear} ${tournamentName} seedings have been published, return those.\n` +
+    `- If not yet published, produce a professional PRE-TOURNAMENT PREDICTED seeding list ` +
+    `based on current ATP/WTA world rankings. Grand Slam seedings follow world rankings ` +
+    `with minor surface-based adjustments. This is a legitimate expert prediction.\n` +
+    `- Every player must be a real, currently active professional player.\n` +
+    `- Return a JSON array of exactly 32 objects ordered by seed 1–32.\n` +
+    `- Each object: "name" (full name), "seed" (integer 1–32), "country" (3-letter IOC code).`;
 
   const responseSchema = {
     type: Type.ARRAY,
@@ -274,7 +406,7 @@ export async function fetchTournamentPlayers(
       console.info(`[GeminiService] Fetching "${tournamentName}" players via ${model}…`);
       const response = await ai.models.generateContent({
         model,
-        contents: prompt,
+        contents: fallbackPrompt,
         config: { responseMimeType: "application/json", responseSchema },
       });
       const parsed: unknown = JSON.parse(response.text ?? "[]");
