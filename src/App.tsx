@@ -293,6 +293,9 @@ export default function App() {
               {currentTournament?.logo && (
                 <motion.div
                   key={currentTournament.id}
+                  // Start at near-zero (not exactly 0) so the logo is
+                  // never fully invisible if the animation is skipped (e.g.
+                  // prefers-reduced-motion) or delayed on slow devices.
                   initial={{ opacity: 0.01, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 6 }}
