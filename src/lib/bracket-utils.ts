@@ -110,7 +110,7 @@ export function generateBracket(players: Player[]): Match[] {
   return matches;
 }
 
-export function advancePlayer(matches: Match[], matchId: string, winnerId: string): Match[] {
+export function advancePlayer(matches: Match[], matchId: string, winnerId: string | null): Match[] {
   const newMatches = [...matches.map(m => ({ ...m, player1: m.player1 ? {...m.player1} : null, player2: m.player2 ? {...m.player2} : null }))];
   const matchIndex = newMatches.findIndex(m => m.id === matchId);
   if (matchIndex === -1) return newMatches;
@@ -118,9 +118,11 @@ export function advancePlayer(matches: Match[], matchId: string, winnerId: strin
   const match = newMatches[matchIndex];
   match.winnerId = winnerId;
   
-  const winner = match.player1?.id === winnerId ? match.player1 : match.player2;
+  const winner = winnerId
+    ? (match.player1?.id === winnerId ? match.player1 : match.player2)
+    : null;
   
-  if (match.nextMatchId && winner) {
+  if (match.nextMatchId) {
     const nextMatchIndex = newMatches.findIndex(m => m.id === match.nextMatchId);
     if (nextMatchIndex !== -1) {
       const nextMatch = newMatches[nextMatchIndex];
@@ -132,19 +134,18 @@ export function advancePlayer(matches: Match[], matchId: string, winnerId: strin
         nextMatch.player2 = winner;
       }
       
-      // If the next match already had a winner, we might need to reset it if the winner changed
-      // For simplicity, let's just clear the winner of the next match if the participants change
-      if (nextMatch.winnerId === winnerId) {
-        // Winner is still the same, do nothing
-      } else {
+      // If the next match already had a winner that is no longer valid, clear it and propagate
+      if (nextMatch.winnerId !== winnerId) {
+        // Save the previous winner ID before nulling so we can remove it from further downstream
+        let prevWinnerId = nextMatch.winnerId;
         nextMatch.winnerId = null;
-        // Also recursively clear subsequent matches
         let curr = nextMatch;
-        while (curr.nextMatchId) {
+        while (curr.nextMatchId && prevWinnerId) {
           const next = newMatches.find(m => m.id === curr.nextMatchId);
           if (next) {
-            if (next.player1?.id === curr.winnerId) next.player1 = null;
-            if (next.player2?.id === curr.winnerId) next.player2 = null;
+            if (next.player1?.id === prevWinnerId) next.player1 = null;
+            if (next.player2?.id === prevWinnerId) next.player2 = null;
+            prevWinnerId = next.winnerId;
             next.winnerId = null;
             curr = next;
           } else {
