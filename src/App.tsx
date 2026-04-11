@@ -1,694 +1,468 @@
-import { useState, useEffect, useMemo, useRef, useCallback, PointerEvent, TouchEvent } from 'react';
-import { tournaments } from './lib/mock-data';
-import {
-  fetchTournamentPlayers,
-  fetchTournamentSchedule,
-  getCachedSchedule,
-  clearPlayerCache,
-  clearScheduleCache,
-  TournamentScheduleEntry,
-} from './services/geminiService';
+import { useState, useEffect, useMemo, useRef, PointerEvent } from 'react';
+import { fetchTournamentPlayers, fetchTournamentsWithDates, TournamentData } from './services/geminiService';
 import { generateBracket, advancePlayer, Match, Player } from './lib/bracket-utils';
-import { assetUrl, APP_BACKGROUND_COLOR } from './lib/utils';
 import { BracketTree } from './components/Bracket';
-import { Button } from './components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
-import {
-  RefreshCw, ZoomIn, ZoomOut, Share2, Download,
-  ChevronLeft, ChevronRight, MoreHorizontal, Menu, X, Trophy, RotateCcw, AlertCircle, Calendar,
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { Button } from './components/ui/button';
+import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal, Menu, X, Trophy, Calendar } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import { motion, AnimatePresence } from 'framer-motion';
 
-// ─── Bracket localStorage helpers ────────────────────────────────────────────
-const BRACKET_KEY_PREFIX = 'grandslam_bracket_';
-const LAST_TOURNAMENT_KEY = 'grandslam_last_tournament';
-
-interface PersistedBracket {
-  players: Player[];
-  matches: Match[];
-  savedAt: number;
-}
-
-function bracketStorageKey(tournamentId: string): string {
-  return `${BRACKET_KEY_PREFIX}${tournamentId}_${new Date().getFullYear()}`;
-}
-
-function loadPersistedBracket(tournamentId: string): PersistedBracket | null {
-  try {
-    const raw = localStorage.getItem(bracketStorageKey(tournamentId));
-    if (!raw) return null;
-    return JSON.parse(raw) as PersistedBracket;
-  } catch {
-    return null;
-  }
-}
-
-function persistBracket(tournamentId: string, players: Player[], matches: Match[]): void {
-  try {
-    const data: PersistedBracket = { players, matches, savedAt: Date.now() };
-    localStorage.setItem(bracketStorageKey(tournamentId), JSON.stringify(data));
-  } catch { /* localStorage quota — ignore */ }
-}
-
-function clearPersistedBracket(tournamentId: string): void {
-  try {
-    localStorage.removeItem(bracketStorageKey(tournamentId));
-  } catch { /* ignore */ }
-}
-
-// ─── Tournament sorting helpers ───────────────────────────────────────────────
-/**
- * Given a schedule entry, compute the date of the next occurrence from today.
- * If the tournament has already started this year, next occurrence = same
- * month/day next year (approximate).
- */
-function nextOccurrence(entry: TournamentScheduleEntry): Date {
-  const today = new Date();
-  const start = new Date(entry.startDate + 'T00:00:00');
-  // If the tournament already ended this year, treat next occurrence as ~1 year out
-  const end = new Date(entry.endDate + 'T23:59:59');
-  if (end < today) {
-    return new Date(start.getFullYear() + 1, start.getMonth(), start.getDate());
-  }
-  return start;
-}
-
-function isInProgress(entry: TournamentScheduleEntry): boolean {
-  const today = new Date();
-  const start = new Date(entry.startDate + 'T00:00:00');
-  const end   = new Date(entry.endDate   + 'T23:59:59');
-  return today >= start && today <= end;
-}
-
-function formatDateRange(startDate: string, endDate: string): string {
-  const fmt = (d: string) =>
-    new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const endFull = new Date(endDate + 'T00:00:00');
-  return `${fmt(startDate)} – ${fmt(endDate)}, ${endFull.getFullYear()}`;
-}
-
-// ─── Loading Skeleton ──────────────────────────────────────────────────────────
-function LoadingState() {
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-6 text-muted-foreground select-none">
-      <motion.div
-        className="relative"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-      >
-        <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary" />
-      </motion.div>
-      <motion.p
-        className="text-sm font-medium tracking-widest uppercase"
-        animate={{ opacity: [0.4, 1, 0.4] }}
-        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-      >
-        Generating Bracket…
-      </motion.p>
-    </div>
-  );
-}
-
-// ─── Error state ──────────────────────────────────────────────────────────────
-function ErrorState({ message }: { message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground select-none px-6 text-center">
-      <AlertCircle className="h-10 w-10 text-destructive/70" />
-      <p className="text-sm font-semibold text-destructive/80">Failed to load bracket</p>
-      <p className="text-xs max-w-xs opacity-70">{message}</p>
-    </div>
-  );
-}
-
-// ─── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
-  // Restore last viewed tournament from localStorage; fall back to first entry.
-  const [selectedTournament, setSelectedTournament] = useState(
-    () => localStorage.getItem(LAST_TOURNAMENT_KEY) ?? tournaments[0].id
-  );
+  const [tournaments, setTournaments] = useState<TournamentData[]>([]);
+  const [selectedTournament, setSelectedTournament] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  // `players` holds the last successfully fetched/cached player list.
-  // Keeping it in state lets "Reset Picks" regenerate the bracket without any
-  // network round-trip.
-  const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
-  const [zoom, setZoom] = useState(0.75);
+  const [zoom, setZoom] = useState(0.8);
   const [loading, setLoading] = useState(false);
-  const [bracketError, setBracketError] = useState<string | null>(null);
-  // Tournament schedule (real dates from Gemini), sorted soonest-first.
-  const [schedule, setSchedule] = useState<TournamentScheduleEntry[]>(
-    // Warm from localStorage immediately so the sidebar renders dates on first paint.
-    () => getCachedSchedule() ?? []
-  );
-  const [scheduleLoading, setScheduleLoading] = useState(false);
-  // Incremented only on an explicit "Refresh Players" user action.
-  // Normal tournament switches use the cache.
-  const [fetchKey, setFetchKey] = useState(0);
-  // When true, the next fetch should bypass the cache (user triggered a refresh).
-  const forceRefreshRef = useRef(false);
+  const [loadingTournaments, setLoadingTournaments] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const bracketRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+  const [scrollPos, setScrollPos] = useState({ x: 0, y: 0 });
 
-  // ─── Touch / pointer panning ────────────────────────────────────────────────
-  const isDragging = useRef(false);
-  const startPos = useRef({ x: 0, y: 0 });
-  const startScroll = useRef({ x: 0, y: 0 });
-
-  const handlePointerDown = useCallback((e: PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('button, [role="button"]')) return;
-    isDragging.current = true;
-    startPos.current = { x: e.clientX, y: e.clientY };
-    startScroll.current = {
-      x: containerRef.current?.scrollLeft ?? 0,
-      y: containerRef.current?.scrollTop ?? 0,
-    };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, []);
-
-  const handlePointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
-    if (!isDragging.current || !containerRef.current) return;
-    const dx = startPos.current.x - e.clientX;
-    const dy = startPos.current.y - e.clientY;
-    containerRef.current.scrollLeft = startScroll.current.x + dx;
-    containerRef.current.scrollTop = startScroll.current.y + dy;
-  }, []);
-
-  const handlePointerUp = useCallback((e: PointerEvent<HTMLDivElement>) => {
-    isDragging.current = false;
-    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-  }, []);
-
-  // ─── Pinch-to-zoom ─────────────────────────────────────────────────────────
-  const lastPinchDist = useRef<number | null>(null);
-
-  const handleTouchMove = useCallback((e: TouchEvent<HTMLDivElement>) => {
-    if (e.touches.length !== 2) return;
-    const dx = e.touches[0].clientX - e.touches[1].clientX;
-    const dy = e.touches[0].clientY - e.touches[1].clientY;
-    const dist = Math.hypot(dx, dy);
-    if (lastPinchDist.current !== null) {
-      const delta = dist - lastPinchDist.current;
-      setZoom(z => Math.max(0.25, Math.min(2, z + delta * 0.003)));
+  // Load bracket from localStorage on mount or tournament change
+  useEffect(() => {
+    if (!selectedTournament) return;
+    const saved = localStorage.getItem(`bracket_state_${selectedTournament}`);
+    if (saved) {
+      setMatches(JSON.parse(saved));
     }
-    lastPinchDist.current = dist;
-  }, []);
-
-  const handleTouchEnd = useCallback(() => {
-    lastPinchDist.current = null;
-  }, []);
-
-  // ─── Keyboard pan / zoom ───────────────────────────────────────────────────
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!containerRef.current) return;
-      const step = 200;
-      if (e.key === 'ArrowLeft') containerRef.current.scrollLeft -= step;
-      if (e.key === 'ArrowRight') containerRef.current.scrollLeft += step;
-      if (e.key === 'ArrowUp') containerRef.current.scrollTop -= step;
-      if (e.key === 'ArrowDown') containerRef.current.scrollTop += step;
-      if (e.key === '+' || e.key === '=') setZoom(z => Math.min(z + 0.15, 2));
-      if (e.key === '-') setZoom(z => Math.max(z - 0.15, 0.25));
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-
-  // ─── Wheel zoom ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setZoom(z => Math.max(0.25, Math.min(2, z + delta)));
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, []);
-
-  // ─── Persist selected tournament ────────────────────────────────────────────
-  useEffect(() => {
-    try { localStorage.setItem(LAST_TOURNAMENT_KEY, selectedTournament); } catch { /* ignore */ }
   }, [selectedTournament]);
 
-  // ─── Load tournament schedule (real dates from Gemini) ─────────────────────
+  // Save bracket to localStorage whenever matches change
   useEffect(() => {
-    // Only fetch if we don't already have cached data (getCachedSchedule was
-    // checked synchronously in useState initializer; if schedule is already
-    // populated we still refresh in the background so it stays up to date).
-    setScheduleLoading(true);
-    fetchTournamentSchedule()
-      .then(s => setSchedule(s))
-      .catch(err => console.warn('[App] Schedule fetch failed:', err))
-      .finally(() => setScheduleLoading(false));
-  // Run once on mount.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (selectedTournament && matches.length > 0) {
+      localStorage.setItem(`bracket_state_${selectedTournament}`, JSON.stringify(matches));
+    }
+  }, [matches, selectedTournament]);
+
+  // Fetch tournaments on mount
+  useEffect(() => {
+    async function initTournaments() {
+      setLoadingTournaments(true);
+      try {
+        const data = await fetchTournamentsWithDates();
+        // Sort by closest date to today
+        const now = new Date();
+        const sorted = data.sort((a, b) => {
+          const dateA = new Date(a.startDate);
+          const dateB = new Date(b.startDate);
+          
+          // If date is in the past, move it further down
+          const diffA = dateA.getTime() - now.getTime();
+          const diffB = dateB.getTime() - now.getTime();
+          
+          if (diffA < 0 && diffB >= 0) return 1;
+          if (diffA >= 0 && diffB < 0) return -1;
+          
+          return Math.abs(diffA) - Math.abs(diffB);
+        });
+        
+        setTournaments(sorted);
+        
+        // Handle shared bracket from URL
+        const params = new URLSearchParams(window.location.search);
+        const shared = params.get('shared');
+        let initialTournamentId = sorted.length > 0 ? sorted[0].id : null;
+        
+        if (shared) {
+          try {
+            const decoded = decodeURIComponent(atob(shared));
+            const parsed = JSON.parse(decoded);
+            if (parsed.tournamentId && parsed.matches) {
+              localStorage.setItem(`bracket_state_${parsed.tournamentId}`, JSON.stringify(parsed.matches));
+              initialTournamentId = parsed.tournamentId;
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          } catch (e) {
+            console.error("Failed to parse shared bracket:", e);
+          }
+        }
+        
+        if (initialTournamentId) {
+          setSelectedTournament(initialTournamentId);
+        }
+      } catch (error) {
+        console.error("Failed to fetch tournaments:", error);
+      } finally {
+        setLoadingTournaments(false);
+      }
+    }
+    initTournaments();
   }, []);
 
-  // ─── Load bracket ─────────────────────────────────────────────────────────
-  // Triggered by tournament switch OR explicit user refresh (fetchKey increment).
+  // Initialize bracket with AI
   useEffect(() => {
-    let cancelled = false;
-    setBracketError(null);
-
+    if (!selectedTournament) return;
+    
     async function initBracket() {
-      // Consume the forceRefresh flag atomically so subsequent renders don't
-      // re-trigger a fresh fetch accidentally.
-      const doForceRefresh = forceRefreshRef.current;
-      forceRefreshRef.current = false;
-
-      // ── Fast path: restore from localStorage ──────────────────────────────
-      if (!doForceRefresh) {
-        const saved = loadPersistedBracket(selectedTournament);
-        if (saved) {
-          if (cancelled) return;
-          setPlayers(saved.players);
-          setMatches(saved.matches);
-          setZoom(0.75);
-          requestAnimationFrame(() => {
-            if (containerRef.current) containerRef.current.scrollLeft = 0;
-          });
-          return;
-        }
+      // If we already have matches for this tournament from localStorage, don't fetch from AI
+      const saved = localStorage.getItem(`bracket_state_${selectedTournament}`);
+      if (saved) {
+        setMatches(JSON.parse(saved));
+        return;
       }
 
-      // ── Slow path: fetch from Gemini ──────────────────────────────────────
       setLoading(true);
       try {
         const tournament = tournaments.find(t => t.id === selectedTournament);
-        const tournamentName = tournament?.name ?? 'Tennis Tournament';
-
-        const aiPlayers = await fetchTournamentPlayers(tournamentName, {
-          forceRefresh: doForceRefresh,
-        });
-        if (cancelled) return;
-
-        const fetchedPlayers: Player[] = aiPlayers.map((p, i) => ({
+        const aiPlayers = await fetchTournamentPlayers(tournament?.name || 'Tennis Tournament');
+        
+        // Add unseeded players to reach 128
+        const players: Player[] = aiPlayers.map((p: any, i: number) => ({
           id: `p${i + 1}`,
           name: p.name,
           seed: p.seed,
           country: p.country,
         }));
-
-        // Fill up to 128 with qualifiers
-        for (let i = fetchedPlayers.length; i < 128; i++) {
-          fetchedPlayers.push({ id: `p${i + 1}`, name: `Qualifier ${i - 31}` });
-        }
-
-        const newMatches = generateBracket(fetchedPlayers);
-        setPlayers(fetchedPlayers);
-        setMatches(newMatches);
-        // Persist so the next visit skips the Gemini call.
-        persistBracket(selectedTournament, fetchedPlayers, newMatches);
-        setZoom(0.75);
-
-        // Scroll to round 1 (leftmost) after render
-        requestAnimationFrame(() => {
-          if (containerRef.current) containerRef.current.scrollLeft = 0;
-        });
+        
+        const initialMatches = generateBracket(players);
+        setMatches(initialMatches);
+        setZoom(0.8);
       } catch (error) {
-        console.error('Failed to generate bracket:', error);
-        if (!cancelled) {
-          setBracketError(
-            error instanceof Error ? error.message : 'Failed to load bracket data.'
-          );
-        }
+        console.error("Failed to fetch players:", error);
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     }
     initBracket();
-    return () => { cancelled = true; };
-  // fetchKey is included so that an explicit refresh triggers a re-run even
-  // when the selected tournament hasn't changed.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTournament, fetchKey]);
+  }, [selectedTournament, tournaments]);
 
-  // ─── Handlers ─────────────────────────────────────────────────────────────
-  const handleSelectWinner = useCallback((matchId: string, winnerId: string | null) => {
-    setMatches(prev => {
-      const updated = advancePlayer(prev, matchId, winnerId);
-      persistBracket(selectedTournament, players, updated);
-      return updated;
-    });
-  }, [selectedTournament, players]);
+  const handleSelectWinner = (matchId: string, winnerId: string) => {
+    setMatches(prev => advancePlayer(prev, matchId, winnerId));
+  };
 
-  /**
-   * Reset Picks — clears all winner selections and regenerates the bracket from
-   * the already-cached player list.  No network call is made.
-   */
-  const handleResetPicks = useCallback(() => {
-    if (players.length > 0) {
-      const newMatches = generateBracket(players);
-      setMatches(newMatches);
-      persistBracket(selectedTournament, players, newMatches);
+  const handleReset = () => {
+    if (selectedTournament) {
+      localStorage.removeItem(`bracket_state_${selectedTournament}`);
+      // Also clear the player cache for this tournament to force a fresh AI search
+      const tournament = tournaments.find(t => t.id === selectedTournament);
+      if (tournament) {
+        const cacheKey = `tennis_players_cache_v5_${tournament.name.replace(/\s+/g, '_').toLowerCase()}`;
+        localStorage.removeItem(cacheKey);
+      }
+      
+      // Force a re-fetch by temporarily clearing the selected tournament
+      setMatches([]);
+      const current = selectedTournament;
+      setSelectedTournament(null);
+      setTimeout(() => setSelectedTournament(current), 10);
     }
-  }, [players, selectedTournament]);
+  };
 
-  /**
-   * Refresh Players — clears all caches for the current tournament and re-fetches
-   * live data from Gemini.  Only this action triggers a real AI call after first load.
-   */
-  const handleRefreshPlayers = useCallback(() => {
-    const tournament = tournaments.find(t => t.id === selectedTournament);
-    if (tournament) {
-      clearPlayerCache(tournament.name);
-    }
-    clearPersistedBracket(selectedTournament);
-    clearScheduleCache();
-    forceRefreshRef.current = true;
-    setFetchKey(k => k + 1);
-  }, [selectedTournament]);
+  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
+    const toast = document.createElement('div');
+    const bg = type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-blue-600';
+    toast.className = `fixed bottom-6 right-6 ${bg} text-white px-4 py-3 rounded-lg shadow-xl z-50 transition-all duration-300 transform translate-y-0 opacity-100 font-medium text-sm flex items-center gap-2`;
+    toast.innerHTML = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(10px)';
+      setTimeout(() => document.body.removeChild(toast), 300);
+    }, 3000);
+  };
 
-  const handleShare = useCallback(() => {
-    const encoded = btoa(JSON.stringify(matches));
-    const url = `${window.location.origin}${window.location.pathname}?bracket=${encoded}`;
-    navigator.clipboard.writeText(url).then(() => alert('Bracket link copied!')).catch(() => {
-      prompt('Copy this link:', url);
-    });
-  }, [matches]);
-
-  const handleExport = useCallback(async (format: 'image' | 'pdf') => {
-    if (!bracketRef.current) return;
+  const handleShare = async () => {
     try {
-      // Dynamically import heavy export libraries to keep initial bundle small
-      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-        import('html2canvas'),
-        import('jspdf'),
-      ]);
-      const canvas = await html2canvas(bracketRef.current, { scale: 2, backgroundColor: APP_BACKGROUND_COLOR });
+      const state = JSON.stringify({
+        tournamentId: selectedTournament,
+        matches: matches
+      });
+      const encoded = btoa(encodeURIComponent(state));
+      const url = `${window.location.origin}${window.location.pathname}?shared=${encoded}`;
+      await navigator.clipboard.writeText(url);
+      showToast('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Bracket link copied to clipboard!', 'success');
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+      showToast('Failed to copy link. Please try again.', 'error');
+    }
+  };
+
+  const handleExport = async (format: 'image' | 'pdf') => {
+    if (!bracketRef.current) return;
+    
+    showToast('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> Generating export...', 'info');
+    
+    try {
+      // Temporarily remove transform for clean export
+      const originalTransform = bracketRef.current.style.transform;
+      bracketRef.current.style.transform = 'none';
+      
+      const canvas = await html2canvas(bracketRef.current, {
+        useCORS: true,
+        scale: 2,
+        backgroundColor: '#09090b',
+        logging: false
+      });
+      
+      // Restore transform
+      bracketRef.current.style.transform = originalTransform;
+
       if (format === 'image') {
         const link = document.createElement('a');
-        link.download = 'bracket.png';
+        link.download = `bracket-${selectedTournament}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
       } else {
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('l', 'px', [canvas.width, canvas.height]);
         pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-        pdf.save('bracket.pdf');
+        pdf.save(`bracket-${selectedTournament}.pdf`);
       }
+      showToast('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Export complete!', 'success');
     } catch (err) {
       console.error('Export failed:', err);
-      alert('Export failed. Please try again.');
+      showToast('Export failed. Please try again.', 'error');
     }
-  }, []);
+  };
 
-  const finalMatch = useMemo(() => matches.find(m => m.nextMatchId === null), [matches]);
+  const finalMatch = useMemo(() => {
+    return matches.find(m => m.nextMatchId === null);
+  }, [matches]);
+
   const currentTournament = tournaments.find(t => t.id === selectedTournament);
-  const champion = useMemo(() => {
-    if (!finalMatch?.winnerId) return null;
-    return finalMatch.player1?.id === finalMatch.winnerId ? finalMatch.player1 : finalMatch.player2;
-  }, [finalMatch]);
 
-  // Sort tournaments by soonest next occurrence using real Gemini-fetched dates.
-  const sortedTournaments = useMemo(() => {
-    if (schedule.length === 0) return tournaments;
-    return [...tournaments]
-      .map(t => {
-        const entry = schedule.find(s => s.id === t.id);
-        return { ...t, scheduleEntry: entry ?? null };
-      })
-      .sort((a, b) => {
-        if (!a.scheduleEntry) return 1;
-        if (!b.scheduleEntry) return -1;
-        return nextOccurrence(a.scheduleEntry).getTime() - nextOccurrence(b.scheduleEntry).getTime();
-      });
-  }, [schedule]);
+  // Panning logic
+  const handlePointerDown = (e: PointerEvent) => {
+    setIsDragging(true);
+    setStartPos({ x: e.clientX - scrollPos.x, y: e.clientY - scrollPos.y });
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
 
-  const scroll = (dir: 'left' | 'right') => {
+  const handlePointerMove = (e: PointerEvent) => {
+    if (!isDragging) return;
+    const newScrollPos = {
+      x: e.clientX - startPos.x,
+      y: e.clientY - startPos.y
+    };
+    setScrollPos(newScrollPos);
+    if (containerRef.current) {
+      containerRef.current.scrollLeft = -newScrollPos.x;
+      containerRef.current.scrollTop = -newScrollPos.y;
+    }
+  };
+
+  const handlePointerUp = (e: PointerEvent) => {
+    setIsDragging(false);
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+  };
+
+  const scroll = (direction: 'up' | 'down' | 'left' | 'right') => {
     if (!containerRef.current) return;
-    containerRef.current.scrollBy({ left: dir === 'left' ? -400 : 400, behavior: 'smooth' });
+    const amount = 300;
+    const scrollOptions: ScrollToOptions = { behavior: 'smooth' };
+    
+    switch (direction) {
+      case 'up': scrollOptions.top = -amount; break;
+      case 'down': scrollOptions.top = amount; break;
+      case 'left': scrollOptions.left = -amount; break;
+      case 'right': scrollOptions.left = amount; break;
+    }
+    
+    containerRef.current.scrollBy(scrollOptions);
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-background text-foreground overflow-hidden">
-
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <header className="flex-none border-b border-white/5 bg-card/60 backdrop-blur-2xl px-4 py-3 shadow-xl z-30">
-        <div className="flex items-center justify-between max-w-7xl mx-auto gap-4">
-          {/* Left — Hamburger */}
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Open tournaments"
-            className="text-white/70 hover:text-white shrink-0 h-11 w-11"
-            onClick={() => setIsSidebarOpen(true)}
-          >
-            <Menu className="h-6 w-6" />
-          </Button>
-
-          {/* Centre — Logos */}
-          <div className="flex items-center gap-3 sm:gap-6 flex-1 justify-center min-w-0">
-            <img
-              src={assetUrl('logos/tennis.svg')}
-              alt="Grand Slam"
-              className="h-9 sm:h-12 w-auto transition-transform duration-500 hover:scale-110 shrink-0"
-              loading="eager"
-            />
-            <AnimatePresence mode="popLayout">
-              {currentTournament?.logo && (
-                <motion.div
-                  key={currentTournament.id}
-                  // Start at near-zero (not exactly 0) so the logo is
-                  // never fully invisible if the animation is skipped (e.g.
-                  // prefers-reduced-motion) or delayed on slow devices.
-                  initial={{ opacity: 0.01, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 6 }}
-                  transition={{ duration: 0.25 }}
-                  className="flex items-center"
-                >
-                  <img
-                    src={assetUrl(currentTournament.logo)}
-                    alt={currentTournament.name}
-                    className="h-8 sm:h-11 w-auto max-w-[140px] sm:max-w-[220px] object-contain"
-                    loading="eager"
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+      {/* Header */}
+      <header className="flex-none border-b border-white/5 bg-card/40 backdrop-blur-3xl px-4 sm:px-6 py-4 sm:py-6 shadow-2xl z-30 sticky top-0">
+        <div className="max-w-7xl mx-auto flex items-center justify-center">
+          <div className="absolute left-4 sm:left-6">
+            <Button variant="ghost" size="icon" className="text-white/70 hover:text-white h-8 w-8" onClick={() => setIsSidebarOpen(true)}>
+              <Menu className="h-5 w-5" />
+            </Button>
           </div>
-
-          {/* Right — Actions menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Actions"
-                className="text-white/70 hover:text-white shrink-0 h-11 w-11"
-              >
-                <MoreHorizontal className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} className="w-48">
-              <DropdownMenuItem onClick={handleResetPicks}>
-                <RotateCcw className="mr-2 h-4 w-4" /> Reset Picks
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleRefreshPlayers}>
-                <RefreshCw className="mr-2 h-4 w-4" /> Refresh Players
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleShare}>
-                <Share2 className="mr-2 h-4 w-4" /> Share Link
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport('image')}>
-                <Download className="mr-2 h-4 w-4" /> Export PNG
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport('pdf')}>
-                <Download className="mr-2 h-4 w-4" /> Export PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-4 sm:gap-8">
+            <img 
+              src="/tennis_logo.png" 
+              alt="Tennis" 
+              className="h-8 w-8 transition-transform hover:rotate-12 duration-500" 
+              referrerPolicy="no-referrer" 
+            />
+            <h1 className="text-sm font-black uppercase tracking-widest hidden sm:block">Grand Slam Tracker</h1>
+            <div className="hidden sm:block h-8 w-px bg-white/10 mx-2" />
+            <span className="text-xs font-bold uppercase opacity-70">{currentTournament?.name}</span>
+          </div>
         </div>
       </header>
 
-      {/* ── Champion Banner ──────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {champion && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="flex-none bg-gradient-to-r from-yellow-500/20 via-amber-400/20 to-yellow-500/20 border-b border-yellow-500/30 px-4 py-2 text-center"
-          >
-            <p className="text-sm font-bold tracking-widest uppercase text-yellow-300 flex items-center justify-center gap-2">
-              <Trophy className="h-4 w-4" />
-              Champion: {champion.name}
-              {champion.country && (
-                <span className="text-yellow-300/70">({champion.country})</span>
-              )}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
+      {/* Sidebar Tournament Selector */}
       <AnimatePresence>
         {isSidebarOpen && (
           <>
-            <motion.div
+            <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
               onClick={() => setIsSidebarOpen(false)}
               className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
             />
-            <motion.aside
+            <motion.div 
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-              className="fixed top-0 left-0 bottom-0 w-72 sm:w-80 bg-card border-r border-white/10 shadow-2xl z-50 p-5 flex flex-col gap-4 safe-area-inset"
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed top-0 left-0 bottom-0 w-72 bg-card border-r border-white/10 shadow-2xl z-50 p-4 flex flex-col gap-4"
             >
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-lg font-black uppercase tracking-widest">Grand Slams</h2>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Close"
-                  className="h-10 w-10"
-                  onClick={() => setIsSidebarOpen(false)}
-                >
-                  <X className="h-5 w-5" />
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-black uppercase tracking-widest opacity-50">Tournaments</h2>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsSidebarOpen(false)}>
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
-
-              <nav className="flex flex-col gap-2">
-                {sortedTournaments.map(t => {
-                  const se = t.scheduleEntry;
-                  const active = se ? isInProgress(se) : false;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => { setSelectedTournament(t.id); setIsSidebarOpen(false); }}
-                      className={`flex items-center gap-4 p-4 rounded-xl text-left transition-all duration-200 ${
-                        selectedTournament === t.id
-                          ? 'bg-white/10 ring-1 ring-white/20'
-                          : 'hover:bg-white/5 active:bg-white/10'
-                      }`}
-                    >
-                      {t.logo && (
-                        <img
-                          src={assetUrl(t.logo)}
-                          alt={t.name}
-                          className="h-10 w-10 object-contain shrink-0"
-                          loading="eager"
+              
+              <div className="flex flex-col gap-1 overflow-y-auto custom-scrollbar">
+                {loadingTournaments ? (
+                  <div className="p-4 text-xs text-center opacity-50">Searching for dates...</div>
+                ) : tournaments.map((t, index) => (
+                  <button
+                    key={`${t.id}-${t.startDate}-${index}`}
+                    onClick={() => {
+                      setSelectedTournament(t.id);
+                      setIsSidebarOpen(false);
+                    }}
+                    className={`flex flex-col gap-1 p-3 rounded-lg transition-all text-left ${selectedTournament === t.id ? 'bg-white/10 ring-1 ring-white/20' : 'hover:bg-white/5'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {t.logo ? (
+                        <img 
+                          src={t.logo} 
+                          alt={t.name} 
+                          className="h-6 w-6 object-contain" 
+                          referrerPolicy="no-referrer" 
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            const fallback = document.createElement('div');
+                            fallback.className = 'h-6 w-6 flex items-center justify-center bg-white/5 rounded';
+                            fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-50"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>';
+                            (e.target as HTMLImageElement).parentNode?.insertBefore(fallback, e.target as HTMLImageElement);
+                          }}
                         />
+                      ) : (
+                        <Trophy className="h-4 w-4 opacity-50" />
                       )}
-                      <div className="flex flex-col min-w-0 gap-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-base truncate">{t.name}</span>
-                          {active && (
-                            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full border border-green-500/30">
-                              Live
-                            </span>
-                          )}
-                        </div>
-                        {se ? (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Calendar className="h-3 w-3 shrink-0" />
-                            {formatDateRange(se.startDate, se.endDate)}
-                            {se.location ? ` · ${se.location}` : ''}
-                          </span>
-                        ) : scheduleLoading ? (
-                          <span className="text-xs text-muted-foreground/50 italic">Loading dates…</span>
-                        ) : null}
-                        {selectedTournament === t.id && (
-                          <span className="text-xs text-primary/70 font-medium">Currently viewing</span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </nav>
-            </motion.aside>
+                      <span className="text-xs font-bold uppercase tracking-tight">{t.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 opacity-40">
+                      <Calendar className="h-3 w-3" />
+                      <span className="text-[10px] font-medium">
+                        {new Date(t.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(t.endDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      {/* ── Main Bracket Canvas ──────────────────────────────────────────────── */}
-      <main className="flex-1 relative overflow-hidden">
+      {/* Main Content - Bracket Viewer */}
+      <main className="flex-1 relative overflow-hidden bg-muted/5 pt-4 sm:pt-8">
+        {/* Floating Action Tools */}
+        <DropdownMenu>
+          <DropdownMenuTrigger className="absolute top-6 right-6 z-20 cursor-pointer rounded-full shadow-lg h-10 w-10 opacity-80 hover:opacity-100 border border-border/50 bg-background/60 backdrop-blur flex items-center justify-center p-0">
+            <MoreHorizontal className="h-5 w-5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="bottom" sideOffset={8} className="w-40">
+            <DropdownMenuItem onClick={handleReset}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Reset
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleShare}>
+              <Share2 className="mr-2 h-4 w-4" />
+              Share
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExport('image')}>
+              <Download className="mr-2 h-4 w-4" />
+              Export Image
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExport('pdf')}>
+              <Download className="mr-2 h-4 w-4" />
+              Export PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        {/* Horizontal scroll arrows */}
-        <button
-          aria-label="Scroll left"
+        {/* Floating Navigation Controls */}
+        <Button 
+          variant="secondary" 
+          className="absolute top-1/2 left-2 -translate-y-1/2 z-20 rounded-full shadow-lg h-24 w-8 p-0 opacity-60 hover:opacity-100 transition-all border border-border/50 bg-background/60 backdrop-blur" 
           onClick={() => scroll('left')}
-          className="absolute left-1 top-1/2 -translate-y-1/2 z-20 hidden sm:flex items-center justify-center h-20 w-7 rounded-full bg-background/60 backdrop-blur border border-white/10 shadow-lg opacity-60 hover:opacity-100 transition-opacity"
         >
           <ChevronLeft className="h-5 w-5" strokeWidth={1.5} />
-        </button>
-        <button
-          aria-label="Scroll right"
+        </Button>
+        <Button 
+          variant="secondary" 
+          className="absolute top-1/2 right-2 -translate-y-1/2 z-20 rounded-full shadow-lg h-24 w-8 p-0 opacity-60 hover:opacity-100 transition-all border border-border/50 bg-background/60 backdrop-blur" 
           onClick={() => scroll('right')}
-          className="absolute right-1 top-1/2 -translate-y-1/2 z-20 hidden sm:flex items-center justify-center h-20 w-7 rounded-full bg-background/60 backdrop-blur border border-white/10 shadow-lg opacity-60 hover:opacity-100 transition-opacity"
         >
           <ChevronRight className="h-5 w-5" strokeWidth={1.5} />
-        </button>
+        </Button>
+        <Button 
+          variant="secondary" 
+          className="absolute top-2 left-1/2 -translate-x-1/2 z-20 rounded-full shadow-lg h-8 w-24 p-0 opacity-60 hover:opacity-100 transition-all border border-border/50 bg-background/60 backdrop-blur" 
+          onClick={() => scroll('up')}
+        >
+          <ChevronUp className="h-5 w-5" strokeWidth={1.5} />
+        </Button>
+        <Button 
+          variant="secondary" 
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 rounded-full shadow-lg h-8 w-24 p-0 opacity-60 hover:opacity-100 transition-all border border-border/50 bg-background/60 backdrop-blur" 
+          onClick={() => scroll('down')}
+        >
+          <ChevronDown className="h-5 w-5" strokeWidth={1.5} />
+        </Button>
 
-        {/* Zoom controls */}
-        <div className="absolute bottom-4 right-4 z-20 flex flex-col gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-white/10 shadow-lg">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Zoom in"
-            className="h-9 w-9"
-            onClick={() => setZoom(z => Math.min(z + 0.15, 2))}
-          >
-            <ZoomIn className="w-4 h-4" />
+        {/* Zoom Controls */}
+        <div className="absolute bottom-6 right-6 z-10 flex flex-col gap-2 bg-background/80 backdrop-blur-sm p-2 rounded-lg border shadow-sm">
+          <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.min(z + 0.2, 2))}>
+            <ZoomIn className="w-5 h-5" />
           </Button>
-          <div className="text-[10px] text-center font-mono text-muted-foreground select-none py-0.5">
+          <div className="text-xs text-center font-medium text-muted-foreground">
             {Math.round(zoom * 100)}%
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Zoom out"
-            className="h-9 w-9"
-            onClick={() => setZoom(z => Math.max(z - 0.15, 0.25))}
-          >
-            <ZoomOut className="w-4 h-4" />
+          <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))}>
+            <ZoomOut className="w-5 h-5" />
           </Button>
         </div>
 
-        {/* Scrollable/pannable bracket area */}
-        <div
+        {/* Scrollable Canvas */}
+        <div 
           ref={containerRef}
-          className="w-full h-full overflow-auto custom-scrollbar touch-pan-x touch-pan-y"
-          style={{ cursor: 'grab' }}
+          className="w-full h-full overflow-auto p-8 cursor-grab active:cursor-grabbing touch-none custom-scrollbar"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
         >
           {loading ? (
-            <LoadingState />
-          ) : bracketError ? (
-            <ErrorState message={bracketError} />
-          ) : finalMatch ? (
-            <div
-              className="p-6 sm:p-10 inline-block"
-              style={{ minWidth: 'max-content' }}
+            <div className="flex items-center justify-center h-full text-muted-foreground">Generating AI Bracket...</div>
+          ) : finalMatch && (
+            <div 
+              className="min-w-max min-h-max"
+              style={{ 
+                width: bracketRef.current ? bracketRef.current.offsetWidth * zoom : 'auto',
+                height: bracketRef.current ? bracketRef.current.offsetHeight * zoom : 'auto',
+                transition: 'width 0.2s, height 0.2s'
+              }}
             >
-              <div
+              <div 
                 ref={bracketRef}
-                className="origin-top-left transition-transform duration-200 ease-out"
-                style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+                className="inline-block transition-transform duration-200 ease-out origin-top-left bg-background p-8 rounded-xl border shadow-sm"
+                style={{ transform: `scale(${zoom})` }}
               >
-                <BracketTree
-                  matchId={finalMatch.id}
-                  matches={matches}
-                  onSelectWinner={handleSelectWinner}
+                <BracketTree 
+                  matchId={finalMatch.id} 
+                  matches={matches} 
+                  onSelectWinner={handleSelectWinner} 
                 />
               </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              No bracket data available.
             </div>
           )}
         </div>

@@ -22,11 +22,10 @@ export type Tournament = {
   matches: Match[];
 };
 
-// Standard tennis seeding positions for a 128-player draw
-// 1 plays 128, 64 vs 65, 32 vs 97, 33 vs 96...
+// Standard tennis seeding positions for a 32-player draw
 export function getSeededDraw(players: Player[]): Player[] {
   // Pad to nearest power of 2
-  const size = 128;
+  const size = 32;
   const padded = [...players];
   while (padded.length < size) {
     padded.push({ id: `bye-${padded.length}`, name: 'Bye' });
@@ -110,7 +109,7 @@ export function generateBracket(players: Player[]): Match[] {
   return matches;
 }
 
-export function advancePlayer(matches: Match[], matchId: string, winnerId: string | null): Match[] {
+export function advancePlayer(matches: Match[], matchId: string, winnerId: string): Match[] {
   const newMatches = [...matches.map(m => ({ ...m, player1: m.player1 ? {...m.player1} : null, player2: m.player2 ? {...m.player2} : null }))];
   const matchIndex = newMatches.findIndex(m => m.id === matchId);
   if (matchIndex === -1) return newMatches;
@@ -118,11 +117,9 @@ export function advancePlayer(matches: Match[], matchId: string, winnerId: strin
   const match = newMatches[matchIndex];
   match.winnerId = winnerId;
   
-  const winner = winnerId
-    ? (match.player1?.id === winnerId ? match.player1 : match.player2)
-    : null;
+  const winner = match.player1?.id === winnerId ? match.player1 : match.player2;
   
-  if (match.nextMatchId) {
+  if (match.nextMatchId && winner) {
     const nextMatchIndex = newMatches.findIndex(m => m.id === match.nextMatchId);
     if (nextMatchIndex !== -1) {
       const nextMatch = newMatches[nextMatchIndex];
@@ -134,18 +131,19 @@ export function advancePlayer(matches: Match[], matchId: string, winnerId: strin
         nextMatch.player2 = winner;
       }
       
-      // If the next match already had a winner that is no longer valid, clear it and propagate
-      if (nextMatch.winnerId !== winnerId) {
-        // Save the previous winner ID before nulling so we can remove it from further downstream
-        let prevWinnerId = nextMatch.winnerId;
+      // If the next match already had a winner, we might need to reset it if the winner changed
+      // For simplicity, let's just clear the winner of the next match if the participants change
+      if (nextMatch.winnerId === winnerId) {
+        // Winner is still the same, do nothing
+      } else {
         nextMatch.winnerId = null;
+        // Also recursively clear subsequent matches
         let curr = nextMatch;
-        while (curr.nextMatchId && prevWinnerId) {
+        while (curr.nextMatchId) {
           const next = newMatches.find(m => m.id === curr.nextMatchId);
           if (next) {
-            if (next.player1?.id === prevWinnerId) next.player1 = null;
-            if (next.player2?.id === prevWinnerId) next.player2 = null;
-            prevWinnerId = next.winnerId;
+            if (next.player1?.id === curr.winnerId) next.player1 = null;
+            if (next.player2?.id === curr.winnerId) next.player2 = null;
             next.winnerId = null;
             curr = next;
           } else {

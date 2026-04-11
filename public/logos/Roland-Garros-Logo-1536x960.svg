@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1536 960" width="1536" height="960">
-  <!-- Roland Garros - Clay/Orange theme -->
-  <rect width="1536" height="960" fill="#c84b00" rx="20"/>
-  <text x="768" y="370" font-family="Georgia, serif" font-size="120" font-weight="bold" fill="white" text-anchor="middle">ROLAND</text>
-  <text x="768" y="520" font-family="Georgia, serif" font-size="120" font-weight="bold" fill="white" text-anchor="middle">GARROS</text>
-  <text x="768" y="660" font-family="Georgia, serif" font-size="72" fill="#f5c790" text-anchor="middle">Paris · May–June</text>
-</svg>

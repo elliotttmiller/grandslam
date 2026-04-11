@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 150" width="300" height="150">
-  <!-- Wimbledon - Green/Purple theme -->
-  <rect width="300" height="150" fill="#1a5c2a" rx="10"/>
-  <rect x="5" y="5" width="290" height="140" fill="none" stroke="#4a0078" stroke-width="4" rx="8"/>
-  <text x="150" y="62" font-family="Georgia, serif" font-size="32" font-weight="bold" fill="white" text-anchor="middle">THE</text>
-  <text x="150" y="102" font-family="Georgia, serif" font-size="22" font-weight="bold" fill="white" text-anchor="middle">CHAMPIONSHIPS</text>
-  <text x="150" y="132" font-family="Georgia, serif" font-size="14" fill="#90ee90" text-anchor="middle">WIMBLEDON</text>
-</svg>
