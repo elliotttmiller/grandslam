@@ -36,9 +36,10 @@ jobs:
           # Derive the base path from the actual repository name so this workflow
           # works correctly even if the repository is renamed or forked.
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
-          # GEMINI_API_KEY is injected from the repository secret at build time.
-          # The compiled bundle uses this key to call the Gemini API client-side.
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # VITE_GEMINI_API_KEY is injected from the repository secret at build time.
+          # Vite's loadEnv only picks up VITE_-prefixed variables, so the prefix is required
+          # for the key to be available in the compiled client bundle.
+          VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: npm run build
 
       - name: Setup Pages
