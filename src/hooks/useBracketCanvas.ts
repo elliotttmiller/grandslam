@@ -82,7 +82,7 @@ export function useBracketCanvas({
 
     // Pinch tracking
     let initialPinchDist: number | null = null;
-    let initialZoomAtPinch = zoom;
+    let initialZoomAtPinch = zoomRef.current;
 
     // Single-finger drag tracking
     let touchStartScroll = { x: 0, y: 0 };
