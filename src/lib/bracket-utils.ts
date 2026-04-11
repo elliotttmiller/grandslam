@@ -22,44 +22,86 @@ export type Tournament = {
   matches: Match[];
 };
 
-// Standard tennis seeding positions for a 32-player draw
-export function getSeededDraw(players: Player[]): Player[] {
-  // Pad to nearest power of 2
-  const size = 32;
-  const padded = [...players];
-  while (padded.length < size) {
-    padded.push({ id: `bye-${padded.length}`, name: 'Bye' });
+export const ROUND_NAMES: Record<number, string> = {
+  1: 'R128', 2: 'R64', 3: 'R32', 4: 'R16', 5: 'QF', 6: 'SF', 7: 'F'
+};
+
+export const ROUND_FULL_NAMES: Record<number, string> = {
+  1: 'Round of 128', 2: 'Round of 64', 3: 'Round of 32', 4: 'Round of 16',
+  5: 'Quarterfinals', 6: 'Semifinals', 7: 'Final'
+};
+
+export const BASE_POINTS: Record<number, number> = {
+  1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32, 7: 64
+};
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
   }
-  
-  // Sort by seed, then unseeded
-  padded.sort((a, b) => {
-    if (a.seed && b.seed) return a.seed - b.seed;
-    if (a.seed) return -1;
-    if (b.seed) return 1;
-    return 0;
+  return a;
+}
+
+// Grand Slam 128-player seeded draw placement
+// Seeded positions (0-indexed) follow standard ATP/WTA draw logic:
+//   S1 → 0, S2 → 127
+//   S3/S4 → randomly {32, 96}
+//   S5-S8 → randomly {16, 48, 80, 112}
+//   S9-S16 → randomly {8, 24, 40, 56, 72, 88, 104, 120}
+//   S17-S32 → randomly {4,12,20,28,36,44,52,60,68,76,84,92,100,108,116,124}
+export function getSeededDraw(players: Player[]): Player[] {
+  const size = 128;
+
+  const seeded = players
+    .filter(p => p.seed && p.seed >= 1 && p.seed <= 32)
+    .sort((a, b) => (a.seed ?? 99) - (b.seed ?? 99));
+
+  const unseeded = players.filter(p => !p.seed || p.seed > 32);
+
+  // Auto-fill qualifiers if fewer than 96 unseeded provided
+  const allUnseeded = [...unseeded];
+  let qNum = 1;
+  while (allUnseeded.length < 96) {
+    allUnseeded.push({ id: `q${qNum}`, name: `Qualifier ${qNum}`, seed: undefined });
+    qNum++;
+  }
+
+  // Build seeded-position map
+  const seedPos: Record<number, number> = { 1: 0, 2: 127 };
+
+  const s3s4 = shuffle([32, 96]);
+  seedPos[3] = s3s4[0];
+  seedPos[4] = s3s4[1];
+
+  const s5s8 = shuffle([16, 48, 80, 112]);
+  [5, 6, 7, 8].forEach((s, i) => { seedPos[s] = s5s8[i]; });
+
+  const s9s16 = shuffle([8, 24, 40, 56, 72, 88, 104, 120]);
+  [9, 10, 11, 12, 13, 14, 15, 16].forEach((s, i) => { seedPos[s] = s9s16[i]; });
+
+  const s17s32 = shuffle([4, 12, 20, 28, 36, 44, 52, 60, 68, 76, 84, 92, 100, 108, 116, 124]);
+  [17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32].forEach((s, i) => {
+    seedPos[s] = s17s32[i];
   });
 
-  // Fold array to create matchups
-  let draw = [padded[0], padded[1]];
-  
-  // Expand the draw to 128
-  // 2 -> 4 -> 8 -> 16 -> 32 -> 64 -> 128
-  const rounds = Math.log2(size);
-  for (let r = 1; r < rounds; r++) {
-    const nextDraw: Player[] = [];
-    const currentSize = draw.length;
-    const sum = currentSize * 2 + 1;
-    for (let i = 0; i < currentSize; i++) {
-      nextDraw.push(draw[i]);
-      // Find the player that should play against draw[i]
-      const player1Index = padded.findIndex(p => p.id === draw[i].id);
-      const player2Index = sum - (player1Index + 1) - 1;
-      nextDraw.push(padded[player2Index]);
-    }
-    draw = nextDraw;
+  const draw: (Player | null)[] = new Array(size).fill(null);
+
+  for (const player of seeded) {
+    const pos = player.seed !== undefined ? seedPos[player.seed] : undefined;
+    if (pos !== undefined) draw[pos] = player;
   }
-  
-  return draw;
+
+  const shuffledUnseeded = shuffle(allUnseeded);
+  let ui = 0;
+  for (let i = 0; i < size; i++) {
+    if (draw[i] === null && ui < shuffledUnseeded.length) {
+      draw[i] = shuffledUnseeded[ui++];
+    }
+  }
+
+  return draw.map((p, i) => p ?? { id: `bye-${i}`, name: 'BYE' });
 }
 
 export function generateBracket(players: Player[]): Match[] {

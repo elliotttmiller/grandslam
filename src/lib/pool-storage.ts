@@ -1,0 +1,152 @@
+import type { Match } from './bracket-utils';
+import type { Pool, PoolEntry } from './pool-types';
+
+const STORAGE_KEY = 'gs_pools_v1';
+
+export function generateId(): string {
+  return Math.random().toString(36).substring(2, 10).toUpperCase();
+}
+
+export function generatePoolCode(): string {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+function encode(obj: unknown): string {
+  return btoa(encodeURIComponent(JSON.stringify(obj)));
+}
+
+function decode<T>(str: string): T | null {
+  try {
+    return JSON.parse(decodeURIComponent(atob(str))) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function getPools(): Pool[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as Pool[];
+  } catch {
+    return [];
+  }
+}
+
+export function getPool(id: string): Pool | null {
+  return getPools().find(p => p.id === id) ?? null;
+}
+
+export function savePool(pool: Pool): void {
+  const pools = getPools();
+  const idx = pools.findIndex(p => p.id === pool.id);
+  if (idx >= 0) {
+    pools[idx] = pool;
+  } else {
+    pools.push(pool);
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(pools));
+}
+
+export function createPool(
+  name: string,
+  tournamentId: string,
+  tournamentName: string,
+  officialMatches: Match[]
+): Pool {
+  const pool: Pool = {
+    id: generatePoolCode(),
+    name,
+    tournamentId,
+    tournamentName,
+    createdAt: new Date().toISOString(),
+    officialMatches,
+    entries: [],
+  };
+  savePool(pool);
+  return pool;
+}
+
+export function addEntry(poolId: string, entry: PoolEntry): void {
+  const pool = getPool(poolId);
+  if (!pool) return;
+  pool.entries.push(entry);
+  savePool(pool);
+}
+
+export function updateEntry(poolId: string, entryId: string, matches: Match[]): void {
+  const pool = getPool(poolId);
+  if (!pool) return;
+  const entry = pool.entries.find(e => e.id === entryId);
+  if (!entry) return;
+  entry.matches = matches;
+  savePool(pool);
+}
+
+export function submitEntry(
+  poolId: string,
+  entryId: string,
+  tiebreakerGames?: number,
+  tiebreakerSets?: number
+): void {
+  const pool = getPool(poolId);
+  if (!pool) return;
+  const entry = pool.entries.find(e => e.id === entryId);
+  if (!entry) return;
+  entry.isSubmitted = true;
+  entry.submittedAt = new Date().toISOString();
+  if (tiebreakerGames !== undefined) entry.tiebreakerGames = tiebreakerGames;
+  if (tiebreakerSets !== undefined) entry.tiebreakerSets = tiebreakerSets;
+  savePool(pool);
+}
+
+export function deletePool(poolId: string): void {
+  const pools = getPools().filter(p => p.id !== poolId);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(pools));
+}
+
+export function exportPool(pool: Pool): string {
+  return encode(pool);
+}
+
+export function importPool(encodedPool: string): Pool | null {
+  const decoded = decode<Pool>(encodedPool);
+  if (!decoded || !decoded.id) return null;
+
+  const existing = getPool(decoded.id);
+  if (existing) {
+    // Merge entries
+    for (const entry of decoded.entries) {
+      if (!existing.entries.find(e => e.id === entry.id)) {
+        existing.entries.push(entry);
+      }
+    }
+    savePool(existing);
+    return existing;
+  }
+
+  savePool(decoded);
+  return decoded;
+}
+
+export function exportEntry(entry: PoolEntry): string {
+  return encode(entry);
+}
+
+export function importEntry(poolId: string, encodedEntry: string): PoolEntry | null {
+  const decoded = decode<PoolEntry>(encodedEntry);
+  if (!decoded || !decoded.id) return null;
+
+  const pool = getPool(poolId);
+  if (!pool) return null;
+
+  const existing = pool.entries.find(e => e.id === decoded.id);
+  if (existing) {
+    // Update existing
+    Object.assign(existing, decoded);
+  } else {
+    pool.entries.push(decoded);
+  }
+  savePool(pool);
+  return decoded;
+}
