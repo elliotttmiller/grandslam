@@ -1,11 +1,12 @@
-import { useState, useEffect, useMemo, useRef, PointerEvent } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useBracketCanvas } from './hooks/useBracketCanvas';
 import { fetchTournamentPlayers, fetchTournamentsWithDates, TournamentData } from './services/geminiService';
 import { generateBracket, advancePlayer, Match, Player } from './lib/bracket-utils';
 import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Button } from './components/ui/button';
-import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users } from 'lucide-react';
+import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -28,11 +29,11 @@ export default function App() {
   const [zoom, setZoom] = useState(0.4);
   const [loading, setLoading] = useState(false);
   const [loadingTournaments, setLoadingTournaments] = useState(true);
-  const containerRef = useRef<HTMLDivElement>(null);
   const bracketRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
-  const [scrollPos, setScrollPos] = useState({ x: 0, y: 0 });
+  const { handlePointerDown, handlePointerMove, handlePointerUp, containerRef: canvasRef } = useBracketCanvas({
+    zoom,
+    onZoomChange: setZoom,
+  });
   const [tiebreakerGames, setTiebreakerGames] = useState<Record<string, number>>({});
   const [tiebreakerSets, setTiebreakerSets] = useState<Record<string, number>>({});
   const [showTiebreakerModal, setShowTiebreakerModal] = useState(false);
@@ -392,46 +393,6 @@ export default function App() {
     [allTournamentScores, calendarBonus]
   );
 
-  // Panning logic
-  const handlePointerDown = (e: PointerEvent) => {
-    setIsDragging(true);
-    setStartPos({ x: e.clientX - scrollPos.x, y: e.clientY - scrollPos.y });
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  };
-
-  const handlePointerMove = (e: PointerEvent) => {
-    if (!isDragging) return;
-    const newScrollPos = {
-      x: e.clientX - startPos.x,
-      y: e.clientY - startPos.y
-    };
-    setScrollPos(newScrollPos);
-    if (containerRef.current) {
-      containerRef.current.scrollLeft = -newScrollPos.x;
-      containerRef.current.scrollTop = -newScrollPos.y;
-    }
-  };
-
-  const handlePointerUp = (e: PointerEvent) => {
-    setIsDragging(false);
-    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-  };
-
-  const scroll = (direction: 'up' | 'down' | 'left' | 'right') => {
-    if (!containerRef.current) return;
-    const amount = 300;
-    const scrollOptions: ScrollToOptions = { behavior: 'smooth' };
-    
-    switch (direction) {
-      case 'up': scrollOptions.top = -amount; break;
-      case 'down': scrollOptions.top = amount; break;
-      case 'left': scrollOptions.left = -amount; break;
-      case 'right': scrollOptions.left = amount; break;
-    }
-    
-    containerRef.current.scrollBy(scrollOptions);
-  };
-
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {/* Header */}
@@ -692,46 +653,12 @@ export default function App() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Floating Navigation Controls */}
-        <Button
-          variant="secondary"
-          className="absolute top-1/2 left-1.5 -translate-y-1/2 z-20 rounded-xl shadow-md h-20 w-7 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm"
-          onClick={() => scroll('left')}
-          aria-label="Scroll left"
-        >
-          <ChevronLeft className="h-4 w-4" strokeWidth={2} />
-        </Button>
-        <Button
-          variant="secondary"
-          className="absolute top-1/2 right-1.5 -translate-y-1/2 z-20 rounded-xl shadow-md h-20 w-7 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm"
-          onClick={() => scroll('right')}
-          aria-label="Scroll right"
-        >
-          <ChevronRight className="h-4 w-4" strokeWidth={2} />
-        </Button>
-        <Button
-          variant="secondary"
-          className="absolute top-1.5 left-1/2 -translate-x-1/2 z-20 rounded-xl shadow-md h-7 w-20 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm"
-          onClick={() => scroll('up')}
-          aria-label="Scroll up"
-        >
-          <ChevronUp className="h-4 w-4" strokeWidth={2} />
-        </Button>
-        <Button
-          variant="secondary"
-          className="absolute bottom-1.5 left-1/2 -translate-x-1/2 z-20 rounded-xl shadow-md h-7 w-20 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm"
-          onClick={() => scroll('down')}
-          aria-label="Scroll down"
-        >
-          <ChevronDown className="h-4 w-4" strokeWidth={2} />
-        </Button>
-
         {/* Zoom Controls */}
         <div className="absolute bottom-5 right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-lg hover:bg-white/10"
+            className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
             onClick={() => setZoom(z => Math.min(z + 0.2, 2))}
             aria-label="Zoom in"
           >
@@ -743,7 +670,7 @@ export default function App() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-lg hover:bg-white/10"
+            className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
             onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))}
             aria-label="Zoom out"
           >
@@ -753,8 +680,8 @@ export default function App() {
 
         {/* Scrollable Canvas */}
         <div 
-          ref={containerRef}
-          className="w-full h-full overflow-auto p-6 sm:p-10 cursor-grab active:cursor-grabbing touch-none custom-scrollbar"
+          ref={canvasRef}
+          className="bracket-canvas w-full h-full overflow-auto p-6 sm:p-10 cursor-grab touch-none custom-scrollbar"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -776,12 +703,11 @@ export default function App() {
               style={{ 
                 width: bracketRef.current ? bracketRef.current.offsetWidth * zoom : 'auto',
                 height: bracketRef.current ? bracketRef.current.offsetHeight * zoom : 'auto',
-                transition: 'width 0.2s, height 0.2s'
               }}
             >
               <div 
                 ref={bracketRef}
-                className="inline-block transition-transform duration-200 ease-out origin-top-left bg-background/50 p-8 rounded-2xl"
+                className="bracket-inner inline-block origin-top-left bg-background/50 p-8 rounded-2xl"
                 style={{ transform: `scale(${zoom})` }}
               >
                 <BracketTree 

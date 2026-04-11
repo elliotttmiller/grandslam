@@ -1,14 +1,13 @@
 import { useState, useRef, useMemo } from 'react';
-import type { PointerEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, ZoomIn, ZoomOut, Lock, Check, X,
-  ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BracketTree } from '@/components/Bracket';
 import { advancePlayer } from '@/lib/bracket-utils';
 import { calculateBracketScore } from '@/lib/scoring';
+import { useBracketCanvas } from '@/hooks/useBracketCanvas';
 import type { Match } from '@/lib/bracket-utils';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 
@@ -33,17 +32,17 @@ export function PoolBracketEditor({
 }: PoolBracketEditorProps) {
   const [matches, setMatches] = useState<Match[]>(entry.matches);
   const [zoom, setZoom] = useState(0.4);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
-  const [scrollPos, setScrollPos] = useState({ x: 0, y: 0 });
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [showTiebreaker, setShowTiebreaker] = useState(false);
   const [tbGamesInput, setTbGamesInput] = useState(String(entry.tiebreakerGames ?? ''));
   const [tbSetsInput, setTbSetsInput] = useState(String(entry.tiebreakerSets ?? ''));
   const [pendingMatches, setPendingMatches] = useState<Match[] | null>(null);
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const bracketRef = useRef<HTMLDivElement>(null);
+  const { containerRef, handlePointerDown, handlePointerMove, handlePointerUp } = useBracketCanvas({
+    zoom,
+    onZoomChange: setZoom,
+  });
 
   const score = useMemo(() => calculateBracketScore(matches), [matches]);
   const finalMatch = useMemo(() => matches.find(m => m.nextMatchId === null), [matches]);
@@ -56,38 +55,6 @@ export function PoolBracketEditor({
     const updated = advancePlayer(matches, matchId, winnerId);
     setMatches(updated);
     onSave(updated);
-  };
-
-  const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    setIsDragging(true);
-    setStartPos({ x: e.clientX - scrollPos.x, y: e.clientY - scrollPos.y });
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  };
-
-  const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (!isDragging) return;
-    const newScrollPos = { x: e.clientX - startPos.x, y: e.clientY - startPos.y };
-    setScrollPos(newScrollPos);
-    if (containerRef.current) {
-      containerRef.current.scrollLeft = -newScrollPos.x;
-      containerRef.current.scrollTop = -newScrollPos.y;
-    }
-  };
-
-  const handlePointerUp = (e: PointerEvent<HTMLDivElement>) => {
-    setIsDragging(false);
-    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-  };
-
-  const scroll = (direction: 'up' | 'down' | 'left' | 'right') => {
-    if (!containerRef.current) return;
-    const amount = 300;
-    const opts: ScrollToOptions = { behavior: 'smooth' };
-    if (direction === 'up') opts.top = -amount;
-    else if (direction === 'down') opts.top = amount;
-    else if (direction === 'left') opts.left = -amount;
-    else opts.left = amount;
-    containerRef.current.scrollBy(opts);
   };
 
   const handleSubmitClick = () => {
@@ -156,27 +123,13 @@ export function PoolBracketEditor({
 
       {/* Bracket canvas */}
       <main className="flex-1 relative overflow-hidden bg-muted/5">
-        {/* Floating nav controls */}
-        <Button variant="secondary" className="absolute top-1/2 left-1.5 -translate-y-1/2 z-10 rounded-xl shadow-md h-20 w-7 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm" onClick={() => scroll('left')} aria-label="Scroll left">
-          <ChevronLeft className="h-4 w-4" strokeWidth={2} />
-        </Button>
-        <Button variant="secondary" className="absolute top-1/2 right-1.5 -translate-y-1/2 z-10 rounded-xl shadow-md h-20 w-7 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm" onClick={() => scroll('right')} aria-label="Scroll right">
-          <ChevronRight className="h-4 w-4" strokeWidth={2} />
-        </Button>
-        <Button variant="secondary" className="absolute top-1.5 left-1/2 -translate-x-1/2 z-10 rounded-xl shadow-md h-7 w-20 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm" onClick={() => scroll('up')} aria-label="Scroll up">
-          <ChevronUp className="h-4 w-4" strokeWidth={2} />
-        </Button>
-        <Button variant="secondary" className="absolute bottom-[68px] left-1/2 -translate-x-1/2 z-10 rounded-xl shadow-md h-7 w-20 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm" onClick={() => scroll('down')} aria-label="Scroll down">
-          <ChevronDown className="h-4 w-4" strokeWidth={2} />
-        </Button>
-
         {/* Zoom controls */}
         <div className="absolute bottom-[68px] right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
-          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-white/10" onClick={() => setZoom(z => Math.min(z + 0.2, 2))} aria-label="Zoom in">
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom(z => Math.min(z + 0.2, 2))} aria-label="Zoom in">
             <ZoomIn className="w-4 h-4" />
           </Button>
           <div className="text-[10px] font-bold text-muted-foreground/70 tabular-nums w-8 text-center">{Math.round(zoom * 100)}%</div>
-          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-white/10" onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} aria-label="Zoom out">
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} aria-label="Zoom out">
             <ZoomOut className="w-4 h-4" />
           </Button>
         </div>
@@ -184,7 +137,7 @@ export function PoolBracketEditor({
         {/* Scrollable bracket */}
         <div
           ref={containerRef}
-          className="w-full h-full overflow-auto p-6 sm:p-10 cursor-grab active:cursor-grabbing touch-none custom-scrollbar"
+          className="bracket-canvas w-full h-full overflow-auto p-6 sm:p-10 cursor-grab touch-none custom-scrollbar"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -196,12 +149,11 @@ export function PoolBracketEditor({
               style={{
                 width: bracketRef.current ? bracketRef.current.offsetWidth * zoom : 'auto',
                 height: bracketRef.current ? bracketRef.current.offsetHeight * zoom : 'auto',
-                transition: 'width 0.2s, height 0.2s',
               }}
             >
               <div
                 ref={bracketRef}
-                className="inline-block transition-transform duration-200 ease-out origin-top-left bg-background/50 p-8 rounded-2xl"
+              className="bracket-inner inline-block origin-top-left bg-background/50 p-8 rounded-2xl"
                 style={{ transform: `scale(${zoom})` }}
               >
                 <BracketTree
