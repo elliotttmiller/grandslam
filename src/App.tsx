@@ -183,8 +183,9 @@ export default function App() {
         }));
 
         // Add 96 unseeded qualifiers to reach 128 total
-        for (let i = players.length + 1; i <= 128; i++) {
-          const qNum = i - 32;
+        const seededCount = players.length;
+        for (let i = seededCount + 1; i <= 128; i++) {
+          const qNum = i - seededCount;
           players.push({ id: `q${qNum}`, name: `Qualifier ${qNum}`, seed: undefined, country: '' });
         }
 
@@ -212,8 +213,9 @@ export default function App() {
       seed: p.seed,
       country: p.country,
     }));
-    for (let i = players.length + 1; i <= 128; i++) {
-      const qNum = i - 32;
+    const seededCount = players.length;
+    for (let i = seededCount + 1; i <= 128; i++) {
+      const qNum = i - seededCount;
       players.push({ id: `q${qNum}`, name: `Qualifier ${qNum}`, seed: undefined, country: '' });
     }
     return generateBracket(players);

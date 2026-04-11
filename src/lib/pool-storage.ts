@@ -106,8 +106,7 @@ export function deletePool(poolId: string): void {
 }
 
 export function exportPool(pool: Pool): string {
-  const exportData: Omit<Pool, 'entries'> & { entries: Pool['entries'] } = { ...pool };
-  return encode(exportData);
+  return encode(pool);
 }
 
 export function importPool(encodedPool: string): Pool | null {

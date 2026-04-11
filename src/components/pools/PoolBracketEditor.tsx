@@ -114,7 +114,7 @@ export function PoolBracketEditor({
     setPendingMatches(null);
   };
 
-  const progressPct = totalMatches > 0 ? (score.picksCompleted / TOTAL_BRACKET_MATCHES) * 100 : 0;
+  const progressPct = totalMatches > 0 ? (score.picksCompleted / totalMatches) * 100 : 0;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
