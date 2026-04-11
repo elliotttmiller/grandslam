@@ -39,11 +39,13 @@ function extractJsonArray(text: string): any[] {
   return [];
 }
 
+const BASE_URL = import.meta.env.BASE_URL || '/';
+
 const TOURNAMENT_LOGOS: Record<string, string> = {
-  'ao': '/Australian-Open-Logo-360x225.png',
-  'rg': '/Roland-Garros-Logo-1536x960.png',
-  'wim': '/Wimbledon-Logo.png',
-  'uso': '/new-US-Open-logo-png-large-size.png'
+  'ao': `${BASE_URL}Australian-Open-Logo-360x225.png`,
+  'rg': `${BASE_URL}Roland-Garros-Logo-1536x960.png`,
+  'wim': `${BASE_URL}Wimbledon-Logo.png`,
+  'uso': `${BASE_URL}new-US-Open-logo-png-large-size.png`,
 };
 
 export async function fetchTournamentsWithDates() {
@@ -240,5 +242,42 @@ export async function fetchTournamentPlayers(tournamentName: string) {
     console.warn("Tier 3 (Fallback) error:", e);
   }
   
-  throw new Error("All AI models failed to generate exactly 32 players.");
+  console.warn("All AI models failed to generate exactly 32 players. Using fallback player list.");
+  return FALLBACK_PLAYERS;
 }
+
+// Fallback top-32 ATP seeds (approximate current rankings, updated periodically)
+const FALLBACK_PLAYERS = [
+  { name: "Jannik Sinner", seed: 1, country: "ITA" },
+  { name: "Carlos Alcaraz", seed: 2, country: "ESP" },
+  { name: "Alexander Zverev", seed: 3, country: "GER" },
+  { name: "Taylor Fritz", seed: 4, country: "USA" },
+  { name: "Casper Ruud", seed: 5, country: "NOR" },
+  { name: "Novak Djokovic", seed: 6, country: "SRB" },
+  { name: "Daniil Medvedev", seed: 7, country: "RUS" },
+  { name: "Andrey Rublev", seed: 8, country: "RUS" },
+  { name: "Hubert Hurkacz", seed: 9, country: "POL" },
+  { name: "Grigor Dimitrov", seed: 10, country: "BUL" },
+  { name: "Ugo Humbert", seed: 11, country: "FRA" },
+  { name: "Alex de Minaur", seed: 12, country: "AUS" },
+  { name: "Stefanos Tsitsipas", seed: 13, country: "GRE" },
+  { name: "Tommy Paul", seed: 14, country: "USA" },
+  { name: "Ben Shelton", seed: 15, country: "USA" },
+  { name: "Holger Rune", seed: 16, country: "DEN" },
+  { name: "Francisco Cerundolo", seed: 17, country: "ARG" },
+  { name: "Sebastian Korda", seed: 18, country: "USA" },
+  { name: "Arthur Fils", seed: 19, country: "FRA" },
+  { name: "Flavio Cobolli", seed: 20, country: "ITA" },
+  { name: "Karen Khachanov", seed: 21, country: "RUS" },
+  { name: "Nicolas Jarry", seed: 22, country: "CHI" },
+  { name: "Tomas Machac", seed: 23, country: "CZE" },
+  { name: "Lorenzo Musetti", seed: 24, country: "ITA" },
+  { name: "Felix Auger-Aliassime", seed: 25, country: "CAN" },
+  { name: "Jiri Lehecka", seed: 26, country: "CZE" },
+  { name: "Alejandro Davidovich Fokina", seed: 27, country: "ESP" },
+  { name: "Jakub Mensik", seed: 28, country: "CZE" },
+  { name: "Brandon Nakashima", seed: 29, country: "USA" },
+  { name: "Tallon Griekspoor", seed: 30, country: "NED" },
+  { name: "Nuno Borges", seed: 31, country: "POR" },
+  { name: "Jacob Fearnley", seed: 32, country: "GBR" },
+];
