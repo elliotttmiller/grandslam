@@ -5,10 +5,20 @@ import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Button } from './components/ui/button';
-import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal, Menu, X, Trophy, Calendar, Lock } from 'lucide-react';
+import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { motion, AnimatePresence } from 'framer-motion';
+import { PoolHub } from './components/pools/PoolHub';
+import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
+import { PoolBracketEditor } from './components/pools/PoolBracketEditor';
+import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId } from './lib/pool-storage';
+
+export type AppView =
+  | { page: 'bracket' }
+  | { page: 'pools' }
+  | { page: 'pool'; poolId: string }
+  | { page: 'pool-entry'; poolId: string; entryId: string };
 
 export default function App() {
   const [tournaments, setTournaments] = useState<TournamentData[]>([]);
@@ -28,6 +38,8 @@ export default function App() {
   const [showTiebreakerModal, setShowTiebreakerModal] = useState(false);
   const [tbGamesInput, setTbGamesInput] = useState('');
   const [tbSetsInput, setTbSetsInput] = useState('');
+  const [appView, setAppView] = useState<AppView>({ page: 'bracket' });
+  const [poolRefreshKey, setPoolRefreshKey] = useState(0);
 
   // Load bracket from localStorage on mount or tournament change
   useEffect(() => {
@@ -108,6 +120,34 @@ export default function App() {
         if (initialTournamentId) {
           setSelectedTournament(initialTournamentId);
         }
+
+        // Handle pool URL params
+        if (!shared) {
+          const joinPoolParam = params.get('joinPool');
+          const poolSnapParam = params.get('poolSnap');
+          const importEntryPoolId = params.get('importEntry');
+          const importEntryData = params.get('entry');
+
+          if (joinPoolParam) {
+            const imported = importPool(joinPoolParam);
+            if (imported) {
+              window.history.replaceState({}, document.title, window.location.pathname);
+              setAppView({ page: 'pool', poolId: imported.id });
+            }
+          } else if (poolSnapParam) {
+            const imported = importPool(poolSnapParam);
+            if (imported) {
+              window.history.replaceState({}, document.title, window.location.pathname);
+              setAppView({ page: 'pool', poolId: imported.id });
+            }
+          } else if (importEntryPoolId && importEntryData) {
+            const imported = importEntry(importEntryPoolId, importEntryData);
+            if (imported) {
+              window.history.replaceState({}, document.title, window.location.pathname);
+              setAppView({ page: 'pool', poolId: importEntryPoolId });
+            }
+          }
+        }
       } catch (error) {
         console.error("Failed to fetch tournaments:", error);
       } finally {
@@ -164,8 +204,42 @@ export default function App() {
     setMatches(prev => advancePlayer(prev, matchId, winnerId));
   };
 
-  const handleReset = () => {
-    if (selectedTournament) {
+  const generateOfficialDraw = async (tournamentId: string, tournamentName: string): Promise<Match[]> => {
+    const aiPlayers = await fetchTournamentPlayers(tournamentName);
+    const players: Player[] = aiPlayers.map((p: { name: string; seed?: number; country?: string }, i: number) => ({
+      id: `p${i + 1}`,
+      name: p.name,
+      seed: p.seed,
+      country: p.country,
+    }));
+    for (let i = players.length + 1; i <= 128; i++) {
+      const qNum = i - 32;
+      players.push({ id: `q${qNum}`, name: `Qualifier ${qNum}`, seed: undefined, country: '' });
+    }
+    return generateBracket(players);
+  };
+
+  const handleCreatePool = async (
+    poolName: string,
+    userName: string,
+    bracketName: string,
+    tournamentId: string,
+    tournamentName: string
+  ): Promise<void> => {
+    const officialMatches = await generateOfficialDraw(tournamentId, tournamentName);
+    const pool = createPool(poolName, tournamentId, tournamentName, officialMatches);
+    const entryId = generateId();
+    addEntry(pool.id, {
+      id: entryId,
+      userName,
+      bracketName: bracketName || `${userName}'s Bracket`,
+      matches: officialMatches.map(m => ({ ...m, winnerId: null })),
+      isSubmitted: false,
+    });
+    setAppView({ page: 'pool', poolId: pool.id });
+  };
+
+  const handleReset = () => {    if (selectedTournament) {
       localStorage.removeItem(`bracket_state_${selectedTournament}`);
       // Also clear the player cache for this tournament to force a fresh AI search
       const tournament = tournaments.find(t => t.id === selectedTournament);
@@ -361,12 +435,17 @@ export default function App() {
       {/* Header */}
       <header className="flex-none border-b border-white/5 bg-card/40 backdrop-blur-3xl px-4 sm:px-6 py-4 sm:py-6 shadow-2xl z-30 sticky top-0">
         <div className="max-w-7xl mx-auto flex items-center justify-center">
+          {/* Left: menu button (only in bracket view) */}
           <div className="absolute left-4 sm:left-6">
-            <Button variant="ghost" size="icon" className="text-white/70 hover:text-white h-8 w-8" onClick={() => setIsSidebarOpen(true)}>
-              <Menu className="h-5 w-5" />
-            </Button>
+            {appView.page === 'bracket' ? (
+              <Button variant="ghost" size="icon" className="text-white/70 hover:text-white h-8 w-8" onClick={() => setIsSidebarOpen(true)}>
+                <Menu className="h-5 w-5" />
+              </Button>
+            ) : null}
           </div>
-          <div className="flex items-center gap-4 sm:gap-8">
+
+          {/* Center: logo + nav tabs */}
+          <div className="flex items-center gap-4 sm:gap-6">
             <img
               src="/tennis_logo.png"
               alt="Tennis"
@@ -374,18 +453,50 @@ export default function App() {
               referrerPolicy="no-referrer"
             />
             <h1 className="text-sm font-black uppercase tracking-widest hidden sm:block">Grand Slam Tracker</h1>
-            <div className="hidden sm:block h-8 w-px bg-white/10 mx-2" />
-            <span className="text-xs font-bold uppercase opacity-70">{currentTournament?.name}</span>
+            <div className="hidden sm:block h-6 w-px bg-white/10" />
+            {/* Nav tabs */}
+            <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
+              <button
+                onClick={() => setAppView({ page: 'bracket' })}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  appView.page === 'bracket'
+                    ? 'bg-white/15 text-foreground shadow-sm'
+                    : 'text-white/50 hover:text-white/80'
+                }`}
+              >
+                <Trophy className="h-3.5 w-3.5" />
+                My Bracket
+              </button>
+              <button
+                onClick={() => setAppView({ page: 'pools' })}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  appView.page !== 'bracket'
+                    ? 'bg-white/15 text-foreground shadow-sm'
+                    : 'text-white/50 hover:text-white/80'
+                }`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                Pools
+              </button>
+            </div>
+            {/* Tournament name in bracket view */}
+            {appView.page === 'bracket' && (
+              <>
+                <div className="hidden sm:block h-6 w-px bg-white/10" />
+                <span className="text-xs font-bold uppercase opacity-70 hidden sm:block">{currentTournament?.name}</span>
+              </>
+            )}
           </div>
-          {/* Score + lock badge in header */}
+
+          {/* Right: score + lock badge (bracket view only) */}
           <div className="absolute right-4 sm:right-6 flex items-center gap-2">
-            {matches.length > 0 && (
+            {appView.page === 'bracket' && matches.length > 0 && (
               <span className="hidden sm:flex items-center gap-1 text-[10px] font-bold bg-primary/20 text-primary px-2 py-1 rounded-full">
                 <Trophy className="h-3 w-3" />
                 {score.total} pts
               </span>
             )}
-            {currentTournament && (
+            {appView.page === 'bracket' && currentTournament && (
               isLocked ? (
                 <span className="flex items-center gap-1 text-[10px] font-bold bg-red-500/20 text-red-400 px-2 py-1 rounded-full">
                   <Lock className="h-3 w-3" />
@@ -493,8 +604,51 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Main Content - Bracket Viewer */}
-      <main className="flex-1 relative overflow-hidden bg-muted/5 pt-4 sm:pt-8">
+      {/* Main Content - View Router */}
+      <div className="flex-1 overflow-hidden relative">
+        {appView.page === 'pools' && (
+          <PoolHub
+            onNavigate={setAppView}
+            tournaments={tournaments}
+            onCreatePool={handleCreatePool}
+          />
+        )}
+        {appView.page === 'pool' && (() => {
+          const pool = getPool(appView.poolId);
+          if (!pool) return <div className="p-8 text-muted-foreground text-sm">Pool not found.</div>;
+          return (
+            <div key={appView.poolId + poolRefreshKey} className="h-full overflow-auto">
+              <PoolLeaderboard
+                pool={pool}
+                onNavigate={setAppView}
+                onPoolUpdate={() => setPoolRefreshKey(k => k + 1)}
+              />
+            </div>
+          );
+        })()}
+        {appView.page === 'pool-entry' && (() => {
+          const pool = getPool(appView.poolId);
+          const entry = pool?.entries.find(e => e.id === appView.entryId);
+          if (!pool || !entry) return <div className="p-8 text-muted-foreground text-sm">Entry not found.</div>;
+          return (
+            <div key={appView.entryId} className="h-full">
+              <PoolBracketEditor
+                pool={pool}
+                entry={entry}
+                onSave={(updatedMatches) => updateEntry(pool.id, entry.id, updatedMatches)}
+                onSubmit={(updatedMatches, tbGames, tbSets) => {
+                  updateEntry(pool.id, entry.id, updatedMatches);
+                  submitEntry(pool.id, entry.id, tbGames, tbSets);
+                  setAppView({ page: 'pool', poolId: pool.id });
+                }}
+                onBack={() => setAppView({ page: 'pool', poolId: pool.id })}
+                readOnly={entry.isSubmitted}
+              />
+            </div>
+          );
+        })()}
+        {appView.page === 'bracket' && (
+          <main className="h-full relative overflow-hidden bg-muted/5 pt-4 sm:pt-8">
         {/* Floating Action Tools */}
         <DropdownMenu>
           <DropdownMenuTrigger className="absolute top-6 right-6 z-20 cursor-pointer rounded-full shadow-lg h-10 w-10 opacity-80 hover:opacity-100 border border-border/50 bg-background/60 backdrop-blur flex items-center justify-center p-0">
@@ -708,7 +862,9 @@ export default function App() {
             </>
           )}
         </AnimatePresence>
-      </main>
+          </main>
+        )}
+      </div>
     </div>
   );
 }

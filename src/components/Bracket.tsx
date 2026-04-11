@@ -8,10 +8,12 @@ interface MatchCardProps {
   match: Match;
   onSelectWinner: (matchId: string, winnerId: string) => void;
   showScore?: boolean;
+  readOnly?: boolean;
 }
 
-export function MatchCard({ match, onSelectWinner, showScore = true }: MatchCardProps) {
+export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = false }: MatchCardProps) {
   const handlePlayerClick = (player: Player | null) => {
+    if (readOnly) return;
     if (!player || !match.player1 || !match.player2) return;
     onSelectWinner(match.id, player.id);
   };
@@ -30,7 +32,7 @@ export function MatchCard({ match, onSelectWinner, showScore = true }: MatchCard
   const renderPlayer = (player: Player | null, isTop: boolean) => {
     const isWinner = match.winnerId === player?.id;
     const isLoser = match.winnerId && match.winnerId !== player?.id;
-    const canSelect = match.player1 && match.player2 && !match.winnerId;
+    const canSelect = !readOnly && match.player1 && match.player2 && !match.winnerId;
 
     return (
       <div
@@ -107,9 +109,10 @@ interface BracketTreeProps {
   matches: Match[];
   onSelectWinner: (matchId: string, winnerId: string) => void;
   showScore?: boolean;
+  readOnly?: boolean;
 }
 
-export function BracketTree({ matchId, matches, onSelectWinner, showScore = true }: BracketTreeProps) {
+export function BracketTree({ matchId, matches, onSelectWinner, showScore = true, readOnly = false }: BracketTreeProps) {
   const match = matches.find(m => m.id === matchId);
   if (!match) return null;
 
@@ -119,13 +122,13 @@ export function BracketTree({ matchId, matches, onSelectWinner, showScore = true
     <div className="flex items-center gap-4">
       {children.length === 2 && (
         <div className="flex flex-col justify-center gap-4">
-          <BracketTree matchId={children[0].id} matches={matches} onSelectWinner={onSelectWinner} showScore={showScore} />
-          <BracketTree matchId={children[1].id} matches={matches} onSelectWinner={onSelectWinner} showScore={showScore} />
+          <BracketTree matchId={children[0].id} matches={matches} onSelectWinner={onSelectWinner} showScore={showScore} readOnly={readOnly} />
+          <BracketTree matchId={children[1].id} matches={matches} onSelectWinner={onSelectWinner} showScore={showScore} readOnly={readOnly} />
         </div>
       )}
       <div className="flex items-center">
         <div className="w-4 h-px bg-border/50" />
-        <MatchCard match={match} onSelectWinner={onSelectWinner} showScore={showScore} />
+        <MatchCard match={match} onSelectWinner={onSelectWinner} showScore={showScore} readOnly={readOnly} />
       </div>
     </div>
   );
