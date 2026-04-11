@@ -12,6 +12,8 @@ import { calculateBracketScore } from '@/lib/scoring';
 import type { Match } from '@/lib/bracket-utils';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 
+const TOTAL_BRACKET_MATCHES = 127;
+
 interface PoolBracketEditorProps {
   pool: Pool;
   entry: PoolEntry;
@@ -112,7 +114,7 @@ export function PoolBracketEditor({
     setPendingMatches(null);
   };
 
-  const progressPct = totalMatches > 0 ? (score.picksCompleted / 127) * 100 : 0;
+  const progressPct = totalMatches > 0 ? (score.picksCompleted / TOTAL_BRACKET_MATCHES) * 100 : 0;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -211,7 +213,7 @@ export function PoolBracketEditor({
       <div className="flex-none border-t border-border/30 bg-card/60 backdrop-blur px-4 py-3 flex items-center gap-4">
         <div className="flex-1 flex flex-col gap-1 min-w-0">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">{score.picksCompleted} / 127 picks</span>
+            <span className="text-muted-foreground">{score.picksCompleted} / {TOTAL_BRACKET_MATCHES} picks</span>
             <span className="font-bold text-primary">{score.total} pts</span>
           </div>
           <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden">
@@ -259,7 +261,7 @@ export function PoolBracketEditor({
                 </Button>
               </div>
               <p className="text-sm text-muted-foreground">
-                You have <span className="font-bold text-foreground">{127 - score.picksCompleted} picks remaining</span>. You can still submit, but incomplete picks won't earn points.
+                You have <span className="font-bold text-foreground">{TOTAL_BRACKET_MATCHES - score.picksCompleted} picks remaining</span>. You can still submit, but incomplete picks won't earn points.
               </p>
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" size="sm" onClick={() => setShowSubmitModal(false)}>Keep Editing</Button>

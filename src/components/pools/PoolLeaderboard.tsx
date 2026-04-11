@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+
+const TOTAL_BRACKET_MATCHES = 127;
 import { calculateBracketScore } from '@/lib/scoring';
 import {
   getPool, deletePool, exportPool, exportEntry, importEntry, savePool, generateId,
@@ -63,10 +65,6 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
 
   const myEntries = rankedEntries.filter(e => e.userName === savedUserName);
   const leaderScore = rankedEntries[0]?.score.total ?? 0;
-
-  const isLocked = new Date() >= new Date(pool.officialMatches.length > 0
-    ? new Date().toISOString() // fallback
-    : new Date().toISOString());
 
   const copyToClipboard = async (text: string, key: string) => {
     try {
@@ -279,7 +277,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                   <div className={cn("text-right text-xs", entry.score.upsetBonus > 0 ? "text-amber-400 font-bold" : "text-muted-foreground")}>
                     {entry.score.upsetBonus > 0 ? `+${entry.score.upsetBonus}` : '—'}
                   </div>
-                  <div className="text-right text-xs text-muted-foreground">{entry.score.picksCompleted}/127</div>
+                  <div className="text-right text-xs text-muted-foreground">{entry.score.picksCompleted}/{TOTAL_BRACKET_MATCHES}</div>
                   <div className="text-center">
                     {entry.isSubmitted ? (
                       <span className="text-[10px] font-bold text-green-400 flex items-center justify-center gap-0.5">
