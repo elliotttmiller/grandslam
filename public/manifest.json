@@ -1,0 +1,29 @@
+{
+  "name": "Grand Slam Bracket",
+  "short_name": "Grand Slam",
+  "description": "Pick your Grand Slam tennis bracket, compete in pools, and chase the Calendar Slam.",
+  "start_url": "/grandslam/",
+  "scope": "/grandslam/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "categories": ["sports", "games"],
+  "icons": [
+    {
+      "src": "/grandslam/tennis_logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/grandslam/tennis_logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

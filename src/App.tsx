@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useBracketCanvas } from './hooks/useBracketCanvas';
 import { fetchTournamentPlayers, fetchTournamentsWithDates, TournamentData } from './services/geminiService';
 import { generateBracket, advancePlayer, Match, Player } from './lib/bracket-utils';
@@ -14,6 +14,8 @@ import { PoolHub } from './components/pools/PoolHub';
 import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
 import { PoolBracketEditor } from './components/pools/PoolBracketEditor';
 import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId } from './lib/pool-storage';
+import { AnimatedNumber } from './components/AnimatedNumber';
+import { CelebrationOverlay } from './components/CelebrationOverlay';
 
 export type AppView =
   | { page: 'bracket' }
@@ -41,6 +43,16 @@ export default function App() {
   const [tbSetsInput, setTbSetsInput] = useState('');
   const [appView, setAppView] = useState<AppView>({ page: 'bracket' });
   const [poolRefreshKey, setPoolRefreshKey] = useState(0);
+
+  // Champion celebration state
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationName, setCelebrationName] = useState<string | undefined>();
+  const prevFinalWinnerRef = useRef<string | null>(null);
+
+  // Framer Motion toast queue
+  interface Toast { id: number; message: string; type: 'success' | 'info' | 'error' }
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastCounter = useRef(0);
 
   // Load bracket from localStorage on mount or tournament change
   useEffect(() => {
@@ -259,19 +271,11 @@ export default function App() {
     }
   };
 
-  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
-    const toast = document.createElement('div');
-    const bg = type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-blue-600';
-    toast.className = `fixed bottom-6 right-6 ${bg} text-white px-4 py-3 rounded-lg shadow-xl z-50 transition-all duration-300 transform translate-y-0 opacity-100 font-medium text-sm flex items-center gap-2`;
-    toast.innerHTML = message;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateY(10px)';
-      setTimeout(() => document.body.removeChild(toast), 300);
-    }, 3000);
-  };
+  const showToast = useCallback((message: string, type: 'success' | 'info' | 'error' = 'info') => {
+    const id = ++toastCounter.current;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3200);
+  }, []);
 
   const handleShare = async () => {
     try {
@@ -282,7 +286,7 @@ export default function App() {
       const encoded = btoa(encodeURIComponent(state));
       const url = `${window.location.origin}${window.location.pathname}?shared=${encoded}`;
       await navigator.clipboard.writeText(url);
-      showToast('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Bracket link copied to clipboard!', 'success');
+      showToast('Bracket link copied to clipboard!', 'success');
     } catch (err) {
       console.error('Failed to copy link:', err);
       showToast('Failed to copy link. Please try again.', 'error');
@@ -292,7 +296,7 @@ export default function App() {
   const handleExport = async (format: 'image' | 'pdf') => {
     if (!bracketRef.current) return;
     
-    showToast('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg> Generating export...', 'info');
+    showToast('Generating export…', 'info');
     
     try {
       // Temporarily remove transform for clean export
@@ -320,7 +324,7 @@ export default function App() {
         pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
         pdf.save(`bracket-${selectedTournament}.pdf`);
       }
-      showToast('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Export complete!', 'success');
+      showToast('Export complete!', 'success');
     } catch (err) {
       console.error('Export failed:', err);
       showToast('Export failed. Please try again.', 'error');
@@ -341,6 +345,22 @@ export default function App() {
       }
     }
   }, [finalMatch?.winnerId, selectedTournament, tiebreakerGames, tiebreakerSets]);
+
+  // Champion celebration — fires once when the final match winner is first set
+  useEffect(() => {
+    const prev = prevFinalWinnerRef.current;
+    const current = finalMatch?.winnerId ?? null;
+    if (!prev && current && appView.page === 'bracket') {
+      const winner = finalMatch
+        ? (finalMatch.player1?.id === current ? finalMatch.player1 : finalMatch.player2)
+        : null;
+      setCelebrationName(winner?.name);
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 3000);
+    }
+    prevFinalWinnerRef.current = current;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalMatch?.winnerId]);
 
   const currentTournament = tournaments.find(t => t.id === selectedTournament);
 
@@ -395,6 +415,33 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+      {/* Champion celebration overlay */}
+      <CelebrationOverlay visible={showCelebration} championName={celebrationName} />
+
+      {/* Framer Motion toast stack */}
+      <div className="fixed bottom-6 right-4 z-[90] flex flex-col gap-2 items-end pointer-events-none">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, y: 12, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.95 }}
+              transition={{ duration: 0.22 }}
+              className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold text-white max-w-[280px] ${
+                toast.type === 'success' ? 'bg-emerald-600' :
+                toast.type === 'error'   ? 'bg-red-600' :
+                                           'bg-zinc-700'
+              }`}
+            >
+              {toast.type === 'success' && <span>✓</span>}
+              {toast.type === 'error'   && <span>✕</span>}
+              <span>{toast.message}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
       {/* Header */}
       <header className="flex-none border-b border-white/[0.06] bg-card/50 backdrop-blur-3xl px-4 sm:px-6 py-3 shadow-lg z-30 sticky top-0">
         <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[44px]">
@@ -462,7 +509,7 @@ export default function App() {
             {appView.page === 'bracket' && matches.length > 0 && score.total > 0 && (
               <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20">
                 <Trophy className="h-3 w-3" />
-                {score.total}
+                <AnimatedNumber value={score.total} />
               </span>
             )}
             {appView.page === 'bracket' && currentTournament && (
@@ -568,7 +615,9 @@ export default function App() {
                 <div className="px-4 pb-5 pt-3 border-t border-white/[0.07]">
                   <div className="rounded-xl bg-white/[0.04] border border-white/[0.07] p-4 flex flex-col gap-1.5">
                     <span className="text-[10px] font-black uppercase tracking-widest text-white/35">Season Total</span>
-                    <span className="text-2xl font-black text-emerald-400">{seasonTotal} <span className="text-sm font-semibold text-white/40">pts</span></span>
+                    <span className="text-2xl font-black text-emerald-400">
+                      <AnimatedNumber value={seasonTotal} /> <span className="text-sm font-semibold text-white/40">pts</span>
+                    </span>
                     {calendarBonus.bonus > 0 && (
                       <span className="text-[11px] text-amber-400/80 font-medium">{calendarBonus.description}</span>
                     )}
@@ -582,258 +631,306 @@ export default function App() {
 
       {/* Main Content - View Router */}
       <div className="flex-1 overflow-hidden relative">
-        {appView.page === 'pools' && (
-          <PoolHub
-            onNavigate={setAppView}
-            tournaments={tournaments}
-            onCreatePool={handleCreatePool}
-          />
-        )}
-        {appView.page === 'pool' && (() => {
-          const pool = getPool(appView.poolId);
-          if (!pool) return <div className="p-8 text-muted-foreground text-sm">Pool not found.</div>;
-          return (
-            <div key={appView.poolId + poolRefreshKey} className="h-full overflow-auto">
-              <PoolLeaderboard
-                pool={pool}
-                onNavigate={setAppView}
-                onPoolUpdate={() => setPoolRefreshKey(k => k + 1)}
-              />
-            </div>
-          );
-        })()}
-        {appView.page === 'pool-entry' && (() => {
-          const pool = getPool(appView.poolId);
-          const entry = pool?.entries.find(e => e.id === appView.entryId);
-          if (!pool || !entry) return <div className="p-8 text-muted-foreground text-sm">Entry not found.</div>;
-          return (
-            <div key={appView.entryId} className="h-full">
-              <PoolBracketEditor
-                pool={pool}
-                entry={entry}
-                onSave={(updatedMatches) => updateEntry(pool.id, entry.id, updatedMatches)}
-                onSubmit={(updatedMatches, tbGames, tbSets) => {
-                  updateEntry(pool.id, entry.id, updatedMatches);
-                  submitEntry(pool.id, entry.id, tbGames, tbSets);
-                  setAppView({ page: 'pool', poolId: pool.id });
-                }}
-                onBack={() => setAppView({ page: 'pool', poolId: pool.id })}
-                readOnly={entry.isSubmitted}
-              />
-            </div>
-          );
-        })()}
-        {appView.page === 'bracket' && (
-          <main className="h-full relative overflow-hidden bg-muted/5">
-        {/* Floating Action Tools */}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className="absolute top-4 right-4 z-20 cursor-pointer rounded-xl shadow-lg h-9 w-9 opacity-70 hover:opacity-100 border border-border/40 bg-background/70 backdrop-blur-sm flex items-center justify-center p-0 transition-all duration-150"
-            aria-label="Bracket actions"
-          >
-            <MoreHorizontal className="h-4.5 w-4.5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="bottom" sideOffset={8} className="w-44">
-            <DropdownMenuItem onClick={handleReset}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Reset Bracket
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleShare}>
-              <Share2 className="mr-2 h-4 w-4" />
-              Share Link
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleExport('image')}>
-              <Download className="mr-2 h-4 w-4" />
-              Export Image
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleExport('pdf')}>
-              <Download className="mr-2 h-4 w-4" />
-              Export PDF
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {/* Zoom Controls */}
-        <div className="absolute bottom-5 right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
-            onClick={() => setZoom(z => Math.min(z + 0.2, 2))}
-            aria-label="Zoom in"
-          >
-            <ZoomIn className="w-4 h-4" />
-          </Button>
-          <div className="text-[10px] text-center font-bold text-muted-foreground/70 w-8">
-            {Math.round(zoom * 100)}%
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
-            onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))}
-            aria-label="Zoom out"
-          >
-            <ZoomOut className="w-4 h-4" />
-          </Button>
-        </div>
-
-        {/* Scrollable Canvas */}
-        <div 
-          ref={canvasRef}
-          className="bracket-canvas w-full h-full overflow-auto p-6 sm:p-10 cursor-grab touch-none custom-scrollbar"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-        >
-          {loading ? (
-            <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground/60">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
-              >
-                <RefreshCw className="h-6 w-6" />
-              </motion.div>
-              <span className="text-sm font-medium">Building bracket…</span>
-            </div>
-          ) : finalMatch && (
-            <div 
-              className="min-w-max min-h-max"
-              style={{ 
-                width: bracketRef.current ? bracketRef.current.offsetWidth * zoom : 'auto',
-                height: bracketRef.current ? bracketRef.current.offsetHeight * zoom : 'auto',
-              }}
+        <AnimatePresence mode="wait" initial={false}>
+          {appView.page === 'pools' && (
+            <motion.div
+              key="pools"
+              initial={{ opacity: 0, x: 18 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 18 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="absolute inset-0"
             >
-              <div 
-                ref={bracketRef}
-                className="bracket-inner inline-block origin-top-left bg-background/50 p-8 rounded-2xl"
-                style={{ transform: `scale(${zoom})` }}
-              >
-                <BracketTree 
-                  matchId={finalMatch.id} 
-                  matches={matches} 
-                  onSelectWinner={handleSelectWinner} 
-                />
-              </div>
-            </div>
+              <PoolHub
+                onNavigate={setAppView}
+                tournaments={tournaments}
+                onCreatePool={handleCreatePool}
+              />
+            </motion.div>
           )}
-        </div>
-
-        {/* Score panel (bottom-left overlay) */}
-        {matches.length > 0 && (
-          <div className="absolute bottom-5 left-4 z-10 bg-background/90 backdrop-blur-md border border-border/50 rounded-xl px-3.5 py-3 shadow-xl text-xs flex flex-col gap-1.5 min-w-[148px]">
-            <div className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-0.5">Score</div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-muted-foreground/80">Base</span>
-              <span className="font-bold tabular-nums">{score.basePoints}</span>
-            </div>
-            {score.upsetBonus > 0 && (
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-amber-400/90">Upset ⚡</span>
-                <span className="font-bold text-amber-400 tabular-nums">+{score.upsetBonus}</span>
-              </div>
-            )}
-            <div className="flex items-center justify-between gap-4 border-t border-border/30 pt-1.5 mt-0.5">
-              <span className="font-bold text-emerald-400">Total</span>
-              <span className="font-black text-emerald-400 tabular-nums">{score.total}</span>
-            </div>
-            <div className="text-[10px] text-muted-foreground/50 tabular-nums">
-              {score.picksCompleted}/127 picks
-            </div>
-            {finalMatch?.winnerId && selectedTournament && (
-              <button
-                onClick={() => {
-                  setTbGamesInput(String(tiebreakerGames[selectedTournament] ?? ''));
-                  setTbSetsInput(String(tiebreakerSets[selectedTournament] ?? ''));
-                  setShowTiebreakerModal(true);
-                }}
-                className="mt-0.5 text-[10px] text-emerald-400/60 hover:text-emerald-400 underline underline-offset-2 text-left transition-colors"
+          {appView.page === 'pool' && (() => {
+            const pool = getPool(appView.poolId);
+            if (!pool) return <div className="p-8 text-muted-foreground text-sm">Pool not found.</div>;
+            return (
+              <motion.div
+                key={appView.poolId + poolRefreshKey}
+                initial={{ opacity: 0, x: 18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 18 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="absolute inset-0 overflow-auto"
               >
-                {tiebreakerGames[selectedTournament] ? '✓ Tiebreaker set' : '+ Set tiebreaker'}
-              </button>
+                <PoolLeaderboard
+                  pool={pool}
+                  onNavigate={setAppView}
+                  onPoolUpdate={() => setPoolRefreshKey(k => k + 1)}
+                />
+              </motion.div>
+            );
+          })()}
+          {appView.page === 'pool-entry' && (() => {
+            const pool = getPool(appView.poolId);
+            const entry = pool?.entries.find(e => e.id === appView.entryId);
+            if (!pool || !entry) return <div className="p-8 text-muted-foreground text-sm">Entry not found.</div>;
+            return (
+              <motion.div
+                key={appView.entryId}
+                initial={{ opacity: 0, x: 18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 18 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="absolute inset-0"
+              >
+                <PoolBracketEditor
+                  pool={pool}
+                  entry={entry}
+                  onSave={(updatedMatches) => updateEntry(pool.id, entry.id, updatedMatches)}
+                  onSubmit={(updatedMatches, tbGames, tbSets) => {
+                    updateEntry(pool.id, entry.id, updatedMatches);
+                    submitEntry(pool.id, entry.id, tbGames, tbSets);
+                    setAppView({ page: 'pool', poolId: pool.id });
+                  }}
+                  onBack={() => setAppView({ page: 'pool', poolId: pool.id })}
+                  readOnly={entry.isSubmitted}
+                />
+              </motion.div>
+            );
+          })()}
+          {appView.page === 'bracket' && (
+            <motion.main
+              key="bracket"
+              initial={{ opacity: 0, x: -18 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -18 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="absolute inset-0 overflow-hidden bg-muted/5"
+            >
+          {/* Floating Action Tools */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="absolute top-4 right-4 z-20 cursor-pointer rounded-xl shadow-lg h-9 w-9 opacity-70 hover:opacity-100 border border-border/40 bg-background/70 backdrop-blur-sm flex items-center justify-center p-0 transition-all duration-150"
+              aria-label="Bracket actions"
+            >
+              <MoreHorizontal className="h-4.5 w-4.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="bottom" sideOffset={8} className="w-44">
+              <DropdownMenuItem onClick={handleReset}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Reset Bracket
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleShare}>
+                <Share2 className="mr-2 h-4 w-4" />
+                Share Link
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('image')}>
+                <Download className="mr-2 h-4 w-4" />
+                Export Image
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('pdf')}>
+                <Download className="mr-2 h-4 w-4" />
+                Export PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Zoom Controls */}
+          <div className="absolute bottom-5 right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
+              onClick={() => setZoom(z => Math.min(z + 0.2, 2))}
+              aria-label="Zoom in"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+            <div className="text-[10px] text-center font-bold text-muted-foreground/70 w-8">
+              {Math.round(zoom * 100)}%
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
+              onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))}
+              aria-label="Zoom out"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Scrollable Canvas */}
+          <div 
+            ref={canvasRef}
+            className="bracket-canvas w-full h-full overflow-auto p-6 sm:p-10 cursor-grab touch-none custom-scrollbar"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+          >
+            {loading ? (
+              <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground/60">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+                >
+                  <RefreshCw className="h-6 w-6" />
+                </motion.div>
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-sm font-medium"
+                >
+                  Building bracket…
+                </motion.span>
+              </div>
+            ) : finalMatch && (
+              <div 
+                className="min-w-max min-h-max"
+                style={{ 
+                  width: bracketRef.current ? bracketRef.current.offsetWidth * zoom : 'auto',
+                  height: bracketRef.current ? bracketRef.current.offsetHeight * zoom : 'auto',
+                }}
+              >
+                <div 
+                  ref={bracketRef}
+                  className="bracket-inner inline-block origin-top-left bg-background/50 p-8 rounded-2xl"
+                  style={{ transform: `scale(${zoom})` }}
+                >
+                  <BracketTree 
+                    matchId={finalMatch.id} 
+                    matches={matches} 
+                    onSelectWinner={handleSelectWinner} 
+                  />
+                </div>
+              </div>
             )}
           </div>
-        )}
 
-        {/* Tiebreaker modal */}
-        <AnimatePresence>
-          {showTiebreakerModal && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setShowTiebreakerModal(false)}
-                className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
-              />
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 8 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 8 }}
-                transition={{ duration: 0.18 }}
-                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[340px] bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-5 flex flex-col gap-4"
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold">Tiebreaker Picks</h3>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setShowTiebreakerModal(false)}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Predict the Final match totals. Used to break ties if scores are equal.
-                </p>
-                <div className="flex flex-col gap-3">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-xs font-semibold text-muted-foreground">Total games in Final</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      value={tbGamesInput}
-                      onChange={e => setTbGamesInput(e.target.value)}
-                      className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
-                      placeholder="e.g. 23"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-xs font-semibold text-muted-foreground">Total sets in Final</span>
-                    <select
-                      value={tbSetsInput}
-                      onChange={e => setTbSetsInput(e.target.value)}
-                      className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
+          {/* Score panel (bottom-left overlay) */}
+          {matches.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15, duration: 0.3 }}
+              className="absolute bottom-5 left-4 z-10 bg-background/90 backdrop-blur-md border border-border/50 rounded-xl px-3.5 py-3 shadow-xl text-xs flex flex-col gap-1.5 min-w-[148px]"
+            >
+              <div className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-0.5">Score</div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-muted-foreground/80">Base</span>
+                <AnimatedNumber value={score.basePoints} className="font-bold tabular-nums" />
+              </div>
+              {score.upsetBonus > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="flex items-center justify-between gap-4"
+                >
+                  <span className="text-amber-400/90">Upset ⚡</span>
+                  <AnimatedNumber value={score.upsetBonus} className="font-bold text-amber-400 tabular-nums" />
+                </motion.div>
+              )}
+              <div className="flex items-center justify-between gap-4 border-t border-border/30 pt-1.5 mt-0.5">
+                <span className="font-bold text-emerald-400">Total</span>
+                <AnimatedNumber value={score.total} className="font-black text-emerald-400 tabular-nums" />
+              </div>
+              <div className="text-[10px] text-muted-foreground/50 tabular-nums">
+                {score.picksCompleted}/127 picks
+              </div>
+              {finalMatch?.winnerId && selectedTournament && (
+                <button
+                  onClick={() => {
+                    setTbGamesInput(String(tiebreakerGames[selectedTournament] ?? ''));
+                    setTbSetsInput(String(tiebreakerSets[selectedTournament] ?? ''));
+                    setShowTiebreakerModal(true);
+                  }}
+                  className="mt-0.5 text-[10px] text-emerald-400/60 hover:text-emerald-400 underline underline-offset-2 text-left transition-colors"
+                >
+                  {tiebreakerGames[selectedTournament] ? '✓ Tiebreaker set' : '+ Set tiebreaker'}
+                </button>
+              )}
+            </motion.div>
+          )}
+
+          {/* Tiebreaker modal */}
+          <AnimatePresence>
+            {showTiebreakerModal && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowTiebreakerModal(false)}
+                  className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
+                />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                  transition={{ duration: 0.18 }}
+                  className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[340px] bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-5 flex flex-col gap-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold">Tiebreaker Picks</h3>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setShowTiebreakerModal(false)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Predict the Final match totals. Used to break ties if scores are equal.
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-semibold text-muted-foreground">Total games in Final</span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        value={tbGamesInput}
+                        onChange={e => setTbGamesInput(e.target.value)}
+                        className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
+                        placeholder="e.g. 23"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-semibold text-muted-foreground">Total sets in Final</span>
+                      <select
+                        value={tbSetsInput}
+                        onChange={e => setTbSetsInput(e.target.value)}
+                        className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
+                      >
+                        <option value="">Select…</option>
+                        <option value="3">3 sets</option>
+                        <option value="5">5 sets</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="ghost" size="sm" onClick={() => setShowTiebreakerModal(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (selectedTournament) {
+                          const g = parseInt(tbGamesInput, 10);
+                          const s = parseInt(tbSetsInput, 10);
+                          if (!isNaN(g)) setTiebreakerGames(prev => ({ ...prev, [selectedTournament]: g }));
+                          if (!isNaN(s)) setTiebreakerSets(prev => ({ ...prev, [selectedTournament]: s }));
+                        }
+                        setShowTiebreakerModal(false);
+                      }}
                     >
-                      <option value="">Select…</option>
-                      <option value="3">3 sets</option>
-                      <option value="5">5 sets</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button variant="ghost" size="sm" onClick={() => setShowTiebreakerModal(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      if (selectedTournament) {
-                        const g = parseInt(tbGamesInput, 10);
-                        const s = parseInt(tbSetsInput, 10);
-                        if (!isNaN(g)) setTiebreakerGames(prev => ({ ...prev, [selectedTournament]: g }));
-                        if (!isNaN(s)) setTiebreakerSets(prev => ({ ...prev, [selectedTournament]: s }));
-                      }
-                      setShowTiebreakerModal(false);
-                    }}
-                  >
-                    Save
-                  </Button>
-                </div>
-              </motion.div>
-            </>
+                      Save
+                    </Button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+            </motion.main>
           )}
         </AnimatePresence>
-          </main>
-        )}
       </div>
     </div>
   );

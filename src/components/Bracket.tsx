@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Match, Player, ROUND_NAMES } from '../lib/bracket-utils';
 import { getBasePoints, getUpsetBonus } from '../lib/scoring';
 import { cn } from '../lib/utils';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const QUALIFIER_PREFIX = 'Qualifier';
 const TBD_NAME = 'TBD';
@@ -15,6 +15,19 @@ interface MatchCardProps {
 }
 
 export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = false }: MatchCardProps) {
+  // Track when the winner was just set to trigger animations
+  const [justPicked, setJustPicked] = useState(false);
+  const prevWinnerIdRef = useRef<string | null>(match.winnerId);
+
+  useEffect(() => {
+    if (!prevWinnerIdRef.current && match.winnerId) {
+      setJustPicked(true);
+      const t = setTimeout(() => setJustPicked(false), 900);
+      return () => clearTimeout(t);
+    }
+    prevWinnerIdRef.current = match.winnerId;
+  }, [match.winnerId]);
+
   const handlePlayerClick = (player: Player | null) => {
     if (readOnly) return;
     if (!player || !match.player1 || !match.player2) return;
@@ -39,15 +52,17 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
     const isQualifier = player?.name?.startsWith(QUALIFIER_PREFIX) || player?.name === TBD_NAME;
 
     return (
-      <div
+      <motion.div
         className={cn(
-          "flex items-center justify-between px-3 py-3 text-[13px] transition-colors duration-150 select-none min-h-[44px]",
+          "flex items-center justify-between px-3 py-3 text-[13px] select-none min-h-[44px]",
           isTop ? "border-b border-border/30" : "",
           isWinner ? "bg-emerald-500/[0.12] font-semibold text-emerald-300" : "",
           isLoser ? "opacity-30" : "",
-          canSelect ? "cursor-pointer hover:bg-white/[0.04] active:bg-white/[0.07]" : "cursor-default",
+          canSelect ? "cursor-pointer" : "cursor-default",
           !player ? "text-muted-foreground/40 italic" : ""
         )}
+        whileTap={canSelect ? { scale: 0.97, backgroundColor: 'rgba(255,255,255,0.06)' } : {}}
+        transition={{ duration: 0.1 }}
         onClick={() => handlePlayerClick(player)}
         role={canSelect ? "button" : undefined}
         tabIndex={canSelect ? 0 : undefined}
@@ -71,27 +86,54 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
           </span>
         </div>
         {isWinner && (
-          <span className="text-[10px] ml-2 shrink-0 text-emerald-400 font-black">✓</span>
+          <motion.span
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+            className="text-[10px] ml-2 shrink-0 text-emerald-400 font-black"
+          >✓</motion.span>
         )}
-      </div>
+      </motion.div>
     );
   };
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.15 }}
+      animate={justPicked
+        ? { opacity: 1, scale: [1, 1.04, 1] }
+        : { opacity: 1, scale: 1 }
+      }
+      transition={justPicked
+        ? { duration: 0.28, ease: 'easeOut' }
+        : { duration: 0.15 }
+      }
       className="py-1 relative group"
       style={{ willChange: 'transform' }}
     >
+      {/* Floating score badge — appears when a winner is first picked */}
+      <AnimatePresence>
+        {justPicked && match.winnerId && (earnedBase + earnedUpset) > 0 && (
+          <motion.div
+            key={`score-float-${match.id}`}
+            initial={{ opacity: 1, y: 0, scale: 1 }}
+            animate={{ opacity: 0, y: -40, scale: 0.85 }}
+            transition={{ duration: 0.75, ease: [0.2, 0, 0.3, 1] }}
+            className="absolute -top-1 right-8 z-20 pointer-events-none text-[11px] font-black text-emerald-300 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-full"
+          >
+            +{earnedBase + earnedUpset} pts
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className={cn(
         "w-[14rem] overflow-hidden transition-all duration-200 rounded-xl border",
         "bg-card/70 backdrop-blur-sm shadow-sm",
         match.winnerId
           ? "border-emerald-500/30 border-l-[3px] border-l-emerald-500 shadow-emerald-950/30 shadow-md"
           : "border-border/40 border-l-[3px] border-l-border/20",
-        !match.winnerId ? "group-hover:border-border/70 group-hover:shadow-md" : ""
+        !match.winnerId ? "group-hover:border-border/70 group-hover:shadow-md" : "",
+        justPicked ? "shadow-emerald-500/20 shadow-lg" : ""
       )}>
         <div className="flex flex-col">
           {renderPlayer(match.player1, true)}
@@ -100,16 +142,26 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
 
         {/* Score & upset badges */}
         {showScore && winner && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-emerald-500/10 bg-emerald-500/[0.04]">
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            transition={{ duration: 0.2 }}
+            className="flex items-center gap-1.5 px-3 py-1.5 border-t border-emerald-500/10 bg-emerald-500/[0.04]"
+          >
             <span className="text-[10px] font-bold text-emerald-400">
               +{earnedBase}{earnedUpset > 0 ? `+${earnedUpset}` : ''} pts
             </span>
             {isUpset && (
-              <span className="text-[10px] bg-amber-500/15 text-amber-400 px-1.5 py-0.5 rounded-md font-bold">
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.1 }}
+                className="text-[10px] bg-amber-500/15 text-amber-400 px-1.5 py-0.5 rounded-md font-bold"
+              >
                 ⚡ upset
-              </span>
+              </motion.span>
             )}
-          </div>
+          </motion.div>
         )}
       </div>
 
