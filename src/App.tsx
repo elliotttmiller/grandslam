@@ -44,17 +44,20 @@ export default function App() {
   const [appView, setAppView] = useState<AppView>({ page: 'bracket' });
   const [poolRefreshKey, setPoolRefreshKey] = useState(0);
 
+  // App view ref — lets the celebration effect read current page without adding
+  // appView as a dependency (which would re-run the effect on navigation)
+  const appViewRef = useRef(appView.page);
+  appViewRef.current = appView.page;
+
   // Champion celebration state
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationName, setCelebrationName] = useState<string | undefined>();
   const prevFinalWinnerRef = useRef<string | null>(null);
-
   // Framer Motion toast queue
   interface Toast { id: number; message: string; type: 'success' | 'info' | 'error' }
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastCounter = useRef(0);
 
-  // Load bracket from localStorage on mount or tournament change
+  const toastCounter = useRef(0);
   useEffect(() => {
     if (!selectedTournament) return;
     const saved = localStorage.getItem(`bracket_state_${selectedTournament}`);
@@ -350,7 +353,7 @@ export default function App() {
   useEffect(() => {
     const prev = prevFinalWinnerRef.current;
     const current = finalMatch?.winnerId ?? null;
-    if (!prev && current && appView.page === 'bracket') {
+    if (!prev && current && appViewRef.current === 'bracket') {
       const winner = finalMatch
         ? (finalMatch.player1?.id === current ? finalMatch.player1 : finalMatch.player2)
         : null;
@@ -359,8 +362,7 @@ export default function App() {
       setTimeout(() => setShowCelebration(false), 3000);
     }
     prevFinalWinnerRef.current = current;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finalMatch?.winnerId]);
+  }, [finalMatch?.winnerId]); // appView.page intentionally read via ref to avoid re-triggering on navigation
 
   const currentTournament = tournaments.find(t => t.id === selectedTournament);
 
