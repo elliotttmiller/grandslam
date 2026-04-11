@@ -93,7 +93,7 @@ export function getSeededDraw(players: Player[]): Player[] {
     if (pos !== undefined) draw[pos] = player;
   }
 
-  const shuffledUnseeded = shuffle(allUnseeded.slice(0, 96));
+  const shuffledUnseeded = shuffle(allUnseeded);
   let ui = 0;
   for (let i = 0; i < size; i++) {
     if (draw[i] === null && ui < shuffledUnseeded.length) {
