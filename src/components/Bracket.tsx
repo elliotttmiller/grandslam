@@ -4,6 +4,9 @@ import { getBasePoints, getUpsetBonus } from '../lib/scoring';
 import { cn } from '../lib/utils';
 import { motion } from 'framer-motion';
 
+const QUALIFIER_PREFIX = 'Qualifier';
+const TBD_NAME = 'TBD';
+
 interface MatchCardProps {
   match: Match;
   onSelectWinner: (matchId: string, winnerId: string) => void;
@@ -33,7 +36,7 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
     const isWinner = match.winnerId === player?.id;
     const isLoser = match.winnerId && match.winnerId !== player?.id;
     const canSelect = !readOnly && match.player1 && match.player2 && !match.winnerId;
-    const isQualifier = player?.name?.startsWith('Qualifier') || player?.name === 'TBD';
+    const isQualifier = player?.name?.startsWith(QUALIFIER_PREFIX) || player?.name === TBD_NAME;
 
     return (
       <div
