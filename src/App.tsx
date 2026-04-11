@@ -435,35 +435,41 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {/* Header */}
-      <header className="flex-none border-b border-white/5 bg-card/40 backdrop-blur-3xl px-4 sm:px-6 py-4 sm:py-6 shadow-2xl z-30 sticky top-0">
-        <div className="max-w-7xl mx-auto flex items-center justify-center">
+      <header className="flex-none border-b border-white/[0.06] bg-card/50 backdrop-blur-3xl px-4 sm:px-6 py-3 shadow-lg z-30 sticky top-0">
+        <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[44px]">
           {/* Left: menu button (only in bracket view) */}
-          <div className="absolute left-4 sm:left-6">
+          <div className="absolute left-3 sm:left-5">
             {appView.page === 'bracket' ? (
-              <Button variant="ghost" size="icon" className="text-white/70 hover:text-white h-8 w-8" onClick={() => setIsSidebarOpen(true)}>
-                <Menu className="h-5 w-5" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white/60 hover:text-white hover:bg-white/8 h-9 w-9 rounded-xl"
+                onClick={() => setIsSidebarOpen(true)}
+                aria-label="Open tournament selector"
+              >
+                <Menu className="h-[18px] w-[18px]" />
               </Button>
             ) : null}
           </div>
 
           {/* Center: logo + nav tabs */}
-          <div className="flex items-center gap-4 sm:gap-6">
+          <div className="flex items-center gap-3 sm:gap-5">
             <img
               src="/tennis_logo.png"
-              alt="Tennis"
-              className="h-8 w-8 transition-transform hover:rotate-12 duration-500"
+              alt="Grand Slam"
+              className="h-7 w-7 transition-transform hover:rotate-12 duration-500 shrink-0"
               referrerPolicy="no-referrer"
             />
-            <h1 className="text-sm font-black uppercase tracking-widest hidden sm:block">Grand Slam Tracker</h1>
-            <div className="hidden sm:block h-6 w-px bg-white/10" />
+            <h1 className="text-[13px] font-black uppercase tracking-widest hidden sm:block text-white/80">Grand Slam</h1>
+            <div className="hidden sm:block h-5 w-px bg-white/10" />
             {/* Nav tabs */}
-            <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
+            <div className="flex items-center gap-0.5 bg-white/[0.06] rounded-xl p-1">
               <button
                 onClick={() => setAppView({ page: 'bracket' })}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
                   appView.page === 'bracket'
-                    ? 'bg-white/15 text-foreground shadow-sm'
-                    : 'text-white/50 hover:text-white/80'
+                    ? 'bg-white/[0.12] text-foreground shadow-sm'
+                    : 'text-white/45 hover:text-white/75 hover:bg-white/[0.04]'
                 }`}
               >
                 <Trophy className="h-3.5 w-3.5" />
@@ -471,10 +477,10 @@ export default function App() {
               </button>
               <button
                 onClick={() => setAppView({ page: 'pools' })}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
                   appView.page !== 'bracket'
-                    ? 'bg-white/15 text-foreground shadow-sm'
-                    : 'text-white/50 hover:text-white/80'
+                    ? 'bg-white/[0.12] text-foreground shadow-sm'
+                    : 'text-white/45 hover:text-white/75 hover:bg-white/[0.04]'
                 }`}
               >
                 <Users className="h-3.5 w-3.5" />
@@ -482,31 +488,31 @@ export default function App() {
               </button>
             </div>
             {/* Tournament name in bracket view */}
-            {appView.page === 'bracket' && (
+            {appView.page === 'bracket' && currentTournament && (
               <>
-                <div className="hidden sm:block h-6 w-px bg-white/10" />
-                <span className="text-xs font-bold uppercase opacity-70 hidden sm:block">{currentTournament?.name}</span>
+                <div className="hidden sm:block h-5 w-px bg-white/10" />
+                <span className="text-[12px] font-semibold text-white/55 hidden sm:block truncate max-w-[160px]">{currentTournament.name}</span>
               </>
             )}
           </div>
 
           {/* Right: score + lock badge (bracket view only) */}
-          <div className="absolute right-4 sm:right-6 flex items-center gap-2">
-            {appView.page === 'bracket' && matches.length > 0 && (
-              <span className="hidden sm:flex items-center gap-1 text-[10px] font-bold bg-primary/20 text-primary px-2 py-1 rounded-full">
+          <div className="absolute right-3 sm:right-5 flex items-center gap-2">
+            {appView.page === 'bracket' && matches.length > 0 && score.total > 0 && (
+              <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20">
                 <Trophy className="h-3 w-3" />
-                {score.total} pts
+                {score.total}
               </span>
             )}
             {appView.page === 'bracket' && currentTournament && (
               isLocked ? (
-                <span className="flex items-center gap-1 text-[10px] font-bold bg-red-500/20 text-red-400 px-2 py-1 rounded-full">
+                <span className="flex items-center gap-1 text-[11px] font-bold bg-red-500/15 text-red-400 px-2.5 py-1 rounded-full border border-red-500/20">
                   <Lock className="h-3 w-3" />
-                  Locked
+                  <span className="hidden xs:inline">Locked</span>
                 </span>
               ) : (
-                <span className="hidden sm:flex items-center gap-1 text-[10px] font-medium opacity-60 px-2 py-1">
-                  ⏰ Locks {new Date(currentTournament.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                <span className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-white/40 px-2 py-1">
+                  ⏰ {new Date(currentTournament.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                 </span>
               )
             )}
@@ -522,28 +528,33 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
               onClick={() => setIsSidebarOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              className="fixed inset-0 bg-black/70 backdrop-blur-[2px] z-50"
             />
             <motion.div 
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 left-0 bottom-0 w-72 bg-card border-r border-white/10 shadow-2xl z-50 p-4 flex flex-col gap-4"
+              transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+              className="fixed top-0 left-0 bottom-0 w-[280px] bg-card/95 backdrop-blur-xl border-r border-white/[0.08] shadow-2xl z-50 flex flex-col"
             >
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-black uppercase tracking-widest opacity-50">Tournaments</h2>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsSidebarOpen(false)}>
+              <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                <h2 className="text-[11px] font-black uppercase tracking-widest text-white/40">Select Tournament</h2>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-white/50 hover:text-white rounded-xl" onClick={() => setIsSidebarOpen(false)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
               
-              <div className="flex flex-col gap-1 overflow-y-auto custom-scrollbar">
+              <div className="flex-1 flex flex-col gap-0.5 overflow-y-auto custom-scrollbar px-3 pb-3">
                 {loadingTournaments ? (
-                  <div className="p-4 text-xs text-center opacity-50">Searching for dates...</div>
+                  <div className="flex items-center justify-center py-12 gap-2 text-xs text-white/40">
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    Loading tournaments…
+                  </div>
                 ) : tournaments.map((t, index) => {
                   const tScore = allTournamentScores[t.id];
+                  const isSelected = selectedTournament === t.id;
                   return (
                     <button
                       key={`${t.id}-${t.startDate}-${index}`}
@@ -551,37 +562,39 @@ export default function App() {
                         setSelectedTournament(t.id);
                         setIsSidebarOpen(false);
                       }}
-                      className={`flex flex-col gap-1 p-3 rounded-lg transition-all text-left ${selectedTournament === t.id ? 'bg-white/10 ring-1 ring-white/20' : 'hover:bg-white/5'}`}
+                      className={`flex flex-col gap-1 p-3 rounded-xl transition-all text-left ${
+                        isSelected
+                          ? 'bg-emerald-500/10 ring-1 ring-emerald-500/25'
+                          : 'hover:bg-white/[0.05] active:bg-white/[0.08]'
+                      }`}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2.5">
                         {t.logo ? (
                           <img
                             src={t.logo}
                             alt={t.name}
-                            className="h-6 w-6 object-contain"
+                            className="h-6 w-6 object-contain shrink-0"
                             referrerPolicy="no-referrer"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
-                              const fallback = document.createElement('div');
-                              fallback.className = 'h-6 w-6 flex items-center justify-center bg-white/5 rounded';
-                              fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-50"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>';
-                              (e.target as HTMLImageElement).parentNode?.insertBefore(fallback, e.target as HTMLImageElement);
                             }}
                           />
                         ) : (
-                          <Trophy className="h-4 w-4 opacity-50" />
+                          <Trophy className={`h-4 w-4 shrink-0 ${isSelected ? 'text-emerald-400' : 'opacity-40'}`} />
                         )}
-                        <span className="text-xs font-bold uppercase tracking-tight">{t.name}</span>
-                        {tScore && (
-                          <span className="ml-auto text-[10px] font-bold bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                        <span className={`text-[13px] font-semibold truncate ${isSelected ? 'text-emerald-300' : 'text-white/80'}`}>
+                          {t.name}
+                        </span>
+                        {tScore && tScore.total > 0 && (
+                          <span className="ml-auto text-[10px] font-bold bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded-full shrink-0">
                             {tScore.total}
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 mt-1 opacity-40">
-                        <Calendar className="h-3 w-3" />
-                        <span className="text-[10px] font-medium">
-                          {new Date(t.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - {new Date(t.endDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                      <div className="flex items-center gap-1.5 pl-[34px] text-white/35">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span className="text-[11px]">
+                          {new Date(t.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – {new Date(t.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </span>
                       </div>
                     </button>
@@ -591,12 +604,12 @@ export default function App() {
 
               {/* Season summary at bottom of sidebar */}
               {Object.keys(allTournamentScores).length > 0 && (
-                <div className="mt-auto pt-4 border-t border-white/10">
-                  <div className="rounded-lg bg-white/5 p-3 flex flex-col gap-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest opacity-50">Season Score</span>
-                    <span className="text-lg font-black text-primary">{seasonTotal} pts</span>
+                <div className="px-4 pb-5 pt-3 border-t border-white/[0.07]">
+                  <div className="rounded-xl bg-white/[0.04] border border-white/[0.07] p-4 flex flex-col gap-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/35">Season Total</span>
+                    <span className="text-2xl font-black text-emerald-400">{seasonTotal} <span className="text-sm font-semibold text-white/40">pts</span></span>
                     {calendarBonus.bonus > 0 && (
-                      <span className="text-[10px] text-amber-400">{calendarBonus.description}</span>
+                      <span className="text-[11px] text-amber-400/80 font-medium">{calendarBonus.description}</span>
                     )}
                   </div>
                 </div>
@@ -650,20 +663,23 @@ export default function App() {
           );
         })()}
         {appView.page === 'bracket' && (
-          <main className="h-full relative overflow-hidden bg-muted/5 pt-4 sm:pt-8">
+          <main className="h-full relative overflow-hidden bg-muted/5">
         {/* Floating Action Tools */}
         <DropdownMenu>
-          <DropdownMenuTrigger className="absolute top-6 right-6 z-20 cursor-pointer rounded-full shadow-lg h-10 w-10 opacity-80 hover:opacity-100 border border-border/50 bg-background/60 backdrop-blur flex items-center justify-center p-0">
-            <MoreHorizontal className="h-5 w-5" />
+          <DropdownMenuTrigger
+            className="absolute top-4 right-4 z-20 cursor-pointer rounded-xl shadow-lg h-9 w-9 opacity-70 hover:opacity-100 border border-border/40 bg-background/70 backdrop-blur-sm flex items-center justify-center p-0 transition-all duration-150"
+            aria-label="Bracket actions"
+          >
+            <MoreHorizontal className="h-4.5 w-4.5" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="bottom" sideOffset={8} className="w-40">
+          <DropdownMenuContent align="end" side="bottom" sideOffset={8} className="w-44">
             <DropdownMenuItem onClick={handleReset}>
               <RefreshCw className="mr-2 h-4 w-4" />
-              Reset
+              Reset Bracket
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleShare}>
               <Share2 className="mr-2 h-4 w-4" />
-              Share
+              Share Link
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => handleExport('image')}>
               <Download className="mr-2 h-4 w-4" />
@@ -677,59 +693,83 @@ export default function App() {
         </DropdownMenu>
 
         {/* Floating Navigation Controls */}
-        <Button 
-          variant="secondary" 
-          className="absolute top-1/2 left-2 -translate-y-1/2 z-20 rounded-full shadow-lg h-24 w-8 p-0 opacity-60 hover:opacity-100 transition-all border border-border/50 bg-background/60 backdrop-blur" 
+        <Button
+          variant="secondary"
+          className="absolute top-1/2 left-1.5 -translate-y-1/2 z-20 rounded-xl shadow-md h-20 w-7 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm"
           onClick={() => scroll('left')}
+          aria-label="Scroll left"
         >
-          <ChevronLeft className="h-5 w-5" strokeWidth={1.5} />
+          <ChevronLeft className="h-4 w-4" strokeWidth={2} />
         </Button>
-        <Button 
-          variant="secondary" 
-          className="absolute top-1/2 right-2 -translate-y-1/2 z-20 rounded-full shadow-lg h-24 w-8 p-0 opacity-60 hover:opacity-100 transition-all border border-border/50 bg-background/60 backdrop-blur" 
+        <Button
+          variant="secondary"
+          className="absolute top-1/2 right-1.5 -translate-y-1/2 z-20 rounded-xl shadow-md h-20 w-7 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm"
           onClick={() => scroll('right')}
+          aria-label="Scroll right"
         >
-          <ChevronRight className="h-5 w-5" strokeWidth={1.5} />
+          <ChevronRight className="h-4 w-4" strokeWidth={2} />
         </Button>
-        <Button 
-          variant="secondary" 
-          className="absolute top-2 left-1/2 -translate-x-1/2 z-20 rounded-full shadow-lg h-8 w-24 p-0 opacity-60 hover:opacity-100 transition-all border border-border/50 bg-background/60 backdrop-blur" 
+        <Button
+          variant="secondary"
+          className="absolute top-1.5 left-1/2 -translate-x-1/2 z-20 rounded-xl shadow-md h-7 w-20 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm"
           onClick={() => scroll('up')}
+          aria-label="Scroll up"
         >
-          <ChevronUp className="h-5 w-5" strokeWidth={1.5} />
+          <ChevronUp className="h-4 w-4" strokeWidth={2} />
         </Button>
-        <Button 
-          variant="secondary" 
-          className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 rounded-full shadow-lg h-8 w-24 p-0 opacity-60 hover:opacity-100 transition-all border border-border/50 bg-background/60 backdrop-blur" 
+        <Button
+          variant="secondary"
+          className="absolute bottom-1.5 left-1/2 -translate-x-1/2 z-20 rounded-xl shadow-md h-7 w-20 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm"
           onClick={() => scroll('down')}
+          aria-label="Scroll down"
         >
-          <ChevronDown className="h-5 w-5" strokeWidth={1.5} />
+          <ChevronDown className="h-4 w-4" strokeWidth={2} />
         </Button>
 
         {/* Zoom Controls */}
-        <div className="absolute bottom-6 right-6 z-10 flex flex-col gap-2 bg-background/80 backdrop-blur-sm p-2 rounded-lg border shadow-sm">
-          <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.min(z + 0.2, 2))}>
-            <ZoomIn className="w-5 h-5" />
+        <div className="absolute bottom-5 right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg hover:bg-white/10"
+            onClick={() => setZoom(z => Math.min(z + 0.2, 2))}
+            aria-label="Zoom in"
+          >
+            <ZoomIn className="w-4 h-4" />
           </Button>
-          <div className="text-xs text-center font-medium text-muted-foreground">
+          <div className="text-[10px] text-center font-bold text-muted-foreground/70 w-8">
             {Math.round(zoom * 100)}%
           </div>
-          <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))}>
-            <ZoomOut className="w-5 h-5" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg hover:bg-white/10"
+            onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))}
+            aria-label="Zoom out"
+          >
+            <ZoomOut className="w-4 h-4" />
           </Button>
         </div>
 
         {/* Scrollable Canvas */}
         <div 
           ref={containerRef}
-          className="w-full h-full overflow-auto p-8 cursor-grab active:cursor-grabbing touch-none custom-scrollbar"
+          className="w-full h-full overflow-auto p-6 sm:p-10 cursor-grab active:cursor-grabbing touch-none custom-scrollbar"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
         >
           {loading ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">Generating AI Bracket...</div>
+            <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground/60">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+              >
+                <RefreshCw className="h-6 w-6" />
+              </motion.div>
+              <span className="text-sm font-medium">Building bracket…</span>
+            </div>
           ) : finalMatch && (
             <div 
               className="min-w-max min-h-max"
@@ -741,7 +781,7 @@ export default function App() {
             >
               <div 
                 ref={bracketRef}
-                className="inline-block transition-transform duration-200 ease-out origin-top-left bg-background p-8 rounded-xl border shadow-sm"
+                className="inline-block transition-transform duration-200 ease-out origin-top-left bg-background/50 p-8 rounded-2xl"
                 style={{ transform: `scale(${zoom})` }}
               >
                 <BracketTree 
@@ -756,23 +796,23 @@ export default function App() {
 
         {/* Score panel (bottom-left overlay) */}
         {matches.length > 0 && (
-          <div className="absolute bottom-6 left-6 z-10 bg-background/90 backdrop-blur-sm border border-border/50 rounded-lg p-3 shadow-lg text-xs flex flex-col gap-1 min-w-[140px]">
-            <div className="font-black uppercase tracking-widest text-[9px] opacity-40 mb-1">Score</div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Base</span>
-              <span className="font-bold">{score.basePoints} pts</span>
+          <div className="absolute bottom-5 left-4 z-10 bg-background/90 backdrop-blur-md border border-border/50 rounded-xl px-3.5 py-3 shadow-xl text-xs flex flex-col gap-1.5 min-w-[148px]">
+            <div className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-0.5">Score</div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground/80">Base</span>
+              <span className="font-bold tabular-nums">{score.basePoints}</span>
             </div>
             {score.upsetBonus > 0 && (
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-amber-400">Upset ⚡</span>
-                <span className="font-bold text-amber-400">+{score.upsetBonus}</span>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-amber-400/90">Upset ⚡</span>
+                <span className="font-bold text-amber-400 tabular-nums">+{score.upsetBonus}</span>
               </div>
             )}
-            <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-1 mt-0.5">
-              <span className="font-black text-primary">Total</span>
-              <span className="font-black text-primary">{score.total} pts</span>
+            <div className="flex items-center justify-between gap-4 border-t border-border/30 pt-1.5 mt-0.5">
+              <span className="font-bold text-emerald-400">Total</span>
+              <span className="font-black text-emerald-400 tabular-nums">{score.total}</span>
             </div>
-            <div className="text-[10px] text-muted-foreground opacity-60">
+            <div className="text-[10px] text-muted-foreground/50 tabular-nums">
               {score.picksCompleted}/127 picks
             </div>
             {finalMatch?.winnerId && selectedTournament && (
@@ -782,7 +822,7 @@ export default function App() {
                   setTbSetsInput(String(tiebreakerSets[selectedTournament] ?? ''));
                   setShowTiebreakerModal(true);
                 }}
-                className="mt-1 text-[9px] text-primary/70 hover:text-primary underline underline-offset-2 text-left"
+                className="mt-0.5 text-[10px] text-emerald-400/60 hover:text-emerald-400 underline underline-offset-2 text-left transition-colors"
               >
                 {tiebreakerGames[selectedTournament] ? '✓ Tiebreaker set' : '+ Set tiebreaker'}
               </button>
@@ -799,41 +839,43 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setShowTiebreakerModal(false)}
-                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+                className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
               />
               <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 bg-card border border-white/10 rounded-xl shadow-2xl z-50 p-5 flex flex-col gap-4"
+                initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                transition={{ duration: 0.18 }}
+                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[340px] bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-5 flex flex-col gap-4"
               >
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-black uppercase tracking-widest">Tiebreaker Picks</h3>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowTiebreakerModal(false)}>
+                  <h3 className="text-sm font-bold">Tiebreaker Picks</h3>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setShowTiebreakerModal(false)}>
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   Predict the Final match totals. Used to break ties if scores are equal.
                 </p>
                 <div className="flex flex-col gap-3">
                   <label className="flex flex-col gap-1.5">
-                    <span className="text-xs font-semibold">Total games in Final (e.g., 23)</span>
+                    <span className="text-xs font-semibold text-muted-foreground">Total games in Final</span>
                     <input
                       type="number"
+                      inputMode="numeric"
                       min={0}
                       value={tbGamesInput}
                       onChange={e => setTbGamesInput(e.target.value)}
-                      className="bg-background border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                       placeholder="e.g. 23"
                     />
                   </label>
                   <label className="flex flex-col gap-1.5">
-                    <span className="text-xs font-semibold">Total sets in Final (3 or 5)</span>
+                    <span className="text-xs font-semibold text-muted-foreground">Total sets in Final</span>
                     <select
                       value={tbSetsInput}
                       onChange={e => setTbSetsInput(e.target.value)}
-                      className="bg-background border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                     >
                       <option value="">Select…</option>
                       <option value="3">3 sets</option>

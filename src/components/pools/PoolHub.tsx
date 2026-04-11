@@ -113,49 +113,50 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <div className="flex-none px-6 py-6 border-b border-border/30">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+      <div className="flex-none px-5 py-5 border-b border-border/25">
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-black tracking-tight">Bracket Pools</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Compete with friends on Grand Slam picks</p>
+            <h2 className="text-lg font-bold tracking-tight">Bracket Pools</h2>
+            <p className="text-[12px] text-muted-foreground/70 mt-0.5">Compete with friends on Grand Slam picks</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowJoin(true)}>
-              <Users className="h-4 w-4 mr-1.5" />
-              Join Pool
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setShowJoin(true)}>
+              <Users className="h-3.5 w-3.5 mr-1.5" />
+              Join
             </Button>
-            <Button size="sm" onClick={() => setShowCreate(true)}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              Create Pool
+            <Button size="sm" className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" onClick={() => setShowCreate(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              Create
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 px-6 py-6">
+      <div className="flex-1 px-5 py-5">
         <div className="max-w-4xl mx-auto">
           {pools.length === 0 ? (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center py-24 gap-4 text-center"
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center justify-center py-20 gap-5 text-center"
             >
-              <div className="h-16 w-16 rounded-2xl bg-muted/30 flex items-center justify-center">
-                <Trophy className="h-8 w-8 text-muted-foreground/50" />
+              <div className="h-16 w-16 rounded-2xl bg-muted/25 border border-border/30 flex items-center justify-center">
+                <Trophy className="h-7 w-7 text-muted-foreground/40" />
               </div>
               <div>
                 <p className="font-semibold text-base">No pools yet</p>
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-[13px] text-muted-foreground/70 mt-1.5 max-w-[220px]">
                   Create your first pool and invite friends to compete!
                 </p>
               </div>
-              <Button onClick={() => setShowCreate(true)}>
+              <Button className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" onClick={() => setShowCreate(true)}>
                 <Plus className="h-4 w-4 mr-1.5" />
                 Create Pool
               </Button>
             </motion.div>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2.5">
               {pools.map((pool, i) => {
                 const topEntries = [...pool.entries]
                   .map(e => ({ ...e, score: calculateBracketScore(e.matches) }))
@@ -165,33 +166,33 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
                 return (
                   <motion.div
                     key={pool.id}
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center justify-between gap-4 hover:border-border transition-colors"
+                    transition={{ delay: i * 0.04, duration: 0.2 }}
+                    className="bg-card/60 border border-border/40 rounded-2xl p-4 flex items-center justify-between gap-4 hover:border-border/70 hover:bg-card/80 transition-all duration-150"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm truncate">{pool.name}</span>
+                        <span className="font-semibold text-[14px] truncate">{pool.name}</span>
                         <span className={cn(
-                          'text-[10px] font-bold px-1.5 py-0.5 rounded border',
+                          'text-[10px] font-bold px-1.5 py-0.5 rounded-md border',
                           tournamentColor(pool.tournamentId)
                         )}>
                           {pool.tournamentName}
                         </span>
                       </div>
-                      <div className="flex items-center gap-3 mt-1.5">
-                        <span className="text-xs text-muted-foreground">
-                          <Users className="inline h-3 w-3 mr-0.5" />
+                      <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                        <span className="text-[12px] text-muted-foreground/70 flex items-center gap-1">
+                          <Users className="inline h-3 w-3" />
                           {pool.entries.length} {pool.entries.length === 1 ? 'entry' : 'entries'}
                         </span>
                         {topEntries.length > 0 && (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-2">
                             {topEntries.map((e, rank) => (
-                              <span key={e.id} className="text-[10px] text-muted-foreground">
+                              <span key={e.id} className="text-[11px] text-muted-foreground/70 flex items-center gap-0.5">
                                 {rank === 0 ? '🥇' : rank === 1 ? '🥈' : '🥉'}
                                 <span className="ml-0.5">{e.userName}</span>
-                                <span className="ml-0.5 font-bold text-foreground">{e.score.total}pt</span>
+                                <span className="ml-0.5 font-bold text-foreground/80 tabular-nums">{e.score.total}</span>
                               </span>
                             ))}
                           </div>
@@ -201,10 +202,10 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="shrink-0"
+                      className="shrink-0 rounded-xl text-muted-foreground/70 hover:text-foreground"
                       onClick={() => onNavigate({ page: 'pool', poolId: pool.id })}
                     >
-                      View <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                      View <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
                     </Button>
                   </motion.div>
                 );
@@ -223,61 +224,62 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => !isCreating && setShowCreate(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-card border border-border/50 rounded-xl shadow-2xl z-50 p-6 flex flex-col gap-4"
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.18 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-md bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-black uppercase tracking-widest">Create a Pool</h3>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowCreate(false)} disabled={isCreating}>
+                <h3 className="text-base font-bold">Create a Pool</h3>
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setShowCreate(false)} disabled={isCreating}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
 
               <div className="flex flex-col gap-3">
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold">Pool Name <span className="text-red-400">*</span></span>
+                  <span className="text-xs font-semibold text-muted-foreground">Pool Name <span className="text-red-400">*</span></span>
                   <input
                     type="text"
                     value={createPoolName}
                     onChange={e => setCreatePoolName(e.target.value)}
                     placeholder="e.g. Miller Family Pool"
-                    className="bg-background border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   />
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold">Your Name <span className="text-red-400">*</span></span>
+                  <span className="text-xs font-semibold text-muted-foreground">Your Name <span className="text-red-400">*</span></span>
                   <input
                     type="text"
                     value={createUserName}
                     onChange={e => setCreateUserName(e.target.value)}
                     placeholder="e.g. John Smith"
-                    className="bg-background border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   />
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold">Your Bracket Name <span className="text-muted-foreground font-normal">(optional)</span></span>
+                  <span className="text-xs font-semibold text-muted-foreground">Your Bracket Name <span className="text-muted-foreground/50 font-normal">(optional)</span></span>
                   <input
                     type="text"
                     value={createBracketName}
                     onChange={e => setCreateBracketName(e.target.value)}
                     placeholder={createUserName ? `${createUserName}'s Bracket` : "e.g. Dark Horse Picks"}
-                    className="bg-background border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   />
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold">Tournament <span className="text-red-400">*</span></span>
+                  <span className="text-xs font-semibold text-muted-foreground">Tournament <span className="text-red-400">*</span></span>
                   <select
                     value={createTournamentId}
                     onChange={e => setCreateTournamentId(e.target.value)}
-                    className="bg-background border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   >
                     <option value="">Select tournament…</option>
                     {tournaments.map(t => (
@@ -286,8 +288,8 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
                   </select>
                 </label>
 
-                <p className="text-[11px] text-muted-foreground bg-muted/20 rounded-md px-3 py-2 border border-border/30">
-                  The tournament draw will be loaded and shared with all participants. You'll be able to fill out your picks after creating the pool.
+                <p className="text-[11px] text-muted-foreground/60 bg-muted/15 rounded-xl px-3 py-2.5 border border-border/20 leading-relaxed">
+                  The tournament draw will be loaded and shared with all participants. You'll fill out your picks after creating the pool.
                 </p>
               </div>
 
@@ -295,13 +297,14 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
                 <Button variant="ghost" size="sm" onClick={() => setShowCreate(false)} disabled={isCreating}>Cancel</Button>
                 <Button
                   size="sm"
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0"
                   disabled={!createPoolName.trim() || !createUserName.trim() || !createTournamentId || isCreating}
                   onClick={handleCreateSubmit}
                 >
                   {isCreating ? (
                     <>
                       <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      Generating draw…
+                      Building draw…
                     </>
                   ) : 'Create Pool'}
                 </Button>
@@ -320,57 +323,58 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowJoin(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-card border border-border/50 rounded-xl shadow-2xl z-50 p-6 flex flex-col gap-4"
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.18 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-sm bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-black uppercase tracking-widest">Join a Pool</h3>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowJoin(false)}>
+                <h3 className="text-base font-bold">Join a Pool</h3>
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setShowJoin(false)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
 
               <div className="flex flex-col gap-3">
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold">Pool Code <span className="text-red-400">*</span></span>
+                  <span className="text-xs font-semibold text-muted-foreground">Pool Code <span className="text-red-400">*</span></span>
                   <input
                     type="text"
                     value={joinCode}
                     onChange={e => setJoinCode(e.target.value.toUpperCase().slice(0, 6))}
                     placeholder="ABCXYZ"
-                    className="bg-background border border-border/50 rounded-md px-3 py-2 text-sm font-mono tracking-widest uppercase focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm font-mono tracking-[0.25em] uppercase focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   />
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold">Your Name <span className="text-red-400">*</span></span>
+                  <span className="text-xs font-semibold text-muted-foreground">Your Name <span className="text-red-400">*</span></span>
                   <input
                     type="text"
                     value={joinUserName}
                     onChange={e => setJoinUserName(e.target.value)}
                     placeholder="e.g. Jane Smith"
-                    className="bg-background border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   />
                 </label>
 
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold">Bracket Name <span className="text-muted-foreground font-normal">(optional)</span></span>
+                  <span className="text-xs font-semibold text-muted-foreground">Bracket Name <span className="text-muted-foreground/50 font-normal">(optional)</span></span>
                   <input
                     type="text"
                     value={joinBracketName}
                     onChange={e => setJoinBracketName(e.target.value)}
                     placeholder={joinUserName ? `${joinUserName}'s Bracket` : 'e.g. My Picks'}
-                    className="bg-background border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   />
                 </label>
 
                 {joinError && (
-                  <p className="text-xs text-red-400 bg-red-500/10 rounded-md px-3 py-2 border border-red-500/20">
+                  <p className="text-xs text-red-400 bg-red-500/10 rounded-xl px-3 py-2.5 border border-red-500/20 leading-relaxed">
                     {joinError}
                   </p>
                 )}
@@ -380,6 +384,7 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
                 <Button variant="ghost" size="sm" onClick={() => setShowJoin(false)}>Cancel</Button>
                 <Button
                   size="sm"
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0"
                   disabled={!joinCode.trim() || !joinUserName.trim()}
                   onClick={handleJoinSubmit}
                 >
