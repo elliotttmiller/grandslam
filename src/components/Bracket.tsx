@@ -41,7 +41,7 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
     return (
       <div
         className={cn(
-          "flex items-center justify-between px-3 py-2.5 text-[13px] transition-all duration-150 select-none",
+          "flex items-center justify-between px-3 py-3 text-[13px] transition-colors duration-150 select-none min-h-[44px]",
           isTop ? "border-b border-border/30" : "",
           isWinner ? "bg-emerald-500/[0.12] font-semibold text-emerald-300" : "",
           isLoser ? "opacity-30" : "",
@@ -83,6 +83,7 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.15 }}
       className="py-1 relative group"
+      style={{ willChange: 'transform' }}
     >
       <div className={cn(
         "w-[14rem] overflow-hidden transition-all duration-200 rounded-xl border",

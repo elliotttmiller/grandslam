@@ -1,0 +1,174 @@
+import { useRef, useEffect, useCallback } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
+
+interface UseBracketCanvasOptions {
+  /** Current zoom level (0.2 – 2.0). Controlled by parent. */
+  zoom: number;
+  onZoomChange: (zoom: number) => void;
+  minZoom?: number;
+  maxZoom?: number;
+}
+
+/**
+ * High-performance bracket canvas interaction hook.
+ *
+ * Key design choices:
+ * - All pan state is kept in refs → zero React re-renders during drag
+ * - Direct DOM scroll manipulation via requestAnimationFrame
+ * - Pinch-to-zoom via native touch events (passive: false to allow preventDefault)
+ * - Mouse-wheel zoom via native wheel event (passive: false)
+ * - Pointer events used for mouse/stylus drag; touch events used for touch drag & pinch
+ */
+export function useBracketCanvas({
+  zoom,
+  onZoomChange,
+  minZoom = 0.2,
+  maxZoom = 2.0,
+}: UseBracketCanvasOptions) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Keep a ref to the latest zoom / callback so event handlers never close over stale values
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const onZoomChangeRef = useRef(onZoomChange);
+  onZoomChangeRef.current = onZoomChange;
+
+  // Drag state (never in React state — kept as refs)
+  const isDraggingRef = useRef(false);
+  const startScrollRef = useRef({ x: 0, y: 0 });
+  const startClientRef = useRef({ x: 0, y: 0 });
+  const rafRef = useRef(0);
+
+  // ─── Pointer (mouse / stylus) drag handlers ─────────────────────────────────
+
+  const handlePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    // Ignore touch pointers — handled by our native touch listeners below
+    if (e.pointerType === 'touch') return;
+    isDraggingRef.current = true;
+    startScrollRef.current = {
+      x: containerRef.current?.scrollLeft ?? 0,
+      y: containerRef.current?.scrollTop ?? 0,
+    };
+    startClientRef.current = { x: e.clientX, y: e.clientY };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
+  }, []);
+
+  const handlePointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current || e.pointerType === 'touch') return;
+    const dx = e.clientX - startClientRef.current.x;
+    const dy = e.clientY - startClientRef.current.y;
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      if (containerRef.current) {
+        containerRef.current.scrollLeft = startScrollRef.current.x - dx;
+        containerRef.current.scrollTop = startScrollRef.current.y - dy;
+      }
+    });
+  }, []);
+
+  const handlePointerUp = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch') return;
+    isDraggingRef.current = false;
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    if (containerRef.current) containerRef.current.style.cursor = '';
+  }, []);
+
+  // ─── Native touch + wheel event listeners ────────────────────────────────────
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Pinch tracking
+    let initialPinchDist: number | null = null;
+    let initialZoomAtPinch = zoomRef.current;
+
+    // Single-finger drag tracking
+    let touchStartScroll = { x: 0, y: 0 };
+    let touchStartClient = { x: 0, y: 0 };
+    let touchRaf = 0;
+
+    const getDistance = (t1: Touch, t2: Touch) =>
+      Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        // Begin pinch gesture
+        initialPinchDist = getDistance(e.touches[0], e.touches[1]);
+        initialZoomAtPinch = zoomRef.current;
+        e.preventDefault();
+      } else if (e.touches.length === 1) {
+        // Begin single-finger drag
+        touchStartScroll = { x: container.scrollLeft, y: container.scrollTop };
+        touchStartClient = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && initialPinchDist !== null) {
+        e.preventDefault();
+        const dist = getDistance(e.touches[0], e.touches[1]);
+        const scale = dist / initialPinchDist;
+        const newZoom = Math.max(
+          minZoom,
+          Math.min(maxZoom, initialZoomAtPinch * scale),
+        );
+        onZoomChangeRef.current(newZoom);
+      } else if (e.touches.length === 1) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - touchStartClient.x;
+        const dy = e.touches[0].clientY - touchStartClient.y;
+        cancelAnimationFrame(touchRaf);
+        touchRaf = requestAnimationFrame(() => {
+          container.scrollLeft = touchStartScroll.x - dx;
+          container.scrollTop = touchStartScroll.y - dy;
+        });
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        initialPinchDist = null;
+      }
+      if (e.touches.length === 1) {
+        // User lifted one finger — reset drag origin to avoid a jump
+        touchStartScroll = { x: container.scrollLeft, y: container.scrollTop };
+        touchStartClient = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    };
+
+    // Mouse wheel zoom (Ctrl/Cmd + scroll or trackpad pinch)
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        const newZoom = Math.max(minZoom, Math.min(maxZoom, zoomRef.current + delta));
+        onZoomChangeRef.current(newZoom);
+      }
+    };
+
+    // passive: false is required for preventDefault() on touchmove/wheel
+    container.addEventListener('touchstart', handleTouchStart, { passive: false });
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    container.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('wheel', handleWheel);
+      cancelAnimationFrame(rafRef.current);
+      cancelAnimationFrame(touchRaf);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minZoom, maxZoom]); // stable deps only — zoom/callbacks accessed via refs
+
+  return {
+    containerRef,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+  };
+}

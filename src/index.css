@@ -138,6 +138,23 @@
     }
 }
 
+/* Bracket canvas GPU acceleration */
+.bracket-canvas {
+  -webkit-overflow-scrolling: touch;
+}
+
+.bracket-inner {
+  will-change: transform;
+  transition: transform 0.15s ease-out;
+}
+
+/* Ensure buttons have fast tap response */
+button {
+  touch-action: manipulation;
+}
+
+/* Active cursor state for grabbing canvas (pointer events only — cursor managed via JS) */
+
 /* Custom Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
