@@ -263,8 +263,7 @@ export default function App() {
         setShowTiebreakerModal(true);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finalMatch?.winnerId, selectedTournament]);
+  }, [finalMatch?.winnerId, selectedTournament, tiebreakerGames, tiebreakerSets]);
 
   const currentTournament = tournaments.find(t => t.id === selectedTournament);
 
@@ -675,15 +674,15 @@ export default function App() {
                   </label>
                   <label className="flex flex-col gap-1.5">
                     <span className="text-xs font-semibold">Total sets in Final (3 or 5)</span>
-                    <input
-                      type="number"
-                      min={3}
-                      max={5}
+                    <select
                       value={tbSetsInput}
                       onChange={e => setTbSetsInput(e.target.value)}
                       className="bg-background border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                      placeholder="3 or 5"
-                    />
+                    >
+                      <option value="">Select…</option>
+                      <option value="3">3 sets</option>
+                      <option value="5">5 sets</option>
+                    </select>
                   </label>
                 </div>
                 <div className="flex gap-2 justify-end">

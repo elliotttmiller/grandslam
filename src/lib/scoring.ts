@@ -67,7 +67,7 @@ export function calculateCalendarSlamBonus(
   let bonus = 0;
   const parts: string[] = [];
 
-  for (const [, count] of Object.entries(counts)) {
+  for (const count of Object.values(counts)) {
     if (count >= 4) { bonus += 1000; parts.push('Calendar Grand Slam (+1,000)'); }
     else if (count === 3) { bonus += 400; parts.push('3 Slams (+400)'); }
     else if (count === 2) { bonus += 150; parts.push('2 Slams (+150)'); }
