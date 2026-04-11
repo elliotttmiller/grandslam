@@ -269,7 +269,7 @@ const FALLBACK_PLAYERS = [
   { name: "Arthur Fils", seed: 19, country: "FRA" },
   { name: "Flavio Cobolli", seed: 20, country: "ITA" },
   { name: "Karen Khachanov", seed: 21, country: "RUS" },
-  { name: "Nicolas Jarry", seed: 22, country: "CHI" },
+  { name: "Nicolas Jarry", seed: 22, country: "CHL" },
   { name: "Tomas Machac", seed: 23, country: "CZE" },
   { name: "Lorenzo Musetti", seed: 24, country: "ITA" },
   { name: "Felix Auger-Aliassime", seed: 25, country: "CAN" },
