@@ -119,27 +119,34 @@ export function PoolBracketEditor({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <header className="flex-none border-b border-border/30 bg-card/40 backdrop-blur-3xl px-4 py-3 z-20">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground shrink-0" onClick={onBack}>
+      <header className="flex-none border-b border-border/20 bg-card/50 backdrop-blur-xl px-4 py-2.5 z-20">
+        <div className="flex items-center gap-2.5 min-h-[40px]">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-muted-foreground/70 hover:text-foreground shrink-0 rounded-lg"
+            onClick={onBack}
+          >
             <ArrowLeft className="h-4 w-4 mr-1" />
-            {pool.name}
+            <span className="max-w-[80px] truncate text-[13px]">{pool.name}</span>
           </Button>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold truncate">{entry.bracketName}</div>
-            <div className="text-[10px] text-muted-foreground">in {pool.name}</div>
+            <div className="text-[13px] font-semibold truncate leading-tight">{entry.bracketName}</div>
+            <div className="text-[10px] text-muted-foreground/60">by {entry.userName}</div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="hidden sm:flex items-center gap-1 text-[10px] font-bold bg-primary/20 text-primary px-2 py-1 rounded-full">
-              {score.total} pts
-            </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {score.total > 0 && (
+              <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                {score.total} pts
+              </span>
+            )}
             {entry.isSubmitted && (
-              <span className="flex items-center gap-1 text-[10px] font-bold bg-green-500/20 text-green-400 px-2 py-1 rounded-full">
-                <Check className="h-3 w-3" /> Submitted
+              <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                <Check className="h-3 w-3" /> Done
               </span>
             )}
             {!entry.isSubmitted && isEffectivelyReadOnly && (
-              <span className="flex items-center gap-1 text-[10px] font-bold bg-red-500/20 text-red-400 px-2 py-1 rounded-full">
+              <span className="flex items-center gap-1 text-[11px] font-bold bg-red-500/15 text-red-400 px-2 py-0.5 rounded-full border border-red-500/20">
                 <Lock className="h-3 w-3" /> Locked
               </span>
             )}
@@ -150,34 +157,34 @@ export function PoolBracketEditor({
       {/* Bracket canvas */}
       <main className="flex-1 relative overflow-hidden bg-muted/5">
         {/* Floating nav controls */}
-        <Button variant="secondary" className="absolute top-1/2 left-2 -translate-y-1/2 z-10 rounded-full shadow-lg h-24 w-8 p-0 opacity-60 hover:opacity-100 transition-all border border-border/50 bg-background/60 backdrop-blur" onClick={() => scroll('left')}>
-          <ChevronLeft className="h-5 w-5" strokeWidth={1.5} />
+        <Button variant="secondary" className="absolute top-1/2 left-1.5 -translate-y-1/2 z-10 rounded-xl shadow-md h-20 w-7 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm" onClick={() => scroll('left')} aria-label="Scroll left">
+          <ChevronLeft className="h-4 w-4" strokeWidth={2} />
         </Button>
-        <Button variant="secondary" className="absolute top-1/2 right-2 -translate-y-1/2 z-10 rounded-full shadow-lg h-24 w-8 p-0 opacity-60 hover:opacity-100 transition-all border border-border/50 bg-background/60 backdrop-blur" onClick={() => scroll('right')}>
-          <ChevronRight className="h-5 w-5" strokeWidth={1.5} />
+        <Button variant="secondary" className="absolute top-1/2 right-1.5 -translate-y-1/2 z-10 rounded-xl shadow-md h-20 w-7 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm" onClick={() => scroll('right')} aria-label="Scroll right">
+          <ChevronRight className="h-4 w-4" strokeWidth={2} />
         </Button>
-        <Button variant="secondary" className="absolute top-2 left-1/2 -translate-x-1/2 z-10 rounded-full shadow-lg h-8 w-24 p-0 opacity-60 hover:opacity-100 transition-all border border-border/50 bg-background/60 backdrop-blur" onClick={() => scroll('up')}>
-          <ChevronUp className="h-5 w-5" strokeWidth={1.5} />
+        <Button variant="secondary" className="absolute top-1.5 left-1/2 -translate-x-1/2 z-10 rounded-xl shadow-md h-7 w-20 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm" onClick={() => scroll('up')} aria-label="Scroll up">
+          <ChevronUp className="h-4 w-4" strokeWidth={2} />
         </Button>
-        <Button variant="secondary" className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 rounded-full shadow-lg h-8 w-24 p-0 opacity-60 hover:opacity-100 transition-all border border-border/50 bg-background/60 backdrop-blur" onClick={() => scroll('down')}>
-          <ChevronDown className="h-5 w-5" strokeWidth={1.5} />
+        <Button variant="secondary" className="absolute bottom-[68px] left-1/2 -translate-x-1/2 z-10 rounded-xl shadow-md h-7 w-20 p-0 opacity-50 hover:opacity-90 transition-all border border-border/40 bg-background/60 backdrop-blur-sm" onClick={() => scroll('down')} aria-label="Scroll down">
+          <ChevronDown className="h-4 w-4" strokeWidth={2} />
         </Button>
 
         {/* Zoom controls */}
-        <div className="absolute bottom-20 right-4 z-10 flex flex-col gap-2 bg-background/80 backdrop-blur-sm p-2 rounded-lg border shadow-sm">
-          <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.min(z + 0.2, 2))}>
-            <ZoomIn className="w-5 h-5" />
+        <div className="absolute bottom-[68px] right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
+          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-white/10" onClick={() => setZoom(z => Math.min(z + 0.2, 2))} aria-label="Zoom in">
+            <ZoomIn className="w-4 h-4" />
           </Button>
-          <div className="text-xs text-center font-medium text-muted-foreground">{Math.round(zoom * 100)}%</div>
-          <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))}>
-            <ZoomOut className="w-5 h-5" />
+          <div className="text-[10px] font-bold text-muted-foreground/70 tabular-nums w-8 text-center">{Math.round(zoom * 100)}%</div>
+          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-white/10" onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} aria-label="Zoom out">
+            <ZoomOut className="w-4 h-4" />
           </Button>
         </div>
 
         {/* Scrollable bracket */}
         <div
           ref={containerRef}
-          className="w-full h-full overflow-auto p-8 cursor-grab active:cursor-grabbing touch-none custom-scrollbar"
+          className="w-full h-full overflow-auto p-6 sm:p-10 cursor-grab active:cursor-grabbing touch-none custom-scrollbar"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -194,7 +201,7 @@ export function PoolBracketEditor({
             >
               <div
                 ref={bracketRef}
-                className="inline-block transition-transform duration-200 ease-out origin-top-left bg-background p-8 rounded-xl border shadow-sm"
+                className="inline-block transition-transform duration-200 ease-out origin-top-left bg-background/50 p-8 rounded-2xl"
                 style={{ transform: `scale(${zoom})` }}
               >
                 <BracketTree
@@ -210,18 +217,18 @@ export function PoolBracketEditor({
       </main>
 
       {/* Bottom bar */}
-      <div className="flex-none border-t border-border/30 bg-card/60 backdrop-blur px-4 py-3 flex items-center gap-4">
-        <div className="flex-1 flex flex-col gap-1 min-w-0">
+      <div className="flex-none border-t border-border/20 bg-card/70 backdrop-blur-xl px-4 py-3 flex items-center gap-3">
+        <div className="flex-1 flex flex-col gap-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">{score.picksCompleted} / {TOTAL_BRACKET_MATCHES} picks</span>
-            <span className="font-bold text-primary">{score.total} pts</span>
+            <span className="text-muted-foreground/70 tabular-nums">{score.picksCompleted} / {TOTAL_BRACKET_MATCHES} picks</span>
+            <span className="font-bold text-emerald-400 tabular-nums">{score.total} pts</span>
           </div>
           <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-primary rounded-full"
+              className="h-full bg-emerald-500 rounded-full"
               initial={{ width: 0 }}
               animate={{ width: `${progressPct}%` }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
             />
           </div>
         </div>
@@ -229,14 +236,14 @@ export function PoolBracketEditor({
         {!entry.isSubmitted && !readOnly && (
           <Button
             size="sm"
-            className="shrink-0"
+            className="shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white border-0 rounded-xl h-9 px-4 font-semibold"
             onClick={handleSubmitClick}
           >
             Submit Picks
           </Button>
         )}
         {entry.isSubmitted && (
-          <div className="shrink-0 flex items-center gap-1.5 text-sm font-bold text-green-400">
+          <div className="shrink-0 flex items-center gap-1.5 text-[13px] font-bold text-emerald-400">
             <Check className="h-4 w-4" />
             Submitted
           </div>
@@ -247,21 +254,22 @@ export function PoolBracketEditor({
       <AnimatePresence>
         {showSubmitModal && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSubmitModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSubmitModal(false)} className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50" />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-card border border-border/50 rounded-xl shadow-2xl z-50 p-6 flex flex-col gap-4"
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.18 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-sm bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-black uppercase tracking-widest">Incomplete Bracket</h3>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowSubmitModal(false)}>
+                <h3 className="text-sm font-bold">Incomplete Bracket</h3>
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setShowSubmitModal(false)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              <p className="text-sm text-muted-foreground">
-                You have <span className="font-bold text-foreground">{TOTAL_BRACKET_MATCHES - score.picksCompleted} picks remaining</span>. You can still submit, but incomplete picks won't earn points.
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                You have <span className="font-semibold text-foreground">{TOTAL_BRACKET_MATCHES - score.picksCompleted} picks remaining</span>. You can still submit, but incomplete picks won't earn points.
               </p>
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" size="sm" onClick={() => setShowSubmitModal(false)}>Keep Editing</Button>
@@ -276,40 +284,42 @@ export function PoolBracketEditor({
       <AnimatePresence>
         {showTiebreaker && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowTiebreaker(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowTiebreaker(false)} className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50" />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 bg-card border border-white/10 rounded-xl shadow-2xl z-50 p-5 flex flex-col gap-4"
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.18 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[340px] bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-5 flex flex-col gap-4"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-black uppercase tracking-widest">Tiebreaker Picks</h3>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowTiebreaker(false)}>
+                <h3 className="text-sm font-bold">Tiebreaker Picks</h3>
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setShowTiebreaker(false)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Predict the Final match totals. Used to break ties if scores are equal. (Optional)
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Predict the Final match totals to break ties. (Optional)
               </p>
               <div className="flex flex-col gap-3">
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold">Total games in Final (e.g., 23)</span>
+                  <span className="text-xs font-semibold text-muted-foreground">Total games in Final</span>
                   <input
                     type="number"
+                    inputMode="numeric"
                     min={0}
                     value={tbGamesInput}
                     onChange={e => setTbGamesInput(e.target.value)}
-                    className="bg-background border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                     placeholder="e.g. 23"
                   />
                 </label>
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold">Total sets in Final (3 or 5)</span>
+                  <span className="text-xs font-semibold text-muted-foreground">Total sets in Final</span>
                   <select
                     value={tbSetsInput}
                     onChange={e => setTbSetsInput(e.target.value)}
-                    className="bg-background border border-border/50 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   >
                     <option value="">Select…</option>
                     <option value="3">3 sets</option>
@@ -319,7 +329,7 @@ export function PoolBracketEditor({
               </div>
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" size="sm" onClick={handleConfirmTiebreaker}>Skip</Button>
-                <Button size="sm" onClick={handleConfirmTiebreaker}>Submit Picks</Button>
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white border-0" onClick={handleConfirmTiebreaker}>Submit Picks</Button>
               </div>
             </motion.div>
           </>
