@@ -1,6 +1,13 @@
+/// <reference types="vite/client" />
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+if (!apiKey) {
+  console.warn('VITE_GEMINI_API_KEY is not set. Gemini features will not work.');
+}
+
+const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
 const TODAY_STR = new Date().toISOString().split('T')[0];
 const GROUNDING_MODEL = "gemini-2.5-flash";

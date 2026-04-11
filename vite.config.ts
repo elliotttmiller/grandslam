@@ -7,14 +7,14 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(({mode}) => {
-  const env = loadEnv(mode, '.', '');
+  const env = loadEnv(mode, '.', 'VITE_');
   
   return {
     base: '/grandslam/',
     plugins: [react(), tailwindcss()],
     define: {
-      'import.meta.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'import.meta.env.APP_URL': JSON.stringify(env.APP_URL || 'https://elliotttmiller.github.io/grandslam/'),
+      'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY),
+      'import.meta.env.VITE_APP_URL': JSON.stringify(env.VITE_APP_URL || 'https://elliotttmiller.github.io/grandslam/'),
     },
     resolve: {
       alias: {
