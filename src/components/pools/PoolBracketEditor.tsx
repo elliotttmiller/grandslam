@@ -247,7 +247,8 @@ export function PoolBracketEditor({
             {/* Scrollable bracket */}
             <div
               ref={containerRef}
-              className="bracket-canvas w-full h-full overflow-auto p-6 sm:p-10 cursor-grab touch-none custom-scrollbar"
+              className="bracket-canvas w-full h-full overflow-auto p-6 sm:p-10 cursor-grab custom-scrollbar"
+              style={{ touchAction: 'pan-x pan-y' }}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
