@@ -907,7 +907,7 @@ export default function App() {
           <div 
             ref={canvasRef}
             className="bracket-canvas w-full h-full overflow-auto p-6 sm:p-10 cursor-grab custom-scrollbar"
-            style={{ touchAction: 'pan-x pan-y' }}
+            style={{ touchAction: 'none' }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
