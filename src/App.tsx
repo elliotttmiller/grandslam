@@ -1,16 +1,18 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useBracketCanvas } from './hooks/useBracketCanvas';
 import { fetchTournamentPlayers, fetchTournamentsWithDates, TournamentData } from './services/geminiService';
-import { generateBracket, advancePlayer, Match, Player } from './lib/bracket-utils';
+import { generateBracket, advancePlayer, Match, Player, ROUND_NAMES, ROUND_FULL_NAMES } from './lib/bracket-utils';
 import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Button } from './components/ui/button';
-import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2 } from 'lucide-react';
+import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PoolHub } from './components/pools/PoolHub';
 import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
 import { PoolBracketEditor } from './components/pools/PoolBracketEditor';
+import { MatchPickCard } from './components/pools/MatchPickCard';
+import { cn } from './lib/utils';
 import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId } from './lib/pool-storage';
 import { AnimatedNumber } from './components/AnimatedNumber';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
@@ -376,6 +378,19 @@ export default function App() {
   // Scoring for the current bracket
   const score = useMemo(() => calculateBracketScore(matches), [matches]);
 
+  // Per-round completion tracking for home bracket view (rounds 1-7)
+  const roundCompletion = useMemo(() => {
+    const c: Record<number, { total: number; done: number }> = {};
+    for (let r = 1; r <= 7; r++) {
+      const rm = matches.filter(m => m.round === r && m.player1 && m.player2);
+      c[r] = { total: rm.length, done: rm.filter(m => m.winnerId).length };
+    }
+    return c;
+  }, [matches]);
+
+  // 0 = full bracket canvas, 1-7 = round-by-round card view
+  const [activeRound, setActiveRound] = useState<number>(0);
+
   // Bracket lock status
   const isLocked = useMemo(() => {
     if (!currentTournament) return false;
@@ -739,8 +754,59 @@ export default function App() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -18 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="absolute inset-0 overflow-hidden bg-muted/5"
+              className="absolute inset-0 overflow-hidden bg-muted/5 flex flex-col"
             >
+          {/* Round / view selector tabs */}
+          <div className="flex-none border-b border-border/20 bg-card/20" role="tablist" aria-label="Bracket rounds">
+            <div className="flex overflow-x-auto px-3 py-2 gap-1" style={{ scrollbarWidth: 'none' }}>
+              {/* "All" tab — full canvas */}
+              <button
+                role="tab"
+                aria-selected={activeRound === 0}
+                onClick={() => setActiveRound(0)}
+                className={cn(
+                  'flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
+                  activeRound === 0
+                    ? 'bg-white/[0.12] text-foreground'
+                    : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/[0.04]',
+                )}
+              >
+                <LayoutGrid className="h-3 w-3" aria-hidden="true" />
+                All
+              </button>
+
+              {/* Round 1-7 tabs */}
+              {([1, 2, 3, 4, 5, 6, 7] as const).map(round => {
+                const rc = roundCompletion[round];
+                const isComplete = rc && rc.total > 0 && rc.done === rc.total;
+                const isPartial = rc && rc.done > 0 && !isComplete;
+                const isRound = activeRound === round;
+                return (
+                  <button
+                    key={round}
+                    role="tab"
+                    aria-selected={isRound}
+                    onClick={() => setActiveRound(round)}
+                    className={cn(
+                      'flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
+                      isRound
+                        ? 'bg-white/[0.12] text-foreground'
+                        : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/[0.04]',
+                    )}
+                  >
+                    {ROUND_NAMES[round]}
+                    {isComplete && <span className="text-emerald-400 text-[10px]">✓</span>}
+                    {isPartial && <span className="text-[9px] font-black text-amber-400 tabular-nums">{rc.done}/{rc.total}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Main bracket content */}
+          <div className="flex-1 relative overflow-hidden">
+          {activeRound === 0 ? (
+          <>
           {/* Floating Action Tools */}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -903,6 +969,62 @@ export default function App() {
               )}
             </motion.div>
           )}
+          </> /* end activeRound === 0 */
+          ) : (
+            /* ── Round card list ── */
+            <div className="h-full overflow-y-auto custom-scrollbar">
+              <div className="px-4 py-4 max-w-lg mx-auto">
+
+                {/* Round header with completion ring */}
+                {(() => {
+                  const rc = roundCompletion[activeRound] ?? { total: 0, done: 0 };
+                  return (
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">
+                          {ROUND_FULL_NAMES[activeRound]}
+                        </h3>
+                        <p className="text-[12px] text-muted-foreground/60 mt-0.5 tabular-nums">
+                          {rc.done} / {rc.total} picked
+                        </p>
+                      </div>
+                      {/* Completion ring */}
+                      <div
+                        className="h-10 w-10 rounded-full relative flex items-center justify-center"
+                        style={{
+                          background: `conic-gradient(rgb(16 185 129 / 0.7) ${(rc.done / Math.max(rc.total, 1)) * 360}deg, rgb(255 255 255 / 0.06) 0deg)`,
+                        }}
+                        aria-hidden="true"
+                      >
+                        <div className="h-8 w-8 rounded-full bg-background flex items-center justify-center">
+                          <span className="text-[10px] font-black tabular-nums text-muted-foreground">
+                            {rc.total > 0 ? Math.round((rc.done / rc.total) * 100) : 0}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Match cards */}
+                <div className="flex flex-col gap-3">
+                  {matches
+                    .filter(m => m.round === activeRound)
+                    .sort((a, b) => a.matchNumber - b.matchNumber)
+                    .map((match, idx) => (
+                      <MatchPickCard
+                        key={match.id}
+                        match={match}
+                        matchIndex={idx}
+                        onSelectWinner={handleSelectWinner}
+                        readOnly={isLocked}
+                      />
+                    ))}
+                </div>
+              </div>
+            </div>
+          )}
+          </div> {/* end flex-1 relative overflow-hidden */}
 
           {/* Tiebreaker modal */}
           <AnimatePresence>
