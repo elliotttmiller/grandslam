@@ -474,7 +474,7 @@ export default function App() {
           {/* Center: logo + nav tabs */}
           <div className="flex items-center gap-3 sm:gap-5">
             <img
-              src="/grandslam/tennis_logo.png"
+              src={`${import.meta.env.BASE_URL}tennis_logo.png`}
               alt="Grand Slam"
               className="h-7 w-7 transition-transform hover:rotate-12 duration-500 shrink-0"
             />

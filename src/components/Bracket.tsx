@@ -78,7 +78,7 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
       >
         <div className="flex items-center gap-2 overflow-hidden min-w-0">
           {player?.seed ? (
-            <span className="text-[10px] text-muted-foreground/70 w-[18px] text-center shrink-0 font-mono leading-none" aria-label={`Seed ${player.seed}`}>
+            <span className="text-[10px] text-muted-foreground/70 w-[18px] text-center shrink-0 font-mono leading-none">
               {player.seed}
             </span>
           ) : (
