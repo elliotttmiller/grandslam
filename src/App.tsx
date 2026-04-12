@@ -689,7 +689,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Main Content - View Router */}
-      <div className="fixed top-[68px] left-0 right-0 bottom-0 overflow-hidden">
+      <div className="fixed top-[var(--header-height)] left-0 right-0 bottom-0 overflow-hidden">
         <AnimatePresence mode="wait" initial={false}>
           {appView.page === 'pools' && (
             <motion.div
