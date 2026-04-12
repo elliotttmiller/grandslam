@@ -98,8 +98,9 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
   };
 
   const handleCopyInviteLink = () => {
-    const encoded = exportPool({ ...pool, entries: [] });
-    const url = `${window.location.origin}${window.location.pathname}?joinPool=${encoded}`;
+    // Use the 6-char pool code only — encoding the full pool (127 matches) produces
+    // a ~60 KB URL that gets truncated by email clients, SMS, and WhatsApp.
+    const url = `${window.location.origin}${window.location.pathname}?join=${pool.id}`;
     copyToClipboard(url, 'invite');
   };
 

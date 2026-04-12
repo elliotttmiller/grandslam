@@ -14,7 +14,7 @@ import { PoolBracketEditor } from './components/pools/PoolBracketEditor';
 import { MatchPickCard } from './components/pools/MatchPickCard';
 import { AuthModal } from './components/AuthModal';
 import { cn } from './lib/utils';
-import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId } from './lib/pool-storage';
+import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH } from './lib/pool-storage';
 import { syncCreatePool, syncAddEntry, syncUpdateEntry } from './services/poolSyncService';
 import { onAuthStateChanged, signOut } from './services/authService';
 import { getUserId, setUserName } from './lib/user-identity';
@@ -48,6 +48,8 @@ export default function App() {
   const [tbSetsInput, setTbSetsInput] = useState('');
   const [appView, setAppView] = useState<AppView>({ page: 'bracket' });
   const [poolRefreshKey, setPoolRefreshKey] = useState(0);
+  // Code from a `?join=POOL_CODE` URL param — passed to PoolHub to pre-fill the join modal.
+  const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null);
 
   // Firebase Authentication state — tracked via onAuthStateChanged at root level
   const [authUser, setAuthUser] = useState<User | null>(null);
@@ -162,12 +164,19 @@ export default function App() {
 
         // Handle pool URL params
         if (!shared) {
-          const joinPoolParam = params.get('joinPool');
+          const joinCodeParam = params.get('join');        // ?join=POOL_CODE  (short invite link)
+          const joinPoolParam = params.get('joinPool');    // legacy encoded pool join
           const poolSnapParam = params.get('poolSnap');
           const importEntryPoolId = params.get('importEntry');
           const importEntryData = params.get('entry');
 
-          if (joinPoolParam) {
+          if (joinCodeParam) {
+            // Short invite link — just a 6-char pool code.
+            // Navigate to the Pools page so PoolHub can auto-open the join modal.
+            window.history.replaceState({}, document.title, window.location.pathname);
+            setPendingJoinCode(joinCodeParam.toUpperCase().slice(0, POOL_CODE_LENGTH));
+            setAppView({ page: 'pools' });
+          } else if (joinPoolParam) {
             const imported = importPool(joinPoolParam);
             if (imported) {
               window.history.replaceState({}, document.title, window.location.pathname);
@@ -521,7 +530,7 @@ export default function App() {
       {/* Header — 3-column flex: [left shrink-0] [center flex-1] [right shrink-0]
            This prevents the score/auth badges on the right from ever overlapping
            the centered nav tabs on narrow mobile screens. */}
-      <header className="fixed top-0 left-0 right-0 border-b border-white/[0.06] bg-card/50 backdrop-blur-3xl z-30 shadow-lg">
+      <header className="safe-top fixed top-0 left-0 right-0 border-b border-white/[0.06] bg-card/80 backdrop-blur-3xl z-30 shadow-lg">
         <div className="flex items-center h-[52px] px-3 gap-2 max-w-7xl mx-auto">
 
           {/* Left: menu button + logo + title (all shrink-0, never pushed into center) */}
@@ -660,7 +669,7 @@ export default function App() {
               aria-modal="true"
               aria-label="Select tournament"
             >
-              <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <div className="safe-top flex items-center justify-between px-5 pt-5 pb-3">
                 <h2 className="text-[11px] font-black uppercase tracking-widest text-white/40">Select Tournament</h2>
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-white/50 hover:text-white rounded-xl" onClick={() => setIsSidebarOpen(false)} aria-label="Close tournament selector">
                   <X className="h-4 w-4" />
@@ -741,7 +750,7 @@ export default function App() {
 
               {/* Season summary at bottom of sidebar */}
               {Object.keys(allTournamentScores).length > 0 && (
-                <div className="px-4 pb-5 pt-3 border-t border-white/[0.07]">
+                <div className="safe-bottom px-4 pb-5 pt-3 border-t border-white/[0.07]">
                   <div className="rounded-xl bg-white/[0.04] border border-white/[0.07] p-4 flex flex-col gap-1.5">
                     <span className="text-[10px] font-black uppercase tracking-widest text-white/35">Season Total</span>
                     <span className="text-2xl font-black text-emerald-400">
@@ -774,6 +783,8 @@ export default function App() {
                 onNavigate={setAppView}
                 tournaments={tournaments}
                 onCreatePool={handleCreatePool}
+                initialJoinCode={pendingJoinCode ?? undefined}
+                onJoinHandled={() => setPendingJoinCode(null)}
               />
             </motion.div>
           )}
@@ -926,7 +937,8 @@ export default function App() {
           </DropdownMenu>
 
           {/* Zoom + Scroll Controls */}
-          <div className="absolute bottom-5 right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
+          <div className="absolute bottom-5 right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md"
+            style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}>
             <Button
               variant="ghost"
               size="icon"
@@ -1042,6 +1054,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15, duration: 0.3 }}
               className="absolute bottom-5 left-4 z-10 bg-background/90 backdrop-blur-md border border-border/50 rounded-xl px-3.5 py-3 shadow-xl text-xs flex flex-col gap-1.5 min-w-[148px]"
+              style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}
             >
               <div className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-0.5">Score</div>
               <div className="flex items-center justify-between gap-4">
@@ -1083,7 +1096,7 @@ export default function App() {
           ) : (
             /* ── Round card list ── */
             <div className="h-full overflow-y-auto custom-scrollbar">
-              <div className="px-4 py-4 max-w-lg mx-auto">
+              <div className="px-4 py-4 max-w-lg mx-auto" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
 
                 {/* Round header with completion ring */}
                 {(() => {

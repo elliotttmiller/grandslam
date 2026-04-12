@@ -9,8 +9,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', 'VITE_');
   
+  // VITE_BASE_PATH is set by the GitHub Actions deploy workflow to
+  // `/<repo-name>/`, so forked repos and renames work automatically.
+  const basePath = env.VITE_BASE_PATH || '/grandslam/';
+
   return {
-    base: '/grandslam/',
+    base: basePath,
     plugins: [react(), tailwindcss()],
     define: {
       'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY),
