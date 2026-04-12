@@ -5,21 +5,10 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getPools, getPool, createPool, addEntry, generateId, importPool } from '@/lib/pool-storage';
 import { calculateBracketScore } from '@/lib/scoring';
+import { tournamentColor } from '@/lib/tournament-colors';
 import type { Pool } from '@/lib/pool-types';
 import type { TournamentData } from '@/services/geminiService';
 import type { AppView } from '@/App';
-
-const TOURNAMENT_COLORS: Record<string, string> = {
-  ao: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-  rg: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
-  wim: 'text-green-400 bg-green-500/10 border-green-500/20',
-  uso: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
-};
-
-function tournamentColor(id: string): string {
-  const key = Object.keys(TOURNAMENT_COLORS).find(k => id.toLowerCase().startsWith(k));
-  return key ? TOURNAMENT_COLORS[key] : 'text-primary bg-primary/10 border-primary/20';
-}
 
 interface PoolHubProps {
   onNavigate: (view: AppView) => void;
@@ -183,8 +172,27 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
                       </div>
                       <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                         <span className="text-[12px] text-muted-foreground/70 flex items-center gap-1">
-                          <Users className="inline h-3 w-3" />
+                          <Users className="inline h-3 w-3" aria-hidden="true" />
                           {pool.entries.length} {pool.entries.length === 1 ? 'entry' : 'entries'}
+                        </span>
+                        {/* Submission dots */}
+                        {pool.entries.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            {pool.entries.slice(0, 8).map(e => (
+                              <div
+                                key={e.id}
+                                className={cn('h-2 w-2 rounded-full', e.isSubmitted ? 'bg-emerald-500' : 'bg-muted/50')}
+                                title={e.isSubmitted ? `${e.userName} submitted` : `${e.userName} in progress`}
+                              />
+                            ))}
+                            {pool.entries.length > 8 && (
+                              <span className="text-[9px] text-muted-foreground/40 ml-0.5">+{pool.entries.length - 8}</span>
+                            )}
+                          </div>
+                        )}
+                        {/* Pool code */}
+                        <span className="font-mono text-[10px] text-muted-foreground/40 bg-muted/10 px-1.5 py-0.5 rounded-md border border-border/20">
+                          {pool.id}
                         </span>
                         {topEntries.length > 0 && (
                           <div className="flex items-center gap-2">

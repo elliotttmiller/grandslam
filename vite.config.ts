@@ -26,7 +26,16 @@ export default defineConfig(({mode}) => {
       sourcemap: false,
       rollupOptions: {
         output: {
-          manualChunks: undefined,
+          manualChunks(id) {
+            // Heavy export utilities — loaded on demand when user exports
+            if (id.includes('html2canvas') || id.includes('jspdf')) return 'export';
+            // Framer Motion animation engine
+            if (id.includes('node_modules/framer-motion') || id.includes('node_modules/motion')) return 'motion';
+            // Gemini AI SDK
+            if (id.includes('@google/genai')) return 'ai';
+            // React core (react + react-dom bundled together to avoid circularity)
+            if (id.includes('node_modules/react')) return 'react';
+          },
         },
       },
     },

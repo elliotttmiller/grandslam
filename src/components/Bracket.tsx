@@ -67,7 +67,14 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
         role={canSelect ? "button" : undefined}
         tabIndex={canSelect ? 0 : undefined}
         onKeyDown={canSelect ? (e) => { if (e.key === 'Enter' || e.key === ' ') handlePlayerClick(player); } : undefined}
-        aria-label={canSelect ? `Select ${player?.name ?? 'TBD'} as winner` : undefined}
+        aria-label={
+          canSelect
+            ? `Select ${player?.name ?? 'TBD'}${player?.seed ? ` (seed ${player.seed})` : ''} as winner`
+            : isWinner
+            ? `${player?.name ?? 'TBD'} — winner`
+            : undefined
+        }
+        aria-pressed={isWinner ? true : undefined}
       >
         <div className="flex items-center gap-2 overflow-hidden min-w-0">
           {player?.seed ? (
@@ -75,7 +82,7 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
               {player.seed}
             </span>
           ) : (
-            <span className="w-[18px] shrink-0" />
+            <span className="w-[18px] shrink-0" aria-hidden="true" />
           )}
           <span className={cn(
             "truncate leading-tight",
@@ -91,6 +98,7 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 500, damping: 20 }}
             className="text-[10px] ml-2 shrink-0 text-emerald-400 font-black"
+            aria-hidden="true"
           >✓</motion.span>
         )}
       </motion.div>

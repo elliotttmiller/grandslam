@@ -6,9 +6,7 @@ import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Button } from './components/ui/button';
-import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PoolHub } from './components/pools/PoolHub';
 import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
@@ -265,6 +263,9 @@ export default function App() {
         const cacheKey = `tennis_players_cache_v5_${tournament.name.replace(/\s+/g, '_').toLowerCase()}`;
         localStorage.removeItem(cacheKey);
       }
+      // Clear tiebreaker data for this tournament
+      setTiebreakerGames(prev => { const next = { ...prev }; delete next[selectedTournament]; return next; });
+      setTiebreakerSets(prev => { const next = { ...prev }; delete next[selectedTournament]; return next; });
       
       // Force a re-fetch by temporarily clearing the selected tournament
       setMatches([]);
@@ -302,6 +303,12 @@ export default function App() {
     showToast('Generating export…', 'info');
     
     try {
+      // Dynamically import heavy export libraries only when needed
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
       // Temporarily remove transform for clean export
       const originalTransform = bracketRef.current.style.transform;
       bracketRef.current.style.transform = 'none';
@@ -456,8 +463,10 @@ export default function App() {
                 className="text-white/60 hover:text-white hover:bg-white/8 h-9 w-9 rounded-xl"
                 onClick={() => setIsSidebarOpen(true)}
                 aria-label="Open tournament selector"
+                aria-expanded={isSidebarOpen}
+                aria-haspopup="dialog"
               >
-                <Menu className="h-[18px] w-[18px]" />
+                <Menu className="h-[18px] w-[18px]" aria-hidden="true" />
               </Button>
             ) : null}
           </div>
@@ -465,42 +474,47 @@ export default function App() {
           {/* Center: logo + nav tabs */}
           <div className="flex items-center gap-3 sm:gap-5">
             <img
-              src="/tennis_logo.png"
+              src={`${import.meta.env.BASE_URL}tennis_logo.png`}
               alt="Grand Slam"
               className="h-7 w-7 transition-transform hover:rotate-12 duration-500 shrink-0"
-              referrerPolicy="no-referrer"
             />
             <h1 className="text-[13px] font-black uppercase tracking-widest hidden sm:block text-white/80">Grand Slam</h1>
-            <div className="hidden sm:block h-5 w-px bg-white/10" />
+            <div className="hidden sm:block h-5 w-px bg-white/10" aria-hidden="true" />
             {/* Nav tabs */}
-            <div className="flex items-center gap-0.5 bg-white/[0.06] rounded-xl p-1">
-              <button
-                onClick={() => setAppView({ page: 'bracket' })}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
-                  appView.page === 'bracket'
-                    ? 'bg-white/[0.12] text-foreground shadow-sm'
-                    : 'text-white/45 hover:text-white/75 hover:bg-white/[0.04]'
-                }`}
-              >
-                <Trophy className="h-3.5 w-3.5" />
-                My Bracket
-              </button>
-              <button
-                onClick={() => setAppView({ page: 'pools' })}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
-                  appView.page !== 'bracket'
-                    ? 'bg-white/[0.12] text-foreground shadow-sm'
-                    : 'text-white/45 hover:text-white/75 hover:bg-white/[0.04]'
-                }`}
-              >
-                <Users className="h-3.5 w-3.5" />
-                Pools
-              </button>
-            </div>
+            <nav aria-label="Main navigation">
+              <div role="tablist" className="flex items-center gap-0.5 bg-white/[0.06] rounded-xl p-1">
+                <button
+                  role="tab"
+                  aria-selected={appView.page === 'bracket'}
+                  onClick={() => setAppView({ page: 'bracket' })}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
+                    appView.page === 'bracket'
+                      ? 'bg-white/[0.12] text-foreground shadow-sm'
+                      : 'text-white/45 hover:text-white/75 hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
+                  My Bracket
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={appView.page !== 'bracket'}
+                  onClick={() => setAppView({ page: 'pools' })}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
+                    appView.page !== 'bracket'
+                      ? 'bg-white/[0.12] text-foreground shadow-sm'
+                      : 'text-white/45 hover:text-white/75 hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                  Pools
+                </button>
+              </div>
+            </nav>
             {/* Tournament name in bracket view */}
             {appView.page === 'bracket' && currentTournament && (
               <>
-                <div className="hidden sm:block h-5 w-px bg-white/10" />
+                <div className="hidden sm:block h-5 w-px bg-white/10" aria-hidden="true" />
                 <span className="text-[12px] font-semibold text-white/55 hidden sm:block truncate max-w-[160px]">{currentTournament.name}</span>
               </>
             )}
@@ -509,19 +523,19 @@ export default function App() {
           {/* Right: score + lock badge (bracket view only) */}
           <div className="absolute right-3 sm:right-5 flex items-center gap-2">
             {appView.page === 'bracket' && matches.length > 0 && score.total > 0 && (
-              <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                <Trophy className="h-3 w-3" />
+              <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20" aria-label={`Score: ${score.total} points`}>
+                <Trophy className="h-3 w-3" aria-hidden="true" />
                 <AnimatedNumber value={score.total} />
               </span>
             )}
             {appView.page === 'bracket' && currentTournament && (
               isLocked ? (
-                <span className="flex items-center gap-1 text-[11px] font-bold bg-red-500/15 text-red-400 px-2.5 py-1 rounded-full border border-red-500/20">
-                  <Lock className="h-3 w-3" />
+                <span className="flex items-center gap-1 text-[11px] font-bold bg-red-500/15 text-red-400 px-2.5 py-1 rounded-full border border-red-500/20" aria-label="Bracket locked">
+                  <Lock className="h-3 w-3" aria-hidden="true" />
                   <span className="hidden xs:inline">Locked</span>
                 </span>
               ) : (
-                <span className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-white/40 px-2 py-1">
+                <span className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-white/40 px-2 py-1" aria-label={`Tournament starts ${new Date(currentTournament.startDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}>
                   ⏰ {new Date(currentTournament.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                 </span>
               )
@@ -541,6 +555,7 @@ export default function App() {
               transition={{ duration: 0.2 }}
               onClick={() => setIsSidebarOpen(false)}
               className="fixed inset-0 bg-black/70 backdrop-blur-[2px] z-50"
+              aria-hidden="true"
             />
             <motion.div 
               initial={{ x: '-100%' }}
@@ -548,10 +563,13 @@ export default function App() {
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 220 }}
               className="fixed top-0 left-0 bottom-0 w-[280px] bg-card/95 backdrop-blur-xl border-r border-white/[0.08] shadow-2xl z-50 flex flex-col"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Select tournament"
             >
               <div className="flex items-center justify-between px-5 pt-5 pb-3">
                 <h2 className="text-[11px] font-black uppercase tracking-widest text-white/40">Select Tournament</h2>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-white/50 hover:text-white rounded-xl" onClick={() => setIsSidebarOpen(false)}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-white/50 hover:text-white rounded-xl" onClick={() => setIsSidebarOpen(false)} aria-label="Close tournament selector">
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -565,6 +583,11 @@ export default function App() {
                 ) : tournaments.map((t, index) => {
                   const tScore = allTournamentScores[t.id];
                   const isSelected = selectedTournament === t.id;
+                  const now = new Date();
+                  const start = new Date(t.startDate);
+                  const end = new Date(t.endDate);
+                  const isActive = now >= start && now <= end;
+                  const isPast = now > end;
                   return (
                     <button
                       key={`${t.id}-${t.startDate}-${index}`}
@@ -577,12 +600,13 @@ export default function App() {
                           ? 'bg-emerald-500/10 ring-1 ring-emerald-500/25'
                           : 'hover:bg-white/[0.05] active:bg-white/[0.08]'
                       }`}
+                      aria-current={isSelected ? 'true' : undefined}
                     >
                       <div className="flex items-center gap-2.5">
                         {t.logo ? (
                           <img
                             src={t.logo}
-                            alt={t.name}
+                            alt=""
                             className="h-6 w-6 object-contain shrink-0"
                             referrerPolicy="no-referrer"
                             onError={(e) => {
@@ -590,19 +614,29 @@ export default function App() {
                             }}
                           />
                         ) : (
-                          <Trophy className={`h-4 w-4 shrink-0 ${isSelected ? 'text-emerald-400' : 'opacity-40'}`} />
+                          <Trophy className={`h-4 w-4 shrink-0 ${isSelected ? 'text-emerald-400' : 'opacity-40'}`} aria-hidden="true" />
                         )}
-                        <span className={`text-[13px] font-semibold truncate ${isSelected ? 'text-emerald-300' : 'text-white/80'}`}>
+                        <span className={`text-[13px] font-semibold truncate flex-1 min-w-0 ${isSelected ? 'text-emerald-300' : 'text-white/80'}`}>
                           {t.name}
                         </span>
+                        {isActive && (
+                          <span className="shrink-0 text-[9px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded-full border border-emerald-500/25">
+                            Live
+                          </span>
+                        )}
+                        {isPast && !isActive && (
+                          <span className="shrink-0 text-[9px] font-bold text-white/25 bg-white/[0.04] px-1.5 py-0.5 rounded-full border border-white/[0.08]">
+                            Past
+                          </span>
+                        )}
                         {tScore && tScore.total > 0 && (
-                          <span className="ml-auto text-[10px] font-bold bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded-full shrink-0">
+                          <span className="shrink-0 text-[10px] font-bold bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded-full">
                             {tScore.total}
                           </span>
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 pl-[34px] text-white/35">
-                        <Calendar className="h-3 w-3 shrink-0" />
+                        <Calendar className="h-3 w-3 shrink-0" aria-hidden="true" />
                         <span className="text-[11px]">
                           {new Date(t.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – {new Date(t.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </span>
@@ -744,9 +778,9 @@ export default function App() {
               onClick={() => setZoom(z => Math.min(z + 0.2, 2))}
               aria-label="Zoom in"
             >
-              <ZoomIn className="w-4 h-4" />
+              <ZoomIn className="w-4 h-4" aria-hidden="true" />
             </Button>
-            <div className="text-[10px] text-center font-bold text-muted-foreground/70 w-8">
+            <div className="text-[10px] text-center font-bold text-muted-foreground/70 w-8" aria-live="polite" aria-label={`Zoom level ${Math.round(zoom * 100)}%`}>
               {Math.round(zoom * 100)}%
             </div>
             <Button
@@ -756,7 +790,23 @@ export default function App() {
               onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))}
               aria-label="Zoom out"
             >
-              <ZoomOut className="w-4 h-4" />
+              <ZoomOut className="w-4 h-4" aria-hidden="true" />
+            </Button>
+            <div className="w-full h-px bg-border/30 my-0.5" aria-hidden="true" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
+              onClick={() => {
+                setZoom(0.4);
+                if (canvasRef.current) {
+                  canvasRef.current.scrollLeft = 0;
+                  canvasRef.current.scrollTop = 0;
+                }
+              }}
+              aria-label="Reset view to default zoom"
+            >
+              <Maximize2 className="w-4 h-4" aria-hidden="true" />
             </Button>
           </div>
 
