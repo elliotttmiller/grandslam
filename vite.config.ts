@@ -33,6 +33,8 @@ export default defineConfig(({mode}) => {
             if (id.includes('node_modules/framer-motion') || id.includes('node_modules/motion')) return 'motion';
             // Gemini AI SDK
             if (id.includes('@google/genai')) return 'ai';
+            // Firebase SDK
+            if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) return 'firebase';
             // React core (react + react-dom bundled together to avoid circularity)
             if (id.includes('node_modules/react')) return 'react';
           },

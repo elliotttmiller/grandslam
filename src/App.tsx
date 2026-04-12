@@ -14,6 +14,8 @@ import { PoolBracketEditor } from './components/pools/PoolBracketEditor';
 import { MatchPickCard } from './components/pools/MatchPickCard';
 import { cn } from './lib/utils';
 import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId } from './lib/pool-storage';
+import { syncCreatePool, syncAddEntry, syncUpdateEntry } from './services/poolSyncService';
+import { getUserId, setUserName } from './lib/user-identity';
 import { AnimatedNumber } from './components/AnimatedNumber';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
 
@@ -245,15 +247,26 @@ export default function App() {
     tournamentName: string
   ): Promise<void> => {
     const officialMatches = await generateOfficialDraw(tournamentId, tournamentName);
+    // Persist user name so subsequent joins pre-fill the field
+    setUserName(userName);
     const pool = createPool(poolName, tournamentId, tournamentName, officialMatches);
     const entryId = generateId();
-    addEntry(pool.id, {
+    const userId = getUserId();
+    const newEntry = {
       id: entryId,
+      userId,
       userName,
       bracketName: bracketName || `${userName}'s Bracket`,
       matches: officialMatches.map(m => ({ ...m, winnerId: null })),
       isSubmitted: false,
+    };
+    addEntry(pool.id, newEntry);
+
+    // Push pool and initial entry to the sync server (best-effort)
+    syncCreatePool(pool).then((synced) => {
+      if (synced) syncAddEntry(pool.id, newEntry);
     });
+
     setAppView({ page: 'pool', poolId: pool.id });
   };
 
@@ -743,10 +756,22 @@ export default function App() {
                 <PoolBracketEditor
                   pool={pool}
                   entry={entry}
-                  onSave={(updatedMatches) => updateEntry(pool.id, entry.id, updatedMatches)}
+                  onSave={(updatedMatches) => {
+                    updateEntry(pool.id, entry.id, updatedMatches);
+                    // Best-effort sync to server
+                    syncUpdateEntry(pool.id, entry.id, { matches: updatedMatches });
+                  }}
                   onSubmit={(updatedMatches, tbGames, tbSets) => {
                     updateEntry(pool.id, entry.id, updatedMatches);
                     submitEntry(pool.id, entry.id, tbGames, tbSets);
+                    // Push final submission to server
+                    syncUpdateEntry(pool.id, entry.id, {
+                      matches: updatedMatches,
+                      isSubmitted: true,
+                      submittedAt: new Date().toISOString(),
+                      ...(tbGames !== undefined ? { tiebreakerGames: tbGames } : {}),
+                      ...(tbSets !== undefined ? { tiebreakerSets: tbSets } : {}),
+                    });
                     setAppView({ page: 'pool', poolId: pool.id });
                   }}
                   onBack={() => setAppView({ page: 'pool', poolId: pool.id })}
