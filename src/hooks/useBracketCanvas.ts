@@ -14,11 +14,11 @@ interface UseBracketCanvasOptions {
  *
  * Key design choices:
  * - All pan state is kept in refs → zero React re-renders during drag
- * - Direct DOM scroll manipulation via requestAnimationFrame (mouse drag)
- * - Single-finger touch panning delegated to native browser scroll (smooth momentum)
+ * - Direct DOM scroll manipulation via requestAnimationFrame (mouse drag + single-finger touch)
+ * - Single-finger touch panning handled manually for reliable up/down/left/right scroll
  * - Pinch-to-zoom via native touch events (passive: false to allow preventDefault)
  * - Mouse-wheel zoom via native wheel event (passive: false)
- * - Pointer events used for mouse/stylus drag; touch events used for pinch-to-zoom only
+ * - Pointer events used for mouse/stylus drag; touch events used for touch pan and pinch-to-zoom
  */
 export function useBracketCanvas({
   zoom,
@@ -85,17 +85,28 @@ export function useBracketCanvas({
     let initialPinchDist: number | null = null;
     let initialZoomAtPinch = zoomRef.current;
 
+    // Single-finger pan tracking
+    let singleTouchStart: { x: number; y: number; scrollX: number; scrollY: number } | null = null;
+
     const getDistance = (t1: Touch, t2: Touch) =>
       Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
 
     const handleTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 2) {
         // Begin pinch gesture — prevent browser default (viewport zoom)
+        singleTouchStart = null;
         initialPinchDist = getDistance(e.touches[0], e.touches[1]);
         initialZoomAtPinch = zoomRef.current;
         e.preventDefault();
+      } else if (e.touches.length === 1) {
+        // Track single-finger touch for manual pan (both horizontal and vertical)
+        singleTouchStart = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY,
+          scrollX: container.scrollLeft,
+          scrollY: container.scrollTop,
+        };
       }
-      // Single-finger panning is handled natively by the browser (smooth momentum scroll)
     };
 
     const handleTouchMove = (e: TouchEvent) => {
@@ -109,13 +120,27 @@ export function useBracketCanvas({
           Math.min(maxZoom, initialZoomAtPinch * scale),
         );
         onZoomChangeRef.current(newZoom);
+      } else if (e.touches.length === 1 && singleTouchStart) {
+        // Single-finger pan: manually scroll in both directions (mirrors mouse/stylus drag)
+        e.preventDefault();
+        const dx = e.touches[0].clientX - singleTouchStart.x;
+        const dy = e.touches[0].clientY - singleTouchStart.y;
+        const startX = singleTouchStart.scrollX;
+        const startY = singleTouchStart.scrollY;
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = requestAnimationFrame(() => {
+          container.scrollLeft = startX - dx;
+          container.scrollTop = startY - dy;
+        });
       }
-      // Single-finger pan is left to native browser scroll for smooth momentum
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
       if (e.touches.length < 2) {
         initialPinchDist = null;
+      }
+      if (e.touches.length === 0) {
+        singleTouchStart = null;
       }
     };
 
