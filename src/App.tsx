@@ -381,15 +381,23 @@ export default function App() {
   // Per-round completion tracking for home bracket view (rounds 1-7)
   const roundCompletion = useMemo(() => {
     const c: Record<number, { total: number; done: number }> = {};
-    for (let r = 1; r <= 7; r++) {
-      const rm = matches.filter(m => m.round === r && m.player1 && m.player2);
-      c[r] = { total: rm.length, done: rm.filter(m => m.winnerId).length };
+    for (let r = 1; r <= 7; r++) c[r] = { total: 0, done: 0 };
+    for (const m of matches) {
+      if (m.round >= 1 && m.round <= 7 && m.player1 && m.player2) {
+        c[m.round].total++;
+        if (m.winnerId) c[m.round].done++;
+      }
     }
     return c;
   }, [matches]);
 
   // 0 = full bracket canvas, 1-7 = round-by-round card view
   const [activeRound, setActiveRound] = useState<number>(0);
+
+  const activeRoundMatches = useMemo(
+    () => matches.filter(m => m.round === activeRound).sort((a, b) => a.matchNumber - b.matchNumber),
+    [matches, activeRound],
+  );
 
   // Bracket lock status
   const isLocked = useMemo(() => {
@@ -1008,10 +1016,7 @@ export default function App() {
 
                 {/* Match cards */}
                 <div className="flex flex-col gap-3">
-                  {matches
-                    .filter(m => m.round === activeRound)
-                    .sort((a, b) => a.matchNumber - b.matchNumber)
-                    .map((match, idx) => (
+                  {activeRoundMatches.map((match, idx) => (
                       <MatchPickCard
                         key={match.id}
                         match={match}
