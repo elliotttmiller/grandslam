@@ -1,13 +1,15 @@
-import { useState, useRef, useMemo, useCallback } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, ZoomIn, ZoomOut, Lock, Check, X, Maximize2,
+  ArrowLeft, ZoomIn, ZoomOut, Lock, Check, X, Maximize2, LayoutGrid,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { BracketTree } from '@/components/Bracket';
-import { advancePlayer } from '@/lib/bracket-utils';
+import { advancePlayer, ROUND_NAMES, ROUND_FULL_NAMES } from '@/lib/bracket-utils';
 import { calculateBracketScore } from '@/lib/scoring';
 import { useBracketCanvas } from '@/hooks/useBracketCanvas';
+import { MatchPickCard } from './MatchPickCard';
 import type { Match } from '@/lib/bracket-utils';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 
@@ -38,6 +40,8 @@ export function PoolBracketEditor({
   const [tbSetsInput, setTbSetsInput] = useState(String(entry.tiebreakerSets ?? ''));
   const [pendingMatches, setPendingMatches] = useState<Match[] | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  // 0 = full bracket canvas, 1-7 = round-by-round card view
+  const [activeRound, setActiveRound] = useState<number>(1);
 
   const bracketRef = useRef<HTMLDivElement>(null);
   const { containerRef, handlePointerDown, handlePointerMove, handlePointerUp } = useBracketCanvas({
@@ -48,6 +52,29 @@ export function PoolBracketEditor({
   const score = useMemo(() => calculateBracketScore(matches), [matches]);
   const finalMatch = useMemo(() => matches.find(m => m.nextMatchId === null), [matches]);
   const totalMatches = matches.filter(m => m.player1 && m.player2).length;
+
+  // Per-round completion tracking (rounds 1-7)
+  const roundCompletion = useMemo(() => {
+    const c: Record<number, { total: number; done: number }> = {};
+    for (let r = 1; r <= 7; r++) {
+      const rm = matches.filter(m => m.round === r && m.player1 && m.player2);
+      c[r] = { total: rm.length, done: rm.filter(m => m.winnerId).length };
+    }
+    return c;
+  }, [matches]);
+
+  // On mount: jump to the first round that still has picks to make
+  useEffect(() => {
+    let first = 1;
+    for (let r = 1; r <= 7; r++) {
+      const rc = roundCompletion[r];
+      if (!rc || rc.total === 0) continue;
+      if (rc.done < rc.total) { first = r; break; }
+      first = Math.min(r + 1, 7);
+    }
+    setActiveRound(first);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally runs once on mount
 
   const isEffectivelyReadOnly = readOnly || entry.isSubmitted;
 
@@ -85,6 +112,14 @@ export function PoolBracketEditor({
 
   const progressPct = totalMatches > 0 ? (score.picksCompleted / totalMatches) * 100 : 0;
 
+  const activeRoundMatches = useMemo(
+    () => matches.filter(m => m.round === activeRound).sort((a, b) => a.matchNumber - b.matchNumber),
+    [matches, activeRound],
+  );
+
+  const activeRoundCompletion = roundCompletion[activeRound] ?? { total: 0, done: 0 };
+  const isRoundComplete = activeRoundCompletion.total > 0 && activeRoundCompletion.done === activeRoundCompletion.total;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
@@ -106,9 +141,7 @@ export function PoolBracketEditor({
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {!isEffectivelyReadOnly && lastSavedAt && (
-              <span className="text-[10px] text-muted-foreground/40 hidden sm:block" aria-live="polite">
-                Saved
-              </span>
+              <span className="text-[10px] text-muted-foreground/40 hidden sm:block" aria-live="polite">Saved</span>
             )}
             {score.total > 0 && (
               <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20" aria-label={`${score.total} points`}>
@@ -117,7 +150,7 @@ export function PoolBracketEditor({
             )}
             {entry.isSubmitted && (
               <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                <Check className="h-3 w-3" aria-hidden="true" /> Done
+                <Check className="h-3 w-3" aria-hidden="true" /> Submitted
               </span>
             )}
             {!entry.isSubmitted && isEffectivelyReadOnly && (
@@ -129,67 +162,200 @@ export function PoolBracketEditor({
         </div>
       </header>
 
-      {/* Bracket canvas */}
-      <main className="flex-1 relative overflow-hidden bg-muted/5">
-        {/* Zoom controls */}
-        <div className="absolute bottom-[68px] right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
-          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom(z => Math.min(z + 0.2, 2))} aria-label="Zoom in">
-            <ZoomIn className="w-4 h-4" aria-hidden="true" />
-          </Button>
-          <div className="text-[10px] font-bold text-muted-foreground/70 tabular-nums w-8 text-center" aria-live="polite" aria-label={`Zoom level ${Math.round(zoom * 100)}%`}>{Math.round(zoom * 100)}%</div>
-          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} aria-label="Zoom out">
-            <ZoomOut className="w-4 h-4" aria-hidden="true" />
-          </Button>
-          <div className="w-full h-px bg-border/30 my-0.5" aria-hidden="true" />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
-            onClick={() => {
-              setZoom(0.4);
-              if (containerRef.current) {
-                containerRef.current.scrollLeft = 0;
-                containerRef.current.scrollTop = 0;
-              }
-            }}
-            aria-label="Reset view to default zoom"
+      {/* Round / view selector tabs */}
+      <div className="flex-none border-b border-border/20 bg-card/20" role="tablist" aria-label="Bracket rounds">
+        <div className="flex overflow-x-auto px-3 py-2 gap-1" style={{ scrollbarWidth: 'none' }}>
+          {/* "All" tab — full canvas */}
+          <button
+            role="tab"
+            aria-selected={activeRound === 0}
+            onClick={() => setActiveRound(0)}
+            className={cn(
+              'flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
+              activeRound === 0
+                ? 'bg-white/[0.12] text-foreground'
+                : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/[0.04]',
+            )}
           >
-            <Maximize2 className="w-4 h-4" aria-hidden="true" />
-          </Button>
-        </div>
+            <LayoutGrid className="h-3 w-3" aria-hidden="true" />
+            All
+          </button>
 
-        {/* Scrollable bracket */}
-        <div
-          ref={containerRef}
-          className="bracket-canvas w-full h-full overflow-auto p-6 sm:p-10 cursor-grab touch-none custom-scrollbar"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-        >
-          {finalMatch && (
-            <div
-              className="min-w-max min-h-max"
-              style={{
-                width: bracketRef.current ? bracketRef.current.offsetWidth * zoom : 'auto',
-                height: bracketRef.current ? bracketRef.current.offsetHeight * zoom : 'auto',
-              }}
-            >
-              <div
-                ref={bracketRef}
-              className="bracket-inner inline-block origin-top-left bg-background/50 p-8 rounded-2xl"
-                style={{ transform: `scale(${zoom})` }}
+          {/* Round 1-7 tabs */}
+          {([1, 2, 3, 4, 5, 6, 7] as const).map(round => {
+            const rc = roundCompletion[round];
+            const isComplete = rc && rc.total > 0 && rc.done === rc.total;
+            const isPartial = rc && rc.done > 0 && !isComplete;
+            const isRound = activeRound === round;
+            return (
+              <button
+                key={round}
+                role="tab"
+                aria-selected={isRound}
+                onClick={() => setActiveRound(round)}
+                className={cn(
+                  'flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
+                  isRound
+                    ? 'bg-white/[0.12] text-foreground'
+                    : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/[0.04]',
+                )}
               >
-                <BracketTree
-                  matchId={finalMatch.id}
-                  matches={matches}
-                  onSelectWinner={handleSelectWinner}
-                  readOnly={isEffectivelyReadOnly}
-                />
-              </div>
-            </div>
-          )}
+                {ROUND_NAMES[round]}
+                {isComplete && <Check className="h-3 w-3 text-emerald-400" aria-label="Complete" />}
+                {isPartial && <span className="text-[9px] font-black text-amber-400 tabular-nums">{rc.done}/{rc.total}</span>}
+              </button>
+            );
+          })}
         </div>
+      </div>
+
+      {/* Main content */}
+      <main className="flex-1 relative overflow-hidden bg-muted/5">
+        {activeRound === 0 ? (
+          /* ── Full bracket canvas ── */
+          <>
+            {/* Zoom controls */}
+            <div className="absolute bottom-4 right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom(z => Math.min(z + 0.2, 2))} aria-label="Zoom in">
+                <ZoomIn className="w-4 h-4" aria-hidden="true" />
+              </Button>
+              <div className="text-[10px] font-bold text-muted-foreground/70 tabular-nums w-8 text-center" aria-live="polite" aria-label={`Zoom ${Math.round(zoom * 100)}%`}>{Math.round(zoom * 100)}%</div>
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} aria-label="Zoom out">
+                <ZoomOut className="w-4 h-4" aria-hidden="true" />
+              </Button>
+              <div className="w-full h-px bg-border/30 my-0.5" aria-hidden="true" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
+                onClick={() => {
+                  setZoom(0.4);
+                  if (containerRef.current) {
+                    containerRef.current.scrollLeft = 0;
+                    containerRef.current.scrollTop = 0;
+                  }
+                }}
+                aria-label="Reset view to default zoom"
+              >
+                <Maximize2 className="w-4 h-4" aria-hidden="true" />
+              </Button>
+            </div>
+
+            {/* Scrollable bracket */}
+            <div
+              ref={containerRef}
+              className="bracket-canvas w-full h-full overflow-auto p-6 sm:p-10 cursor-grab touch-none custom-scrollbar"
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+            >
+              {finalMatch && (
+                <div className="min-w-max min-h-max">
+                  <div
+                    ref={bracketRef}
+                    className="bracket-inner inline-block origin-top-left bg-background/50 p-8 rounded-2xl"
+                    style={{ transform: `scale(${zoom})` }}
+                  >
+                    <BracketTree
+                      matchId={finalMatch.id}
+                      matches={matches}
+                      onSelectWinner={handleSelectWinner}
+                      readOnly={isEffectivelyReadOnly}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          /* ── Round card list ── */
+          <div className="h-full overflow-y-auto custom-scrollbar">
+            <div className="px-4 py-4 max-w-lg mx-auto">
+
+              {/* Round header with completion ring */}
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">
+                    {ROUND_FULL_NAMES[activeRound]}
+                  </h3>
+                  <p className="text-[12px] text-muted-foreground/60 mt-0.5 tabular-nums">
+                    {activeRoundCompletion.done} / {activeRoundCompletion.total} picked
+                  </p>
+                </div>
+                {/* Completion ring */}
+                <div
+                  className="h-10 w-10 rounded-full relative flex items-center justify-center"
+                  style={{
+                    background: `conic-gradient(rgb(16 185 129 / 0.7) ${(activeRoundCompletion.done / Math.max(activeRoundCompletion.total, 1)) * 360}deg, rgb(255 255 255 / 0.06) 0deg)`,
+                  }}
+                  aria-hidden="true"
+                >
+                  <div className="h-8 w-8 rounded-full bg-background flex items-center justify-center">
+                    <span className="text-[10px] font-black tabular-nums text-muted-foreground">
+                      {activeRoundCompletion.total > 0
+                        ? Math.round((activeRoundCompletion.done / activeRoundCompletion.total) * 100)
+                        : 0}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Match cards */}
+              <div className="flex flex-col gap-3">
+                {activeRoundMatches.map((match, idx) => (
+                  <MatchPickCard
+                    key={match.id}
+                    match={match}
+                    matchIndex={idx}
+                    onSelectWinner={handleSelectWinner}
+                    readOnly={isEffectivelyReadOnly}
+                  />
+                ))}
+              </div>
+
+              {/* CTA when round is complete */}
+              <AnimatePresence>
+                {isRoundComplete && activeRound < 7 && (
+                  <motion.div
+                    key="next-round"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="mt-4"
+                  >
+                    <Button
+                      className="w-full h-12 bg-emerald-600 hover:bg-emerald-500 text-white border-0 rounded-2xl font-semibold text-[14px]"
+                      onClick={() => setActiveRound(r => r + 1)}
+                    >
+                      Continue to {ROUND_FULL_NAMES[activeRound + 1]} →
+                    </Button>
+                  </motion.div>
+                )}
+                {isRoundComplete && activeRound === 7 && !entry.isSubmitted && !readOnly && (
+                  <motion.div
+                    key="submit-cta"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="mt-4"
+                  >
+                    <Button
+                      className="w-full h-12 bg-emerald-600 hover:bg-emerald-500 text-white border-0 rounded-2xl font-semibold text-[14px]"
+                      onClick={handleSubmitClick}
+                    >
+                      🎉 Submit My Picks
+                    </Button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div className="h-6" aria-hidden="true" />
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Bottom bar */}

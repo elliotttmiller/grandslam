@@ -55,6 +55,17 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
   const myEntries = rankedEntries.filter(e => e.userName === savedUserName);
   const leaderScore = rankedEntries[0]?.score.total ?? 0;
 
+  // Pool-level stats
+  const submittedCount = pool.entries.filter(e => e.isSubmitted).length;
+  const avgCompletion = pool.entries.length > 0
+    ? Math.round(
+        pool.entries.reduce((sum, e) => {
+          const s = calculateBracketScore(e.matches);
+          return sum + (s.picksCompleted / TOTAL_BRACKET_MATCHES) * 100;
+        }, 0) / pool.entries.length,
+      )
+    : 0;
+
   const copyToClipboard = async (text: string, key: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -202,6 +213,61 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
       <div className="flex-1 px-5 py-5">
         <div className="max-w-4xl mx-auto flex flex-col gap-5">
 
+          {/* Stats strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {[
+              { label: 'Entries', value: pool.entries.length, color: '' },
+              { label: 'Submitted', value: submittedCount, color: 'text-emerald-400' },
+              { label: 'Leader', value: leaderScore > 0 ? `${leaderScore} pts` : '—', color: 'text-amber-400' },
+              { label: 'Avg picks', value: `${avgCompletion}%`, color: '' },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="bg-card/50 border border-border/25 rounded-2xl px-4 py-3 flex flex-col items-center text-center">
+                <span className={cn('text-xl font-black tabular-nums', color)}>{value}</span>
+                <span className="text-[10px] text-muted-foreground/55 font-medium mt-0.5">{label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* My entry spotlight */}
+          {myEntries.length > 0 && (
+            <div className="bg-emerald-500/[0.06] border border-emerald-500/20 rounded-2xl p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400/70 mb-3">Your Bracket</p>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-lg shrink-0">
+                  {myEntries[0].rank === 1 ? '🥇' : myEntries[0].rank === 2 ? '🥈' : myEntries[0].rank === 3 ? '🥉' : `#${myEntries[0].rank}`}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-[14px] truncate">{myEntries[0].bracketName}</span>
+                    {myEntries[0].isSubmitted
+                      ? <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5"><Check className="h-2.5 w-2.5" aria-hidden="true" />Submitted</span>
+                      : <span className="text-[10px] text-amber-400 font-semibold">In progress</span>
+                    }
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-xl font-black text-emerald-400 tabular-nums">{myEntries[0].score.total}</span>
+                    <span className="text-[11px] text-muted-foreground/55">pts · {myEntries[0].score.picksCompleted}/{TOTAL_BRACKET_MATCHES} picks</span>
+                  </div>
+                  <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden mt-1.5">
+                    <motion.div
+                      className="h-full bg-emerald-500 rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(myEntries[0].score.picksCompleted / TOTAL_BRACKET_MATCHES) * 100}%` }}
+                      transition={{ duration: 0.5, ease: 'easeOut' }}
+                    />
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  className="shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white border-0 rounded-xl"
+                  onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: myEntries[0].id })}
+                >
+                  {myEntries[0].isSubmitted ? 'View' : 'Edit Picks'}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* My Entry CTA */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Leaderboard</span>
@@ -266,6 +332,17 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                         <span className="text-[11px] text-amber-400 font-bold tabular-nums">⚡+{entry.score.upsetBonus}</span>
                       )}
                     </div>
+                    {/* Completion bar */}
+                    <div className="h-1 bg-muted/20 rounded-full overflow-hidden mt-1.5">
+                      <div
+                        className={cn(
+                          'h-full rounded-full transition-all duration-500',
+                          entry.score.picksCompleted === TOTAL_BRACKET_MATCHES ? 'bg-emerald-500' : 'bg-emerald-500/50',
+                        )}
+                        style={{ width: `${(entry.score.picksCompleted / TOTAL_BRACKET_MATCHES) * 100}%` }}
+                        aria-hidden="true"
+                      />
+                    </div>
                   </div>
                   {/* Desktop stats */}
                   <div className="hidden sm:flex items-center gap-4 shrink-0 text-[12px]">
@@ -275,6 +352,17 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                     </span>
                     <span className="text-muted-foreground/50 tabular-nums" title="Picks completed">{entry.score.picksCompleted}/{TOTAL_BRACKET_MATCHES}</span>
                   </div>
+                  {/* Gap from leader */}
+                  {entry.rank > 1 && leaderScore > 0 && (
+                    <div className="hidden sm:flex shrink-0 text-[11px] text-muted-foreground/35 tabular-nums w-10 text-right" title="Gap from leader">
+                      -{leaderScore - entry.score.total}
+                    </div>
+                  )}
+                  {entry.rank === 1 && leaderScore > 0 && (
+                    <div className="hidden sm:flex shrink-0 text-[10px] font-bold text-amber-400/70 w-10 text-right" title="Leader">
+                      Leader
+                    </div>
+                  )}
                   {/* Score */}
                   <div className="shrink-0 font-black text-base tabular-nums text-emerald-400" aria-label={`${entry.score.total} points`}>{entry.score.total}</div>
                   {/* Actions */}
