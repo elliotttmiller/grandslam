@@ -446,7 +446,7 @@ export default function App() {
   );
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
+    <div className="bg-background text-foreground">
       {/* Champion celebration overlay */}
       <CelebrationOverlay visible={showCelebration} championName={celebrationName} />
 
@@ -475,7 +475,7 @@ export default function App() {
       </div>
 
       {/* Header */}
-      <header className="flex-none border-b border-white/[0.06] bg-card/50 backdrop-blur-3xl px-4 sm:px-6 py-3 shadow-lg z-30 sticky top-0">
+      <header className="fixed top-0 left-0 right-0 border-b border-white/[0.06] bg-card/50 backdrop-blur-3xl px-4 sm:px-6 py-3 shadow-lg z-30">
         <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[44px]">
           {/* Left: menu button (only in bracket view) */}
           <div className="absolute left-3 sm:left-5">
@@ -689,7 +689,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Main Content - View Router */}
-      <div className="flex-1 overflow-hidden relative">
+      <div className="fixed top-[68px] left-0 right-0 bottom-0 overflow-hidden">
         <AnimatePresence mode="wait" initial={false}>
           {appView.page === 'pools' && (
             <motion.div
