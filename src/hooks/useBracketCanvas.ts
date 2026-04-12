@@ -14,10 +14,11 @@ interface UseBracketCanvasOptions {
  *
  * Key design choices:
  * - All pan state is kept in refs → zero React re-renders during drag
- * - Direct DOM scroll manipulation via requestAnimationFrame
+ * - Direct DOM scroll manipulation via requestAnimationFrame (mouse drag)
+ * - Single-finger touch panning delegated to native browser scroll (smooth momentum)
  * - Pinch-to-zoom via native touch events (passive: false to allow preventDefault)
  * - Mouse-wheel zoom via native wheel event (passive: false)
- * - Pointer events used for mouse/stylus drag; touch events used for touch drag & pinch
+ * - Pointer events used for mouse/stylus drag; touch events used for pinch-to-zoom only
  */
 export function useBracketCanvas({
   zoom,
@@ -84,29 +85,22 @@ export function useBracketCanvas({
     let initialPinchDist: number | null = null;
     let initialZoomAtPinch = zoomRef.current;
 
-    // Single-finger drag tracking
-    let touchStartScroll = { x: 0, y: 0 };
-    let touchStartClient = { x: 0, y: 0 };
-    let touchRaf = 0;
-
     const getDistance = (t1: Touch, t2: Touch) =>
       Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
 
     const handleTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 2) {
-        // Begin pinch gesture
+        // Begin pinch gesture — prevent browser default (viewport zoom)
         initialPinchDist = getDistance(e.touches[0], e.touches[1]);
         initialZoomAtPinch = zoomRef.current;
         e.preventDefault();
-      } else if (e.touches.length === 1) {
-        // Begin single-finger drag
-        touchStartScroll = { x: container.scrollLeft, y: container.scrollTop };
-        touchStartClient = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       }
+      // Single-finger panning is handled natively by the browser (smooth momentum scroll)
     };
 
     const handleTouchMove = (e: TouchEvent) => {
       if (e.touches.length === 2 && initialPinchDist !== null) {
+        // Two-finger pinch: custom zoom, prevent browser handling
         e.preventDefault();
         const dist = getDistance(e.touches[0], e.touches[1]);
         const scale = dist / initialPinchDist;
@@ -115,26 +109,13 @@ export function useBracketCanvas({
           Math.min(maxZoom, initialZoomAtPinch * scale),
         );
         onZoomChangeRef.current(newZoom);
-      } else if (e.touches.length === 1) {
-        e.preventDefault();
-        const dx = e.touches[0].clientX - touchStartClient.x;
-        const dy = e.touches[0].clientY - touchStartClient.y;
-        cancelAnimationFrame(touchRaf);
-        touchRaf = requestAnimationFrame(() => {
-          container.scrollLeft = touchStartScroll.x - dx;
-          container.scrollTop = touchStartScroll.y - dy;
-        });
       }
+      // Single-finger pan is left to native browser scroll for smooth momentum
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
       if (e.touches.length < 2) {
         initialPinchDist = null;
-      }
-      if (e.touches.length === 1) {
-        // User lifted one finger — reset drag origin to avoid a jump
-        touchStartScroll = { x: container.scrollLeft, y: container.scrollTop };
-        touchStartClient = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       }
     };
 
@@ -148,7 +129,7 @@ export function useBracketCanvas({
       }
     };
 
-    // passive: false is required for preventDefault() on touchmove/wheel
+    // passive: false is required for preventDefault() on touchstart/touchmove for pinch
     container.addEventListener('touchstart', handleTouchStart, { passive: false });
     container.addEventListener('touchmove', handleTouchMove, { passive: false });
     container.addEventListener('touchend', handleTouchEnd, { passive: true });
@@ -160,7 +141,6 @@ export function useBracketCanvas({
       container.removeEventListener('touchend', handleTouchEnd);
       container.removeEventListener('wheel', handleWheel);
       cancelAnimationFrame(rafRef.current);
-      cancelAnimationFrame(touchRaf);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minZoom, maxZoom]); // stable deps only — zoom/callbacks accessed via refs
