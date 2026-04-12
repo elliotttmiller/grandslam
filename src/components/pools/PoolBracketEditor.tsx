@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, ZoomIn, ZoomOut, Lock, Check, X, Maximize2, LayoutGrid,
+  ArrowLeft, ZoomIn, ZoomOut, Lock, Check, X, Maximize2, LayoutGrid, ChevronUp, ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -210,8 +210,15 @@ export function PoolBracketEditor({
         {activeRound === 0 ? (
           /* ── Full bracket canvas ── */
           <>
-            {/* Zoom controls */}
+            {/* Zoom + Scroll controls */}
             <div className="absolute bottom-4 right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => containerRef.current?.scrollBy({ top: -200, behavior: 'smooth' })} aria-label="Scroll up">
+                <ChevronUp className="w-4 h-4" aria-hidden="true" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => containerRef.current?.scrollBy({ top: 200, behavior: 'smooth' })} aria-label="Scroll down">
+                <ChevronDown className="w-4 h-4" aria-hidden="true" />
+              </Button>
+              <div className="w-full h-px bg-border/30 my-0.5" aria-hidden="true" />
               <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom(z => Math.min(z + 0.2, 2))} aria-label="Zoom in">
                 <ZoomIn className="w-4 h-4" aria-hidden="true" />
               </Button>

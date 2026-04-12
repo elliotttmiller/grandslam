@@ -6,7 +6,7 @@ import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Button } from './components/ui/button';
-import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid } from 'lucide-react';
+import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PoolHub } from './components/pools/PoolHub';
 import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
@@ -843,8 +843,27 @@ export default function App() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Zoom Controls */}
+          {/* Zoom + Scroll Controls */}
           <div className="absolute bottom-5 right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
+              onClick={() => canvasRef.current?.scrollBy({ top: -200, behavior: 'smooth' })}
+              aria-label="Scroll up"
+            >
+              <ChevronUp className="w-4 h-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
+              onClick={() => canvasRef.current?.scrollBy({ top: 200, behavior: 'smooth' })}
+              aria-label="Scroll down"
+            >
+              <ChevronDown className="w-4 h-4" aria-hidden="true" />
+            </Button>
+            <div className="w-full h-px bg-border/30 my-0.5" aria-hidden="true" />
             <Button
               variant="ghost"
               size="icon"
