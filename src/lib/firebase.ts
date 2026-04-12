@@ -1,5 +1,6 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getAuth as _getAuth, type Auth } from 'firebase/auth';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 
 /**
@@ -26,6 +27,11 @@ function getFirebaseApp(): FirebaseApp {
 /** Singleton Firestore instance. */
 export function getDb(): Firestore {
   return getFirestore(getFirebaseApp());
+}
+
+/** Singleton Firebase Auth instance. */
+export function getAuth(): Auth {
+  return _getAuth(getFirebaseApp());
 }
 
 /**
