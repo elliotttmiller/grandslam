@@ -48,6 +48,8 @@ export default function App() {
   const [tbSetsInput, setTbSetsInput] = useState('');
   const [appView, setAppView] = useState<AppView>({ page: 'bracket' });
   const [poolRefreshKey, setPoolRefreshKey] = useState(0);
+  // Code from a `?join=POOL_CODE` URL param — passed to PoolHub to pre-fill the join modal.
+  const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null);
 
   // Firebase Authentication state — tracked via onAuthStateChanged at root level
   const [authUser, setAuthUser] = useState<User | null>(null);
@@ -162,12 +164,19 @@ export default function App() {
 
         // Handle pool URL params
         if (!shared) {
-          const joinPoolParam = params.get('joinPool');
+          const joinCodeParam = params.get('join');        // ?join=POOL_CODE  (short invite link)
+          const joinPoolParam = params.get('joinPool');    // legacy encoded pool join
           const poolSnapParam = params.get('poolSnap');
           const importEntryPoolId = params.get('importEntry');
           const importEntryData = params.get('entry');
 
-          if (joinPoolParam) {
+          if (joinCodeParam) {
+            // Short invite link — just a 6-char pool code.
+            // Navigate to the Pools page so PoolHub can auto-open the join modal.
+            window.history.replaceState({}, document.title, window.location.pathname);
+            setPendingJoinCode(joinCodeParam.toUpperCase().slice(0, 6));
+            setAppView({ page: 'pools' });
+          } else if (joinPoolParam) {
             const imported = importPool(joinPoolParam);
             if (imported) {
               window.history.replaceState({}, document.title, window.location.pathname);
@@ -774,6 +783,8 @@ export default function App() {
                 onNavigate={setAppView}
                 tournaments={tournaments}
                 onCreatePool={handleCreatePool}
+                initialJoinCode={pendingJoinCode ?? undefined}
+                onJoinHandled={() => setPendingJoinCode(null)}
               />
             </motion.div>
           )}

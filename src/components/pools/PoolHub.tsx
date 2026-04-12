@@ -22,9 +22,13 @@ interface PoolHubProps {
     tournamentId: string,
     tournamentName: string
   ) => Promise<void>;
+  /** Pre-populate the join modal with this pool code (from `?join=CODE` URL param). */
+  initialJoinCode?: string;
+  /** Called once the join modal has been shown for the initial code, so the parent can clear its state. */
+  onJoinHandled?: () => void;
 }
 
-export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps) {
+export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode, onJoinHandled }: PoolHubProps) {
   const [pools, setPools] = useState<Pool[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
@@ -50,6 +54,17 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
     setCreateUserName(savedName);
     setJoinUserName(savedName);
   }, []);
+
+  // When a `?join=CODE` URL param was detected, auto-open the join modal
+  // pre-filled with the code so the user only has to enter their name.
+  useEffect(() => {
+    if (initialJoinCode) {
+      setJoinCode(initialJoinCode.toUpperCase().slice(0, 6));
+      setShowJoin(true);
+      onJoinHandled?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialJoinCode]);
 
   const refreshPools = () => setPools(getPools());
 
