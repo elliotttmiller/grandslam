@@ -6,18 +6,21 @@ import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Button } from './components/ui/button';
-import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown } from 'lucide-react';
+import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown, LogIn, LogOut, UserCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PoolHub } from './components/pools/PoolHub';
 import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
 import { PoolBracketEditor } from './components/pools/PoolBracketEditor';
 import { MatchPickCard } from './components/pools/MatchPickCard';
+import { AuthModal } from './components/AuthModal';
 import { cn } from './lib/utils';
 import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId } from './lib/pool-storage';
 import { syncCreatePool, syncAddEntry, syncUpdateEntry } from './services/poolSyncService';
+import { onAuthStateChanged, signOut } from './services/authService';
 import { getUserId, setUserName } from './lib/user-identity';
 import { AnimatedNumber } from './components/AnimatedNumber';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
+import type { User } from 'firebase/auth';
 
 export type AppView =
   | { page: 'bracket' }
@@ -45,6 +48,24 @@ export default function App() {
   const [tbSetsInput, setTbSetsInput] = useState('');
   const [appView, setAppView] = useState<AppView>({ page: 'bracket' });
   const [poolRefreshKey, setPoolRefreshKey] = useState(0);
+
+  // Firebase Authentication state — tracked via onAuthStateChanged at root level
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // Subscribe to auth state changes once on mount
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged((user) => {
+      setAuthUser(user);
+      setAuthChecked(true);
+    });
+    return unsubscribe;
+  }, []);
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
   // App view ref — lets the celebration effect read current page without adding
   // appView as a dependency (which would re-run the effect on navigation)
@@ -463,6 +484,16 @@ export default function App() {
       {/* Champion celebration overlay */}
       <CelebrationOverlay visible={showCelebration} championName={celebrationName} />
 
+      {/* Authentication modal */}
+      <AuthModal
+        open={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={(user) => {
+          setAuthUser(user);
+          setShowAuthModal(false);
+        }}
+      />
+
       {/* Framer Motion toast stack */}
       <div className="fixed bottom-6 right-4 z-[90] flex flex-col gap-2 items-end pointer-events-none">
         <AnimatePresence>
@@ -556,7 +587,7 @@ export default function App() {
             )}
           </div>
 
-          {/* Right: score + lock badge (bracket view only) */}
+          {/* Right: score + lock badge (bracket view only) + auth button */}
           <div className="absolute right-3 sm:right-5 flex items-center gap-2">
             {appView.page === 'bracket' && matches.length > 0 && score.total > 0 && (
               <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20" aria-label={`Score: ${score.total} points`}>
@@ -574,6 +605,30 @@ export default function App() {
                 <span className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-white/40 px-2 py-1" aria-label={`Tournament starts ${new Date(currentTournament.startDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}>
                   ⏰ {new Date(currentTournament.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                 </span>
+              )
+            )}
+            {/* Auth button — shown once the initial auth check is complete */}
+            {authChecked && (
+              authUser ? (
+                <button
+                  onClick={handleSignOut}
+                  title={`Signed in as ${authUser.email ?? 'user'} — click to sign out`}
+                  aria-label={`Signed in as ${authUser.email ?? 'user'}. Click to sign out.`}
+                  className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors px-2 py-1 rounded-lg hover:bg-emerald-500/10"
+                >
+                  <UserCircle className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline truncate max-w-[80px]">{authUser.email}</span>
+                  <LogOut className="h-3 w-3 opacity-60" aria-hidden="true" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  aria-label="Sign in or create account"
+                  className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 hover:text-white/80 transition-colors px-2 py-1 rounded-lg hover:bg-white/[0.06]"
+                >
+                  <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="hidden sm:inline">Sign In</span>
+                </button>
               )
             )}
           </div>
