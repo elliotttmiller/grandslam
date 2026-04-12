@@ -80,6 +80,8 @@ function friendlyAuthError(err: unknown): string {
       return 'Too many attempts. Please try again later.';
     case 'auth/network-request-failed':
       return 'Network error. Check your connection and try again.';
+    case 'auth/configuration-not-found':
+      return 'Sign-in is not enabled for this app. Please enable Email/Password in the Firebase Console under Authentication → Sign-in method.';
     default:
       return (err instanceof Error ? err.message : null) ?? 'Authentication failed.';
   }
