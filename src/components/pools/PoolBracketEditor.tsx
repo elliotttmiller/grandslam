@@ -275,7 +275,7 @@ export function PoolBracketEditor({
         ) : (
           /* ── Round card list ── */
           <div className="h-full overflow-y-auto custom-scrollbar">
-            <div className="px-4 py-4 max-w-lg mx-auto">
+            <div className="px-4 py-4 max-w-lg mx-auto" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
 
               {/* Round header with completion ring */}
               <div className="flex items-center justify-between mb-4">
@@ -363,7 +363,7 @@ export function PoolBracketEditor({
       </main>
 
       {/* Bottom bar */}
-      <div className="flex-none border-t border-border/20 bg-card/70 backdrop-blur-xl px-4 py-3 flex items-center gap-3">
+      <div className="safe-bottom flex-none border-t border-border/20 bg-card/70 backdrop-blur-xl px-4 py-3 flex items-center gap-3">
         <div className="flex-1 flex flex-col gap-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground/70 tabular-nums">{score.picksCompleted} / {TOTAL_BRACKET_MATCHES} picks</span>
