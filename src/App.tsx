@@ -518,11 +518,14 @@ export default function App() {
         </AnimatePresence>
       </div>
 
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 border-b border-white/[0.06] bg-card/50 backdrop-blur-3xl px-4 sm:px-6 py-3 shadow-lg z-30">
-        <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[44px]">
-          {/* Left: menu button (only in bracket view) */}
-          <div className="absolute left-3 sm:left-5">
+      {/* Header — 3-column flex: [left shrink-0] [center flex-1] [right shrink-0]
+           This prevents the score/auth badges on the right from ever overlapping
+           the centered nav tabs on narrow mobile screens. */}
+      <header className="fixed top-0 left-0 right-0 border-b border-white/[0.06] bg-card/50 backdrop-blur-3xl z-30 shadow-lg">
+        <div className="flex items-center h-[52px] px-3 gap-2 max-w-7xl mx-auto">
+
+          {/* Left: menu button + logo + title (all shrink-0, never pushed into center) */}
+          <div className="flex items-center gap-2 shrink-0">
             {appView.page === 'bracket' ? (
               <Button
                 variant="ghost"
@@ -535,19 +538,25 @@ export default function App() {
               >
                 <Menu className="h-[18px] w-[18px]" aria-hidden="true" />
               </Button>
-            ) : null}
-          </div>
-
-          {/* Center: logo + nav tabs */}
-          <div className="flex items-center gap-3 sm:gap-5">
+            ) : (
+              <div className="h-9 w-9" aria-hidden="true" />
+            )}
             <img
               src={`${import.meta.env.BASE_URL}tennis_logo.png`}
               alt="Grand Slam"
-              className="h-7 w-7 transition-transform hover:rotate-12 duration-500 shrink-0"
+              className="h-6 w-6 transition-transform hover:rotate-12 duration-500 shrink-0"
             />
             <h1 className="text-[13px] font-black uppercase tracking-widest hidden sm:block text-white/80">Grand Slam</h1>
-            <div className="hidden sm:block h-5 w-px bg-white/10" aria-hidden="true" />
-            {/* Nav tabs */}
+            {appView.page === 'bracket' && currentTournament && (
+              <>
+                <div className="hidden sm:block h-5 w-px bg-white/10" aria-hidden="true" />
+                <span className="text-[12px] font-semibold text-white/55 hidden md:block truncate max-w-[160px]">{currentTournament.name}</span>
+              </>
+            )}
+          </div>
+
+          {/* Center: nav tabs — flex-1 keeps it between the two fixed-width columns */}
+          <div className="flex-1 flex justify-center">
             <nav aria-label="Main navigation">
               <div role="tablist" className="flex items-center gap-0.5 bg-white/[0.06] rounded-xl p-1">
                 <button
@@ -578,17 +587,10 @@ export default function App() {
                 </button>
               </div>
             </nav>
-            {/* Tournament name in bracket view */}
-            {appView.page === 'bracket' && currentTournament && (
-              <>
-                <div className="hidden sm:block h-5 w-px bg-white/10" aria-hidden="true" />
-                <span className="text-[12px] font-semibold text-white/55 hidden sm:block truncate max-w-[160px]">{currentTournament.name}</span>
-              </>
-            )}
           </div>
 
-          {/* Right: score + lock badge (bracket view only) + auth button */}
-          <div className="absolute right-3 sm:right-5 flex items-center gap-2">
+          {/* Right: score + lock badge + auth (shrink-0, icon-only on mobile) */}
+          <div className="flex items-center gap-1.5 shrink-0">
             {appView.page === 'bracket' && matches.length > 0 && score.total > 0 && (
               <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20" aria-label={`Score: ${score.total} points`}>
                 <Trophy className="h-3 w-3" aria-hidden="true" />
@@ -597,9 +599,9 @@ export default function App() {
             )}
             {appView.page === 'bracket' && currentTournament && (
               isLocked ? (
-                <span className="flex items-center gap-1 text-[11px] font-bold bg-red-500/15 text-red-400 px-2.5 py-1 rounded-full border border-red-500/20" aria-label="Bracket locked">
+                <span className="hidden sm:flex items-center gap-1 text-[11px] font-bold bg-red-500/15 text-red-400 px-2.5 py-1 rounded-full border border-red-500/20" aria-label="Bracket locked">
                   <Lock className="h-3 w-3" aria-hidden="true" />
-                  <span className="hidden xs:inline">Locked</span>
+                  <span>Locked</span>
                 </span>
               ) : (
                 <span className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-white/40 px-2 py-1" aria-label={`Tournament starts ${new Date(currentTournament.startDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}>
