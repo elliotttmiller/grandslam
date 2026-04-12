@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
+import { useState, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, ZoomIn, ZoomOut, Lock, Check, X, Maximize2, LayoutGrid,
@@ -41,7 +41,16 @@ export function PoolBracketEditor({
   const [pendingMatches, setPendingMatches] = useState<Match[] | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   // 0 = full bracket canvas, 1-7 = round-by-round card view
-  const [activeRound, setActiveRound] = useState<number>(1);
+  // Initialise to the first round that still needs picks
+  const [activeRound, setActiveRound] = useState<number>(() => {
+    const initial = entry.matches;
+    for (let r = 1; r <= 7; r++) {
+      const roundMs = initial.filter(m => m.round === r && m.player1 && m.player2);
+      if (roundMs.length > 0 && roundMs.some(m => !m.winnerId)) return r;
+      if (roundMs.length > 0) continue; // round complete, check next
+    }
+    return 7; // all done, show final
+  });
 
   const bracketRef = useRef<HTMLDivElement>(null);
   const { containerRef, handlePointerDown, handlePointerMove, handlePointerUp } = useBracketCanvas({
@@ -62,19 +71,6 @@ export function PoolBracketEditor({
     }
     return c;
   }, [matches]);
-
-  // On mount: jump to the first round that still has picks to make
-  useEffect(() => {
-    let first = 1;
-    for (let r = 1; r <= 7; r++) {
-      const rc = roundCompletion[r];
-      if (!rc || rc.total === 0) continue;
-      if (rc.done < rc.total) { first = r; break; }
-      first = Math.min(r + 1, 7);
-    }
-    setActiveRound(first);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally runs once on mount
 
   const isEffectivelyReadOnly = readOnly || entry.isSubmitted;
 

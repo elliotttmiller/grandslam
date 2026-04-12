@@ -40,7 +40,7 @@ export function MatchPickCard({ match, matchIndex, onSelectWinner, readOnly = fa
         onClick={() => { if (isPickable) onSelectWinner(match.id, player!.id); }}
         role={isPickable ? 'button' : undefined}
         tabIndex={isPickable ? 0 : undefined}
-        onKeyDown={isPickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') onSelectWinner(match.id, player!.id); } : undefined}
+        onKeyDown={isPickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectWinner(match.id, player!.id); } } : undefined}
         aria-label={isPickable && player ? `Pick ${player.name} as winner` : undefined}
         aria-pressed={isWinner}
       >
