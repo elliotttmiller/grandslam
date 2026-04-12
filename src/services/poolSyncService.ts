@@ -7,7 +7,7 @@
  *
  * All write helpers are best-effort: failures are caught and return null/false
  * so the app continues to work with its localStorage cache when Firebase is
- * unreachable (e.g. no VITE_FIREBASE_PROJECT_ID configured yet).
+ * unreachable (e.g. offline or permission denied).
  */
 import {
   doc,
@@ -24,21 +24,11 @@ import { getDb } from '@/lib/firebase';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Returns false when Firebase hasn't been configured yet (no projectId). */
-function isConfigured(): boolean {
-  return Boolean(import.meta.env.VITE_FIREBASE_PROJECT_ID);
-}
-
-// ---------------------------------------------------------------------------
 // Read
 // ---------------------------------------------------------------------------
 
 /** Fetch a pool document by its 6-char code. Returns null on miss or error. */
 export async function syncGetPool(id: string): Promise<Pool | null> {
-  if (!isConfigured()) return null;
   try {
     const snap = await getDoc(doc(getDb(), 'pools', id));
     if (!snap.exists()) return null;
@@ -63,7 +53,6 @@ export async function syncGetPool(id: string): Promise<Pool | null> {
  * call is a no-op (we don't overwrite an existing pool).
  */
 export async function syncCreatePool(pool: Pool): Promise<Pool | null> {
-  if (!isConfigured()) return null;
   try {
     const ref = doc(getDb(), 'pools', pool.id);
     const existing = await getDoc(ref);
@@ -88,7 +77,6 @@ export async function syncAddEntry(
   poolId: string,
   entry: PoolEntry,
 ): Promise<boolean> {
-  if (!isConfigured()) return false;
   try {
     await updateDoc(doc(getDb(), 'pools', poolId), {
       entries: arrayUnion(entry),
@@ -115,7 +103,6 @@ export async function syncUpdateEntry(
   entryId: string,
   patch: Partial<PoolEntry>,
 ): Promise<boolean> {
-  if (!isConfigured()) return false;
   try {
     const ref = doc(getDb(), 'pools', poolId);
     await runTransaction(getDb(), async (tx) => {
@@ -147,14 +134,11 @@ export async function syncUpdateEntry(
  *
  * Returns a cleanup function that unsubscribes the listener — call it from
  * a React `useEffect` cleanup to avoid memory leaks.
- *
- * Falls back to a no-op cleanup when Firebase is not configured.
  */
 export function subscribeToPool(
   poolId: string,
   onUpdate: (pool: Pool) => void,
 ): () => void {
-  if (!isConfigured()) return () => {};
   let unsubscribe: Unsubscribe;
   try {
     unsubscribe = onSnapshot(
