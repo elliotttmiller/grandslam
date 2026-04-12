@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Plus, Users, ChevronRight, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { getPools, getPool, savePool, addEntry, generateId, importPool } from '@/lib/pool-storage';
+import { getPools, getPool, savePool, addEntry, generateId, importPool, POOL_CODE_LENGTH } from '@/lib/pool-storage';
 import { syncGetPool, syncAddEntry } from '@/services/poolSyncService';
 import { getUserId, setUserName } from '@/lib/user-identity';
 import { calculateBracketScore } from '@/lib/scoring';
@@ -48,6 +48,10 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
 
   const [isJoining, setIsJoining] = useState(false);
 
+  // Stable ref for onJoinHandled so the effect dependency is never stale.
+  const onJoinHandledRef = useRef(onJoinHandled);
+  onJoinHandledRef.current = onJoinHandled;
+
   useEffect(() => {
     setPools(getPools());
     const savedName = localStorage.getItem('gs_user_name') ?? '';
@@ -59,11 +63,10 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
   // pre-filled with the code so the user only has to enter their name.
   useEffect(() => {
     if (initialJoinCode) {
-      setJoinCode(initialJoinCode.toUpperCase().slice(0, 6));
+      setJoinCode(initialJoinCode.toUpperCase().slice(0, POOL_CODE_LENGTH));
       setShowJoin(true);
-      onJoinHandled?.();
+      onJoinHandledRef.current?.();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialJoinCode]);
 
   const refreshPools = () => setPools(getPools());
@@ -393,7 +396,7 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                   <input
                     type="text"
                     value={joinCode}
-                    onChange={e => setJoinCode(e.target.value.toUpperCase().slice(0, 6))}
+                    onChange={e => setJoinCode(e.target.value.toUpperCase().slice(0, POOL_CODE_LENGTH))}
                     placeholder="ABCXYZ"
                     className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm font-mono tracking-[0.25em] uppercase focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   />

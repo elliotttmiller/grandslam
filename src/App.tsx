@@ -14,7 +14,7 @@ import { PoolBracketEditor } from './components/pools/PoolBracketEditor';
 import { MatchPickCard } from './components/pools/MatchPickCard';
 import { AuthModal } from './components/AuthModal';
 import { cn } from './lib/utils';
-import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId } from './lib/pool-storage';
+import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH } from './lib/pool-storage';
 import { syncCreatePool, syncAddEntry, syncUpdateEntry } from './services/poolSyncService';
 import { onAuthStateChanged, signOut } from './services/authService';
 import { getUserId, setUserName } from './lib/user-identity';
@@ -174,7 +174,7 @@ export default function App() {
             // Short invite link — just a 6-char pool code.
             // Navigate to the Pools page so PoolHub can auto-open the join modal.
             window.history.replaceState({}, document.title, window.location.pathname);
-            setPendingJoinCode(joinCodeParam.toUpperCase().slice(0, 6));
+            setPendingJoinCode(joinCodeParam.toUpperCase().slice(0, POOL_CODE_LENGTH));
             setAppView({ page: 'pools' });
           } else if (joinPoolParam) {
             const imported = importPool(joinPoolParam);
