@@ -3,7 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Plus, Users, ChevronRight, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { getPools, getPool, createPool, addEntry, generateId, importPool } from '@/lib/pool-storage';
+import { getPools, getPool, savePool, addEntry, generateId, importPool } from '@/lib/pool-storage';
+import { syncGetPool, syncAddEntry } from '@/services/poolSyncService';
+import { getUserId, setUserName } from '@/lib/user-identity';
 import { calculateBracketScore } from '@/lib/scoring';
 import { tournamentColor } from '@/lib/tournament-colors';
 import type { Pool } from '@/lib/pool-types';
@@ -40,6 +42,8 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
   const [joinBracketName, setJoinBracketName] = useState('');
   const [joinError, setJoinError] = useState('');
 
+  const [isJoining, setIsJoining] = useState(false);
+
   useEffect(() => {
     setPools(getPools());
     const savedName = localStorage.getItem('gs_user_name') ?? '';
@@ -71,33 +75,54 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
     }
   };
 
-  const handleJoinSubmit = () => {
+  const handleJoinSubmit = async () => {
     setJoinError('');
     const code = joinCode.trim().toUpperCase();
     if (!code || !joinUserName.trim()) return;
 
-    // Try to find pool locally by ID (pool IDs are the codes)
-    const pool = getPool(code);
-    if (!pool) {
-      setJoinError('Pool not found. Ask the pool creator to share the invite link.');
-      return;
+    setIsJoining(true);
+    try {
+      // 1. Try local cache first (same device or previously synced)
+      let pool = getPool(code);
+
+      // 2. If not found locally, fetch from the sync server
+      if (!pool) {
+        pool = await syncGetPool(code);
+        if (pool) {
+          // Cache it locally so we can work offline from here on
+          savePool(pool);
+        }
+      }
+
+      if (!pool) {
+        setJoinError('Pool not found. Check the code or ask the creator to share the invite link.');
+        return;
+      }
+
+      setUserName(joinUserName.trim());
+
+      const entryId = generateId();
+      const bracketName = joinBracketName.trim() || `${joinUserName.trim()}'s Bracket`;
+      const userId = getUserId();
+
+      const newEntry = {
+        id: entryId,
+        userId,
+        userName: joinUserName.trim(),
+        bracketName,
+        matches: pool.officialMatches.map(m => ({ ...m, winnerId: null })),
+        isSubmitted: false,
+      };
+
+      // Push to server first (best-effort), then update local cache
+      await syncAddEntry(pool.id, newEntry);
+      addEntry(pool.id, newEntry);
+
+      setShowJoin(false);
+      onNavigate({ page: 'pool-entry', poolId: pool.id, entryId });
+    } finally {
+      setIsJoining(false);
     }
-
-    localStorage.setItem('gs_user_name', joinUserName.trim());
-
-    const entryId = generateId();
-    const bracketName = joinBracketName.trim() || `${joinUserName.trim()}'s Bracket`;
-
-    addEntry(pool.id, {
-      id: entryId,
-      userName: joinUserName.trim(),
-      bracketName,
-      matches: pool.officialMatches.map(m => ({ ...m, winnerId: null })),
-      isSubmitted: false,
-    });
-
-    setShowJoin(false);
-    onNavigate({ page: 'pool-entry', poolId: pool.id, entryId });
   };
 
   return (
@@ -389,14 +414,19 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool }: PoolHubProps)
               </div>
 
               <div className="flex gap-2 justify-end">
-                <Button variant="ghost" size="sm" onClick={() => setShowJoin(false)}>Cancel</Button>
+                <Button variant="ghost" size="sm" onClick={() => setShowJoin(false)} disabled={isJoining}>Cancel</Button>
                 <Button
                   size="sm"
                   className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0"
-                  disabled={!joinCode.trim() || !joinUserName.trim()}
+                  disabled={!joinCode.trim() || !joinUserName.trim() || isJoining}
                   onClick={handleJoinSubmit}
                 >
-                  Join Pool
+                  {isJoining ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      Joining…
+                    </>
+                  ) : 'Join Pool'}
                 </Button>
               </div>
             </motion.div>

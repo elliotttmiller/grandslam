@@ -15,6 +15,7 @@ export default defineConfig(({mode}) => {
     define: {
       'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY),
       'import.meta.env.VITE_APP_URL': JSON.stringify(env.VITE_APP_URL || 'https://elliotttmiller.github.io/grandslam/'),
+      'import.meta.env.VITE_SYNC_API_URL': JSON.stringify(env.VITE_SYNC_API_URL || ''),
     },
     resolve: {
       alias: {
@@ -43,6 +44,15 @@ export default defineConfig(({mode}) => {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true' ? false : undefined,
+      proxy: {
+        // Forward /api/* to the pool sync server during development.
+        // Start the sync server with: npm run server
+        // The sync server listens on PORT (default 3001); set PORT env var to override.
+        '/api': {
+          target: `http://localhost:${process.env.PORT ?? '3001'}`,
+          changeOrigin: true,
+        },
+      },
     },
   };
 });

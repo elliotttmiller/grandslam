@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Share2, Copy, Users, Trophy, Lock,
-  ChevronRight, Check, X, Plus, Trash2, ClipboardCheck,
+  ChevronRight, Check, X, Plus, Trash2, ClipboardCheck, Radio,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,8 @@ import { calculateBracketScore } from '@/lib/scoring';
 import {
   getPool, deletePool, exportPool, exportEntry, importEntry, savePool, generateId,
 } from '@/lib/pool-storage';
+import { subscribeToPool, syncAddEntry } from '@/services/poolSyncService';
+import { getUserId } from '@/lib/user-identity';
 import { tournamentColor } from '@/lib/tournament-colors';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 import type { AppView } from '@/App';
@@ -33,6 +35,25 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
+  const [isLive, setIsLive] = useState(false);
+
+  // Keep a stable ref to onPoolUpdate so the SSE callback doesn't need it
+  // as a dependency (avoids re-subscribing on every parent render).
+  const onPoolUpdateRef = useRef(onPoolUpdate);
+  onPoolUpdateRef.current = onPoolUpdate;
+
+  // Subscribe to real-time pool updates via SSE.
+  // Whenever the server pushes an update we persist it to localStorage and
+  // ask the parent to re-render with the fresh data.
+  useEffect(() => {
+    setIsLive(false);
+    const unsubscribe = subscribeToPool(pool.id, (updatedPool) => {
+      setIsLive(true);
+      savePool(updatedPool);
+      onPoolUpdateRef.current();
+    });
+    return unsubscribe;
+  }, [pool.id]);
 
   const savedUserName = localStorage.getItem('gs_user_name') ?? '';
 
@@ -132,6 +153,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
 
     const entry = {
       id: entryId,
+      userId: getUserId(),
       userName: savedUserName || 'Anonymous',
       bracketName,
       matches: freshPool.officialMatches.map(m => ({ ...m, winnerId: null })),
@@ -140,6 +162,8 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
 
     freshPool.entries.push(entry);
     savePool(freshPool);
+    // Best-effort sync to server
+    syncAddEntry(pool.id, entry);
     onPoolUpdate();
     onNavigate({ page: 'pool-entry', poolId: pool.id, entryId });
   };
@@ -202,6 +226,16 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                 <span className="text-muted-foreground/60">leader</span>
               </div>
             )}
+            {/* Live sync indicator */}
+            <div className={cn(
+              'flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
+              isLive
+                ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                : 'text-muted-foreground/40 border-border/20 bg-muted/10',
+            )}>
+              <Radio className="h-2.5 w-2.5" aria-hidden="true" />
+              {isLive ? 'Live' : 'Connecting…'}
+            </div>
             <div className="flex items-center gap-1.5 text-[12px]">
               <Lock className="h-3.5 w-3.5 text-muted-foreground/60" />
               <span className="text-muted-foreground/60 truncate max-w-[140px]">{pool.tournamentName}</span>
