@@ -1,104 +1,184 @@
+/**
+ * Firebase Firestore sync service for pool data.
+ *
+ * Data model — Firestore collection: "pools"
+ *   Document ID : pool.id  (6-char uppercase code)
+ *   Fields      : all Pool fields (flat document, entries is an array field)
+ *
+ * All write helpers are best-effort: failures are caught and return null/false
+ * so the app continues to work with its localStorage cache when Firebase is
+ * unreachable (e.g. no VITE_FIREBASE_PROJECT_ID configured yet).
+ */
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  onSnapshot,
+  arrayUnion,
+  serverTimestamp,
+  runTransaction,
+  type Unsubscribe,
+} from 'firebase/firestore';
+import { getDb } from '@/lib/firebase';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 
-/**
- * Base URL for the sync API. Reads VITE_SYNC_API_URL at build-time; falls
- * back to '/api' which Vite proxies to the local sync server during
- * development.  For production deployments, set VITE_SYNC_API_URL to the
- * full URL of the running server (e.g. "https://your-server.example.com").
- */
-const API_BASE: string =
-  (import.meta.env.VITE_SYNC_API_URL as string | undefined) ?? '/api';
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-/** Fetch a pool by its 6-char code from the central server. */
+/** Returns false when Firebase hasn't been configured yet (no projectId). */
+function isConfigured(): boolean {
+  return Boolean(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+}
+
+// ---------------------------------------------------------------------------
+// Read
+// ---------------------------------------------------------------------------
+
+/** Fetch a pool document by its 6-char code. Returns null on miss or error. */
 export async function syncGetPool(id: string): Promise<Pool | null> {
+  if (!isConfigured()) return null;
   try {
-    const res = await fetch(`${API_BASE}/pools/${id}`);
-    if (!res.ok) return null;
-    return (await res.json()) as Pool;
+    const snap = await getDoc(doc(getDb(), 'pools', id));
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    // Firestore timestamps → ISO strings
+    return {
+      ...(data as Pool),
+      createdAt: data['createdAt']?.toDate?.()?.toISOString() ?? data['createdAt'],
+      updatedAt: data['updatedAt']?.toDate?.()?.toISOString() ?? data['updatedAt'],
+    };
   } catch {
     return null;
   }
 }
 
-/** Push a newly-created pool to the server. */
+// ---------------------------------------------------------------------------
+// Create
+// ---------------------------------------------------------------------------
+
+/**
+ * Write a new pool document.  Idempotent — if the doc already exists the
+ * call is a no-op (we don't overwrite an existing pool).
+ */
 export async function syncCreatePool(pool: Pool): Promise<Pool | null> {
+  if (!isConfigured()) return null;
   try {
-    const res = await fetch(`${API_BASE}/pools`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pool),
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as Pool;
+    const ref = doc(getDb(), 'pools', pool.id);
+    const existing = await getDoc(ref);
+    if (existing.exists()) return existing.data() as Pool;
+    await setDoc(ref, { ...pool, updatedAt: serverTimestamp() });
+    return pool;
   } catch {
     return null;
   }
 }
 
-/** Add a new bracket entry to an existing pool on the server. */
+// ---------------------------------------------------------------------------
+// Entry mutations
+// ---------------------------------------------------------------------------
+
+/**
+ * Append a new bracket entry to the pool's `entries` array.
+ * Uses `arrayUnion` so concurrent adds from different devices don't clobber
+ * each other (Firestore applies the union atomically).
+ */
 export async function syncAddEntry(
   poolId: string,
   entry: PoolEntry,
 ): Promise<boolean> {
+  if (!isConfigured()) return false;
   try {
-    const res = await fetch(`${API_BASE}/pools/${poolId}/entries`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entry),
+    await updateDoc(doc(getDb(), 'pools', poolId), {
+      entries: arrayUnion(entry),
+      updatedAt: serverTimestamp(),
     });
-    return res.ok;
+    return true;
   } catch {
     return false;
   }
 }
 
-/** Patch an existing entry on the server (picks, submit, tiebreaker). */
+/**
+ * Apply a partial patch to a single entry inside the pool document.
+ *
+ * Firestore doesn't support patching individual array elements natively, so
+ * we fetch the document, apply the patch in-memory (last-write-wins), then
+ * write the updated entries array back.
+ *
+ * For small groups (1-10 users) this is safe.  A Firestore Transaction
+ * ensures atomicity for concurrent edits.
+ */
 export async function syncUpdateEntry(
   poolId: string,
   entryId: string,
   patch: Partial<PoolEntry>,
 ): Promise<boolean> {
+  if (!isConfigured()) return false;
   try {
-    const res = await fetch(`${API_BASE}/pools/${poolId}/entries/${entryId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
+    const ref = doc(getDb(), 'pools', poolId);
+    await runTransaction(getDb(), async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return;
+      const pool = snap.data() as Pool;
+      const entries = (pool.entries ?? []).map((e) =>
+        e.id === entryId
+          ? { ...e, ...patch, updatedAt: new Date().toISOString() }
+          : e,
+      );
+      tx.update(ref, { entries, updatedAt: serverTimestamp() });
     });
-    return res.ok;
+    return true;
   } catch {
     return false;
   }
 }
 
+// ---------------------------------------------------------------------------
+// Real-time subscription
+// ---------------------------------------------------------------------------
+
 /**
- * Subscribe to live pool updates via Server-Sent Events.
- * The callback is invoked immediately with the current pool state and then
- * on every subsequent change pushed by the server.
+ * Subscribe to live pool updates via Firestore `onSnapshot`.
  *
- * Returns a cleanup function that closes the SSE connection.
+ * The callback fires immediately with the current server state (if the doc
+ * exists) and then on every subsequent write by any client.
+ *
+ * Returns a cleanup function that unsubscribes the listener — call it from
+ * a React `useEffect` cleanup to avoid memory leaks.
+ *
+ * Falls back to a no-op cleanup when Firebase is not configured.
  */
 export function subscribeToPool(
   poolId: string,
   onUpdate: (pool: Pool) => void,
 ): () => void {
-  let es: EventSource | null = null;
+  if (!isConfigured()) return () => {};
+  let unsubscribe: Unsubscribe;
   try {
-    es = new EventSource(`${API_BASE}/sync/${poolId}`);
-    es.onmessage = (e) => {
-      try {
-        const pool = JSON.parse(e.data as string) as Pool;
+    unsubscribe = onSnapshot(
+      doc(getDb(), 'pools', poolId),
+      (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data();
+        const pool: Pool = {
+          ...(data as Pool),
+          createdAt:
+            data['createdAt']?.toDate?.()?.toISOString() ?? data['createdAt'],
+          updatedAt:
+            data['updatedAt']?.toDate?.()?.toISOString() ?? data['updatedAt'],
+        };
         onUpdate(pool);
-      } catch {
-        // ignore malformed messages
-      }
-    };
-    es.onerror = () => {
-      // EventSource will auto-reconnect; no action required.
-    };
+      },
+      () => {
+        // Listener error — ignore silently (network issue or permission denied
+        // before the pool exists).  The component falls back to local data.
+      },
+    );
   } catch {
-    // SSE not supported or server unavailable — caller gracefully degrades.
+    return () => {};
   }
-  return () => {
-    es?.close();
-  };
+  return () => unsubscribe?.();
 }
+

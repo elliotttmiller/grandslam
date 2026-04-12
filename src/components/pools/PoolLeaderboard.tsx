@@ -42,8 +42,8 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
   const onPoolUpdateRef = useRef(onPoolUpdate);
   onPoolUpdateRef.current = onPoolUpdate;
 
-  // Subscribe to real-time pool updates via SSE.
-  // Whenever the server pushes an update we persist it to localStorage and
+  // Subscribe to real-time pool updates via Firestore onSnapshot.
+  // Whenever Firestore pushes an update we persist it to localStorage and
   // ask the parent to re-render with the fresh data.
   useEffect(() => {
     setIsLive(false);

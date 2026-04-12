@@ -15,7 +15,13 @@ export default defineConfig(({mode}) => {
     define: {
       'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY),
       'import.meta.env.VITE_APP_URL': JSON.stringify(env.VITE_APP_URL || 'https://elliotttmiller.github.io/grandslam/'),
-      'import.meta.env.VITE_SYNC_API_URL': JSON.stringify(env.VITE_SYNC_API_URL || ''),
+      // Firebase client configuration (safe to expose in the browser bundle)
+      'import.meta.env.VITE_FIREBASE_API_KEY': JSON.stringify(env.VITE_FIREBASE_API_KEY || ''),
+      'import.meta.env.VITE_FIREBASE_AUTH_DOMAIN': JSON.stringify(env.VITE_FIREBASE_AUTH_DOMAIN || ''),
+      'import.meta.env.VITE_FIREBASE_PROJECT_ID': JSON.stringify(env.VITE_FIREBASE_PROJECT_ID || ''),
+      'import.meta.env.VITE_FIREBASE_STORAGE_BUCKET': JSON.stringify(env.VITE_FIREBASE_STORAGE_BUCKET || ''),
+      'import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID': JSON.stringify(env.VITE_FIREBASE_MESSAGING_SENDER_ID || ''),
+      'import.meta.env.VITE_FIREBASE_APP_ID': JSON.stringify(env.VITE_FIREBASE_APP_ID || ''),
     },
     resolve: {
       alias: {
@@ -34,6 +40,8 @@ export default defineConfig(({mode}) => {
             if (id.includes('node_modules/framer-motion') || id.includes('node_modules/motion')) return 'motion';
             // Gemini AI SDK
             if (id.includes('@google/genai')) return 'ai';
+            // Firebase SDK
+            if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) return 'firebase';
             // React core (react + react-dom bundled together to avoid circularity)
             if (id.includes('node_modules/react')) return 'react';
           },
@@ -44,15 +52,6 @@ export default defineConfig(({mode}) => {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true' ? false : undefined,
-      proxy: {
-        // Forward /api/* to the pool sync server during development.
-        // Start the sync server with: npm run server
-        // The sync server listens on PORT (default 3001); set PORT env var to override.
-        '/api': {
-          target: `http://localhost:${process.env.PORT ?? '3001'}`,
-          changeOrigin: true,
-        },
-      },
     },
   };
 });

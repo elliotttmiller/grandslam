@@ -6,5 +6,3 @@ coverage/
 *.log
 .env*
 !.env.example
-# Pool sync server — runtime database (contains user data; not committed)
-data/
