@@ -6,26 +6,15 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-
-const TOTAL_BRACKET_MATCHES = 127;
 import { calculateBracketScore } from '@/lib/scoring';
 import {
   getPool, deletePool, exportPool, exportEntry, importEntry, savePool, generateId,
 } from '@/lib/pool-storage';
+import { tournamentColor } from '@/lib/tournament-colors';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 import type { AppView } from '@/App';
 
-const TOURNAMENT_COLORS: Record<string, string> = {
-  ao: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-  rg: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
-  wim: 'text-green-400 bg-green-500/10 border-green-500/20',
-  uso: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
-};
-
-function tournamentColor(id: string): string {
-  const key = Object.keys(TOURNAMENT_COLORS).find(k => id.toLowerCase().startsWith(k));
-  return key ? TOURNAMENT_COLORS[key] : 'text-primary bg-primary/10 border-primary/20';
-}
+const TOTAL_BRACKET_MATCHES = 127;
 
 interface RankedEntry extends PoolEntry {
   rank: number;
@@ -256,14 +245,14 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                   )}
                 >
                   {/* Rank */}
-                  <div className="shrink-0 w-7">{rankBadge(entry.rank)}</div>
+                  <div className="shrink-0 w-7" aria-label={`Rank ${entry.rank}`}>{rankBadge(entry.rank)}</div>
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-[13px] truncate">{entry.userName}</span>
                       {entry.isSubmitted ? (
                         <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5">
-                          <Check className="h-2.5 w-2.5" /> Done
+                          <Check className="h-2.5 w-2.5" aria-hidden="true" /> Done
                         </span>
                       ) : (
                         <span className="text-[10px] text-muted-foreground/50">in progress</span>
@@ -272,7 +261,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                     <div className="text-[11px] text-muted-foreground/55 truncate">{entry.bracketName}</div>
                     {/* Mobile stats row */}
                     <div className="flex items-center gap-3 mt-1 sm:hidden">
-                      <span className="text-[11px] text-muted-foreground/50 tabular-nums">{entry.score.picksCompleted}/127</span>
+                      <span className="text-[11px] text-muted-foreground/50 tabular-nums">{entry.score.picksCompleted}/{TOTAL_BRACKET_MATCHES}</span>
                       {entry.score.upsetBonus > 0 && (
                         <span className="text-[11px] text-amber-400 font-bold tabular-nums">⚡+{entry.score.upsetBonus}</span>
                       )}
@@ -280,14 +269,14 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                   </div>
                   {/* Desktop stats */}
                   <div className="hidden sm:flex items-center gap-4 shrink-0 text-[12px]">
-                    <span className="text-muted-foreground/50 tabular-nums">{entry.score.basePoints}</span>
-                    <span className={cn("tabular-nums", entry.score.upsetBonus > 0 ? "text-amber-400 font-bold" : "text-muted-foreground/40")}>
+                    <span className="text-muted-foreground/50 tabular-nums" title="Base points">{entry.score.basePoints}</span>
+                    <span className={cn("tabular-nums", entry.score.upsetBonus > 0 ? "text-amber-400 font-bold" : "text-muted-foreground/40")} title="Upset bonus">
                       {entry.score.upsetBonus > 0 ? `+${entry.score.upsetBonus}` : '—'}
                     </span>
-                    <span className="text-muted-foreground/50 tabular-nums">{entry.score.picksCompleted}/127</span>
+                    <span className="text-muted-foreground/50 tabular-nums" title="Picks completed">{entry.score.picksCompleted}/{TOTAL_BRACKET_MATCHES}</span>
                   </div>
                   {/* Score */}
-                  <div className="shrink-0 font-black text-base tabular-nums text-emerald-400">{entry.score.total}</div>
+                  <div className="shrink-0 font-black text-base tabular-nums text-emerald-400" aria-label={`${entry.score.total} points`}>{entry.score.total}</div>
                   {/* Actions */}
                   <div className="shrink-0 flex gap-1">
                     <Button
@@ -295,6 +284,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                       size="sm"
                       className="h-7 px-2.5 text-[11px] rounded-lg text-muted-foreground/60 hover:text-foreground"
                       onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: entry.id })}
+                      aria-label={`View ${entry.userName}'s bracket`}
                     >
                       View
                     </Button>
@@ -302,10 +292,10 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 rounded-lg text-muted-foreground/50 hover:text-foreground"
-                      title="Copy entry share link"
+                      aria-label={`Copy share link for ${entry.userName}'s bracket`}
                       onClick={() => handleCopyEntryLink(entry)}
                     >
-                      {copied === `entry-${entry.id}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                      {copied === `entry-${entry.id}` ? <Check className="h-3 w-3 text-emerald-400" aria-hidden="true" /> : <Copy className="h-3 w-3" aria-hidden="true" />}
                     </Button>
                   </div>
                 </motion.div>
@@ -317,16 +307,16 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
           <div className="border border-border/30 rounded-2xl p-5 bg-card/30">
             <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 text-muted-foreground/60">Invite Others</h3>
             <div className="flex items-center gap-4 mb-4 flex-wrap">
-              <div className="font-mono text-2xl font-black tracking-[0.3em] bg-muted/15 px-4 py-2.5 rounded-xl border border-border/25">
+              <div className="font-mono text-2xl font-black tracking-[0.3em] bg-muted/15 px-4 py-2.5 rounded-xl border border-border/25" aria-label={`Pool code: ${pool.id}`}>
                 {pool.id}
               </div>
               <div className="flex flex-col gap-2">
                 <Button variant="outline" size="sm" className="rounded-xl" onClick={handleCopyInviteLink}>
-                  {copied === 'invite' ? <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
+                  {copied === 'invite' ? <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />}
                   {copied === 'invite' ? 'Copied!' : 'Copy Invite Link'}
                 </Button>
                 <Button variant="outline" size="sm" className="rounded-xl" onClick={handleCopyPoolSnap}>
-                  {copied === 'snap' ? <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> : <ClipboardCheck className="h-3.5 w-3.5 mr-1.5" />}
+                  {copied === 'snap' ? <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" aria-hidden="true" /> : <ClipboardCheck className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />}
                   {copied === 'snap' ? 'Copied!' : 'Copy Pool Snapshot'}
                 </Button>
               </div>

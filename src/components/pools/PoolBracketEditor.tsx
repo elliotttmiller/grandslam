@@ -1,7 +1,7 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, ZoomIn, ZoomOut, Lock, Check, X,
+  ArrowLeft, ZoomIn, ZoomOut, Lock, Check, X, Maximize2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BracketTree } from '@/components/Bracket';
@@ -37,6 +37,7 @@ export function PoolBracketEditor({
   const [tbGamesInput, setTbGamesInput] = useState(String(entry.tiebreakerGames ?? ''));
   const [tbSetsInput, setTbSetsInput] = useState(String(entry.tiebreakerSets ?? ''));
   const [pendingMatches, setPendingMatches] = useState<Match[] | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   const bracketRef = useRef<HTMLDivElement>(null);
   const { containerRef, handlePointerDown, handlePointerMove, handlePointerUp } = useBracketCanvas({
@@ -50,12 +51,13 @@ export function PoolBracketEditor({
 
   const isEffectivelyReadOnly = readOnly || entry.isSubmitted;
 
-  const handleSelectWinner = (matchId: string, winnerId: string) => {
+  const handleSelectWinner = useCallback((matchId: string, winnerId: string) => {
     if (isEffectivelyReadOnly) return;
     const updated = advancePlayer(matches, matchId, winnerId);
     setMatches(updated);
     onSave(updated);
-  };
+    setLastSavedAt(new Date());
+  }, [isEffectivelyReadOnly, matches, onSave]);
 
   const handleSubmitClick = () => {
     if (entry.isSubmitted) return;
@@ -93,8 +95,9 @@ export function PoolBracketEditor({
             size="sm"
             className="h-8 px-2 text-muted-foreground/70 hover:text-foreground shrink-0 rounded-lg"
             onClick={onBack}
+            aria-label={`Back to ${pool.name}`}
           >
-            <ArrowLeft className="h-4 w-4 mr-1" />
+            <ArrowLeft className="h-4 w-4 mr-1" aria-hidden="true" />
             <span className="max-w-[80px] truncate text-[13px]">{pool.name}</span>
           </Button>
           <div className="flex-1 min-w-0">
@@ -102,19 +105,24 @@ export function PoolBracketEditor({
             <div className="text-[10px] text-muted-foreground/60">by {entry.userName}</div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
+            {!isEffectivelyReadOnly && lastSavedAt && (
+              <span className="text-[10px] text-muted-foreground/40 hidden sm:block" aria-live="polite">
+                Saved
+              </span>
+            )}
             {score.total > 0 && (
-              <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">
+              <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20" aria-label={`${score.total} points`}>
                 {score.total} pts
               </span>
             )}
             {entry.isSubmitted && (
               <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                <Check className="h-3 w-3" /> Done
+                <Check className="h-3 w-3" aria-hidden="true" /> Done
               </span>
             )}
             {!entry.isSubmitted && isEffectivelyReadOnly && (
               <span className="flex items-center gap-1 text-[11px] font-bold bg-red-500/15 text-red-400 px-2 py-0.5 rounded-full border border-red-500/20">
-                <Lock className="h-3 w-3" /> Locked
+                <Lock className="h-3 w-3" aria-hidden="true" /> Locked
               </span>
             )}
           </div>
@@ -126,11 +134,27 @@ export function PoolBracketEditor({
         {/* Zoom controls */}
         <div className="absolute bottom-[68px] right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
           <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom(z => Math.min(z + 0.2, 2))} aria-label="Zoom in">
-            <ZoomIn className="w-4 h-4" />
+            <ZoomIn className="w-4 h-4" aria-hidden="true" />
           </Button>
-          <div className="text-[10px] font-bold text-muted-foreground/70 tabular-nums w-8 text-center">{Math.round(zoom * 100)}%</div>
+          <div className="text-[10px] font-bold text-muted-foreground/70 tabular-nums w-8 text-center" aria-live="polite" aria-label={`Zoom level ${Math.round(zoom * 100)}%`}>{Math.round(zoom * 100)}%</div>
           <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} aria-label="Zoom out">
-            <ZoomOut className="w-4 h-4" />
+            <ZoomOut className="w-4 h-4" aria-hidden="true" />
+          </Button>
+          <div className="w-full h-px bg-border/30 my-0.5" aria-hidden="true" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
+            onClick={() => {
+              setZoom(0.4);
+              if (containerRef.current) {
+                containerRef.current.scrollLeft = 0;
+                containerRef.current.scrollTop = 0;
+              }
+            }}
+            aria-label="Reset view to default zoom"
+          >
+            <Maximize2 className="w-4 h-4" aria-hidden="true" />
           </Button>
         </div>
 
