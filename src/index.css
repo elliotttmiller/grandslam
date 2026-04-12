@@ -49,6 +49,7 @@
 }
 
 :root {
+    /* 52px = base header inner height (h-[52px] in App.tsx header div) */
     --header-height: calc(52px + env(safe-area-inset-top, 0px));
     --background: hsl(0 0% 4%);
     --foreground: hsl(0 0% 96%);
