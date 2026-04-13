@@ -9,9 +9,10 @@ interface AuthModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess: (user: User) => void;
+  onContinueAsGuest?: () => Promise<void>;
 }
 
-export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
+export function AuthModal({ open, onClose, onSuccess, onContinueAsGuest }: AuthModalProps) {
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -47,6 +48,19 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
     }
   };
 
+  const handleContinueAsGuest = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await onContinueAsGuest?.();
+      handleClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to continue as guest.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const switchMode = () => {
     setError('');
     setMode(m => m === 'sign-in' ? 'sign-up' : 'sign-in');
@@ -72,7 +86,7 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 8 }}
             transition={{ duration: 0.18 }}
-            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[360px] bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-5"
+            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-90 bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-5"
           >
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -150,6 +164,30 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
                 {mode === 'sign-in' ? 'Sign up' : 'Sign in'}
               </button>
             </p>
+
+            {/* Divider */}
+            <div className="flex items-center gap-2.5">
+              <div className="flex-1 h-px bg-border/30" aria-hidden="true" />
+              <span className="text-[11px] text-muted-foreground/50">or</span>
+              <div className="flex-1 h-px bg-border/30" aria-hidden="true" />
+            </div>
+
+            {/* Guest button */}
+            {onContinueAsGuest && (
+              <Button
+                type="button"
+                onClick={handleContinueAsGuest}
+                disabled={loading}
+                variant="outline"
+                className="w-full rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-white/4"
+              >
+                {loading ? (
+                  <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" aria-hidden="true" /> Please wait…</>
+                ) : (
+                  'Continue as Guest'
+                )}
+              </Button>
+            )}
           </motion.div>
         </>
       )}

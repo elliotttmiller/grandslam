@@ -1,5 +1,6 @@
 import type { Match } from './bracket-utils';
 import type { Pool, PoolEntry } from './pool-types';
+import { authGetItem, authSetItem } from './auth-storage';
 
 const STORAGE_KEY = 'gs_pools_v1';
 
@@ -28,7 +29,7 @@ function decode<T>(str: string): T | null {
 
 export function getPools(): Pool[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = authGetItem(STORAGE_KEY);
     if (!raw) return [];
     return JSON.parse(raw) as Pool[];
   } catch {
@@ -48,7 +49,7 @@ export function savePool(pool: Pool): void {
   } else {
     pools.push(pool);
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(pools));
+  authSetItem(STORAGE_KEY, JSON.stringify(pools));
 }
 
 export function createPool(

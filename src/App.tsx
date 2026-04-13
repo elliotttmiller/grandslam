@@ -15,6 +15,7 @@ import { MatchPickCard } from './components/pools/MatchPickCard';
 import { AuthModal } from './components/AuthModal';
 import { cn } from './lib/utils';
 import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH } from './lib/pool-storage';
+import { setAuthStorageUserId, authGetItem, authSetItem, authRemoveItem } from './lib/auth-storage';
 import { syncCreatePool, syncAddEntry, syncUpdateEntry } from './services/poolSyncService';
 import { onAuthStateChanged, signOut, signInAnonymously } from './services/authService';
 import { getUserId, setUserName } from './lib/user-identity';
@@ -63,29 +64,23 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged((user) => {
       setAuthUser(user);
-      if (!user) {
-        // No existing session — sign in anonymously so Firestore operations
-        // always carry a valid auth token (satisfies `request.auth != null`
-        // security rules) without requiring the user to create an account.
-        // We deliberately defer setAuthChecked(true) until the anonymous
-        // sign-in resolves: this prevents a brief window where pool reads/
-        // writes would run without any auth token.
-        signInAnonymously()
-          .then(() => {
-            setAuthError(false);
-          })
-          .catch((err) => {
-            console.warn(
-              'Anonymous sign-in failed — Firestore pool operations may not work:',
-              err,
-            );
-            setAuthError(true);
-          })
-          .finally(() => {
-            setAuthChecked(true);
-          });
+      
+      // Scope storage to the current user's UID to prevent cache collision
+      // when multiple users sign in on the same device
+      if (user) {
+        setAuthStorageUserId(user.uid);
       } else {
-        // Named user or freshly-created anonymous user — auth is ready.
+        setAuthStorageUserId(null);
+      }
+      
+      if (!user) {
+        // No existing session — user must either sign in/sign up with email,
+        // or explicitly choose to continue as a guest (which triggers anonymous sign-in).
+        // We mark auth as checked but let the user decide their auth method.
+        setAuthError(false);
+        setAuthChecked(true);
+      } else {
+        // Named user or existing session — auth is ready.
         setAuthError(false);
         setAuthChecked(true);
       }
@@ -113,7 +108,7 @@ export default function App() {
   const toastCounter = useRef(0);
   useEffect(() => {
     if (!selectedTournament) return;
-    const saved = localStorage.getItem(`bracket_state_${selectedTournament}`);
+    const saved = authGetItem(`bracket_state_${selectedTournament}`);
     if (saved) {
       setMatches(JSON.parse(saved));
     }
@@ -122,7 +117,7 @@ export default function App() {
   // Save bracket to localStorage whenever matches change
   useEffect(() => {
     if (selectedTournament && matches.length > 0) {
-      localStorage.setItem(`bracket_state_${selectedTournament}`, JSON.stringify(matches));
+      authSetItem(`bracket_state_${selectedTournament}`, JSON.stringify(matches));
     }
   }, [matches, selectedTournament]);
 
@@ -177,7 +172,7 @@ export default function App() {
             const decoded = decodeURIComponent(atob(shared));
             const parsed = JSON.parse(decoded);
             if (parsed.tournamentId && parsed.matches) {
-              localStorage.setItem(`bracket_state_${parsed.tournamentId}`, JSON.stringify(parsed.matches));
+              authSetItem(`bracket_state_${parsed.tournamentId}`, JSON.stringify(parsed.matches));
               initialTournamentId = parsed.tournamentId;
               window.history.replaceState({}, document.title, window.location.pathname);
             }
@@ -239,7 +234,7 @@ export default function App() {
     
     async function initBracket() {
       // If we already have matches for this tournament from localStorage, don't fetch from AI
-      const saved = localStorage.getItem(`bracket_state_${selectedTournament}`);
+      const saved = authGetItem(`bracket_state_${selectedTournament}`);
       if (saved) {
         setMatches(JSON.parse(saved));
         return;
@@ -350,7 +345,7 @@ export default function App() {
   };
 
   const handleReset = () => {    if (selectedTournament) {
-      localStorage.removeItem(`bracket_state_${selectedTournament}`);
+      authRemoveItem(`bracket_state_${selectedTournament}`);
       // Also clear the player cache for this tournament to force a fresh AI search
       const tournament = tournaments.find(t => t.id === selectedTournament);
       if (tournament) {
@@ -504,7 +499,7 @@ export default function App() {
       if (t.id === selectedTournament) {
         scores[t.id] = score;
       } else {
-        const saved = localStorage.getItem(`bracket_state_${t.id}`);
+        const saved = authGetItem(`bracket_state_${t.id}`);
         if (saved) {
           try { scores[t.id] = calculateBracketScore(JSON.parse(saved)); } catch { /* skip */ }
         }
@@ -521,7 +516,7 @@ export default function App() {
       if (t.id === selectedTournament) {
         tMatches = matches;
       } else {
-        const saved = localStorage.getItem(`bracket_state_${t.id}`);
+        const saved = authGetItem(`bracket_state_${t.id}`);
         tMatches = saved ? (JSON.parse(saved) as Match[]) : [];
       }
       const finalM = tMatches.find(m => m.nextMatchId === null);
@@ -549,6 +544,17 @@ export default function App() {
         onSuccess={(user) => {
           setAuthUser(user);
           setShowAuthModal(false);
+        }}
+        onContinueAsGuest={async () => {
+          try {
+            await signInAnonymously();
+            setAuthError(false);
+            setShowAuthModal(false);
+          } catch (err) {
+            console.warn('Anonymous sign-in failed:', err);
+            setAuthError(true);
+            throw err;
+          }
         }}
       />
 
