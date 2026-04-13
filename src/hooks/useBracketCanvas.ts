@@ -7,6 +7,12 @@ interface UseBracketCanvasOptions {
   onZoomChange: (zoom: number) => void;
   minZoom?: number;
   maxZoom?: number;
+  /**
+   * When false, no touch/wheel listeners are attached (e.g. canvas is hidden).
+   * When it flips to true the effect re-runs so listeners attach to the freshly
+   * mounted canvas element. Defaults to true.
+   */
+  enabled?: boolean;
 }
 
 /**
@@ -25,6 +31,7 @@ export function useBracketCanvas({
   onZoomChange,
   minZoom = 0.2,
   maxZoom = 2.0,
+  enabled = true,
 }: UseBracketCanvasOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -99,6 +106,7 @@ export function useBracketCanvas({
   // ─── Native touch + wheel event listeners ────────────────────────────────────
 
   useEffect(() => {
+    if (!enabled) return;
     const container = containerRef.current;
     if (!container) return;
 
@@ -189,7 +197,7 @@ export function useBracketCanvas({
       cancelAnimationFrame(rafRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minZoom, maxZoom]); // stable deps only — zoom/callbacks accessed via refs
+  }, [minZoom, maxZoom, enabled]); // stable deps only — zoom/callbacks accessed via refs
 
   return {
     containerRef,

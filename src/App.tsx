@@ -40,10 +40,13 @@ export default function App() {
   const [zoom, setZoom] = useState(0.4);
   const [loading, setLoading] = useState(false);
   const [loadingTournaments, setLoadingTournaments] = useState(true);
+  // 0 = full bracket canvas, 1-7 = round-by-round card view
+  const [activeRound, setActiveRound] = useState<number>(0);
   const bracketRef = useRef<HTMLDivElement>(null);
   const { handlePointerDown, handlePointerMove, handlePointerUp, containerRef: canvasRef } = useBracketCanvas({
     zoom,
     onZoomChange: setZoom,
+    enabled: activeRound === 0,
   });
   const [tiebreakerGames, setTiebreakerGames] = useState<Record<string, number>>({});
   const [tiebreakerSets, setTiebreakerSets] = useState<Record<string, number>>({});
@@ -480,9 +483,6 @@ export default function App() {
     }
     return c;
   }, [matches]);
-
-  // 0 = full bracket canvas, 1-7 = round-by-round card view
-  const [activeRound, setActiveRound] = useState<number>(0);
 
   const activeRoundMatches = useMemo(
     () => matches.filter(m => m.round === activeRound).sort((a, b) => a.matchNumber - b.matchNumber),
@@ -933,25 +933,6 @@ export default function App() {
               transition={{ duration: 0.2, ease: 'easeOut' }}
               className="absolute inset-0 overflow-hidden bg-muted/5 flex flex-col"
             >
-          {/* Floating Tournament Selector */}
-          {currentTournament && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="absolute top-3 left-3 z-20"
-            >
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-card/70 hover:bg-card/90 border border-white/10 hover:border-white/20 rounded-lg transition-all backdrop-blur-sm text-xs font-semibold text-white/80 hover:text-white group"
-                aria-label="Select tournament"
-              >
-                <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="hidden sm:inline max-w-28 truncate">{currentTournament.name}</span>
-                <span className="sm:hidden">{currentTournament.name.substring(0, 3)}</span>
-              </button>
-            </motion.div>
-          )}
-
           {/* Round / view selector tabs */}
           <div className="flex-none border-b border-border/20 bg-card/20" role="tablist" aria-label="Bracket rounds">
             <div className="flex overflow-x-auto px-3 py-2 gap-1" style={{ scrollbarWidth: 'none' }}>
@@ -1003,6 +984,24 @@ export default function App() {
           <div className="flex-1 relative overflow-hidden">
           {activeRound === 0 ? (
           <>
+          {/* Floating Tournament Selector — lives inside the canvas area so it never covers the tabs */}
+          {currentTournament && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="absolute top-3 left-3 z-20"
+            >
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-card/70 hover:bg-card/90 border border-white/10 hover:border-white/20 rounded-lg transition-all backdrop-blur-sm text-xs font-semibold text-white/80 hover:text-white group"
+                aria-label="Select tournament"
+              >
+                <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline max-w-28 truncate">{currentTournament.name}</span>
+                <span className="sm:hidden">{currentTournament.name.substring(0, 3)}</span>
+              </button>
+            </motion.div>
+          )}
           {/* Floating Action Tools */}
           <DropdownMenu>
             <DropdownMenuTrigger
