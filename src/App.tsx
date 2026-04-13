@@ -16,7 +16,7 @@ import { AuthModal } from './components/AuthModal';
 import { cn } from './lib/utils';
 import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH } from './lib/pool-storage';
 import { syncCreatePool, syncAddEntry, syncUpdateEntry } from './services/poolSyncService';
-import { onAuthStateChanged, signOut } from './services/authService';
+import { onAuthStateChanged, signOut, signInAnonymously } from './services/authService';
 import { getUserId, setUserName } from './lib/user-identity';
 import { AnimatedNumber } from './components/AnimatedNumber';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
@@ -50,17 +50,46 @@ export default function App() {
   const [poolRefreshKey, setPoolRefreshKey] = useState(0);
   // Code from a `?join=POOL_CODE` URL param — passed to PoolHub to pre-fill the join modal.
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null);
+  // Set to true when a newly-created pool fails to sync to Firestore, so we can
+  // warn the creator that others may not be able to join by code.
+  const [poolSyncFailed, setPoolSyncFailed] = useState(false);
 
   // Firebase Authentication state — tracked via onAuthStateChanged at root level
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [authError, setAuthError] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Subscribe to auth state changes once on mount
   useEffect(() => {
     const unsubscribe = onAuthStateChanged((user) => {
       setAuthUser(user);
-      setAuthChecked(true);
+      if (!user) {
+        // No existing session — sign in anonymously so Firestore operations
+        // always carry a valid auth token (satisfies `request.auth != null`
+        // security rules) without requiring the user to create an account.
+        // We deliberately defer setAuthChecked(true) until the anonymous
+        // sign-in resolves: this prevents a brief window where pool reads/
+        // writes would run without any auth token.
+        signInAnonymously()
+          .then(() => {
+            setAuthError(false);
+          })
+          .catch((err) => {
+            console.warn(
+              'Anonymous sign-in failed — Firestore pool operations may not work:',
+              err,
+            );
+            setAuthError(true);
+          })
+          .finally(() => {
+            setAuthChecked(true);
+          });
+      } else {
+        // Named user or freshly-created anonymous user — auth is ready.
+        setAuthError(false);
+        setAuthChecked(true);
+      }
     });
     return unsubscribe;
   }, []);
@@ -292,10 +321,18 @@ export default function App() {
     };
     addEntry(pool.id, newEntry);
 
-    // Push pool and initial entry to the sync server (best-effort)
-    syncCreatePool(pool).then((synced) => {
-      if (synced) syncAddEntry(pool.id, newEntry);
-    });
+    // Push pool and initial entry to the sync server (best-effort).
+    // Awaiting ensures the pool exists in Firestore before the creator
+    // navigates away, so other devices can immediately find it by code.
+    const synced = await syncCreatePool(pool);
+    if (synced) {
+      await syncAddEntry(pool.id, newEntry);
+      setPoolSyncFailed(false);
+    } else {
+      // Pool was saved locally but not to Firestore — warn the creator.
+      setPoolSyncFailed(true);
+      console.warn('Pool sync failed — pool is accessible locally but may not be joinable from other devices.');
+    }
 
     setAppView({ page: 'pool', poolId: pool.id });
   };
@@ -620,7 +657,7 @@ export default function App() {
             )}
             {/* Auth button — shown once the initial auth check is complete */}
             {authChecked && (
-              authUser ? (
+              (authUser && !authUser.isAnonymous) ? (
                 <button
                   onClick={handleSignOut}
                   title={`Signed in as ${authUser.email ?? 'user'} — click to sign out`}
@@ -785,6 +822,7 @@ export default function App() {
                 onCreatePool={handleCreatePool}
                 initialJoinCode={pendingJoinCode ?? undefined}
                 onJoinHandled={() => setPendingJoinCode(null)}
+                authError={authError}
               />
             </motion.div>
           )}
@@ -800,6 +838,11 @@ export default function App() {
                 transition={{ duration: 0.2, ease: 'easeOut' }}
                 className="absolute inset-0 overflow-auto"
               >
+                {poolSyncFailed && (
+                  <p className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2.5 mx-4 mt-4">
+                    ⚠️ This pool could not be saved to the cloud. Others may not be able to join by code until your connection is restored.
+                  </p>
+                )}
                 <PoolLeaderboard
                   pool={pool}
                   onNavigate={setAppView}

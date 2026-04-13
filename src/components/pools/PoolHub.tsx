@@ -26,9 +26,11 @@ interface PoolHubProps {
   initialJoinCode?: string;
   /** Called once the join modal has been shown for the initial code, so the parent can clear its state. */
   onJoinHandled?: () => void;
+  /** True when anonymous sign-in failed — warns users that pool sync is unavailable. */
+  authError?: boolean;
 }
 
-export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode, onJoinHandled }: PoolHubProps) {
+export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode, onJoinHandled, authError }: PoolHubProps) {
   const [pools, setPools] = useState<Pool[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
@@ -105,16 +107,25 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
 
       // 2. If not found locally, fetch from the sync server
       if (!pool) {
-        pool = await syncGetPool(code);
-        if (pool) {
-          // Cache it locally so we can work offline from here on
-          savePool(pool);
+        let syncFailed = false;
+        try {
+          pool = await syncGetPool(code);
+          if (pool) {
+            // Cache it locally so we can work offline from here on
+            savePool(pool);
+          }
+        } catch {
+          syncFailed = true;
         }
-      }
 
-      if (!pool) {
-        setJoinError('Pool not found. Check the code or ask the creator to share the invite link.');
-        return;
+        if (!pool) {
+          if (syncFailed) {
+            setJoinError('Could not reach the server. Check your connection and try again.');
+          } else {
+            setJoinError('Pool not found. Check the code or ask the creator to share the invite link.');
+          }
+          return;
+        }
       }
 
       setUserName(joinUserName.trim());
@@ -342,6 +353,12 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                 <p className="text-[11px] text-muted-foreground/60 bg-muted/15 rounded-xl px-3 py-2.5 border border-border/20 leading-relaxed">
                   The tournament draw will be loaded and shared with all participants. You'll fill out your picks after creating the pool.
                 </p>
+
+                {authError && (
+                  <p className="text-xs text-yellow-400 bg-yellow-500/10 rounded-xl px-3 py-2.5 border border-yellow-500/20 leading-relaxed">
+                    ⚠️ Could not connect to the sync server. This pool will be saved locally but may not be joinable from other devices.
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-2 justify-end">
@@ -423,6 +440,12 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                     className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   />
                 </label>
+
+                {authError && (
+                  <p className="text-xs text-yellow-400 bg-yellow-500/10 rounded-xl px-3 py-2.5 border border-yellow-500/20 leading-relaxed">
+                    ⚠️ Could not connect to the sync server. Joining by code may not work right now.
+                  </p>
+                )}
 
                 {joinError && (
                   <p className="text-xs text-red-400 bg-red-500/10 rounded-xl px-3 py-2.5 border border-red-500/20 leading-relaxed">

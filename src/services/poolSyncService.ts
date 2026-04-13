@@ -27,21 +27,21 @@ import type { Pool, PoolEntry } from '@/lib/pool-types';
 // Read
 // ---------------------------------------------------------------------------
 
-/** Fetch a pool document by its 6-char code. Returns null on miss or error. */
+/** Fetch a pool document by its 6-char code. Returns null if the pool does
+ * not exist.  Throws a `FirebaseError` if the Firestore read fails (e.g.
+ * `permission-denied` when security rules block the request, or network
+ * unavailability) so callers can distinguish "not found" from "server error"
+ * and show an appropriate message. */
 export async function syncGetPool(id: string): Promise<Pool | null> {
-  try {
-    const snap = await getDoc(doc(getDb(), 'pools', id));
-    if (!snap.exists()) return null;
-    const data = snap.data();
-    // Firestore timestamps → ISO strings
-    return {
-      ...(data as Pool),
-      createdAt: data['createdAt']?.toDate?.()?.toISOString() ?? data['createdAt'],
-      updatedAt: data['updatedAt']?.toDate?.()?.toISOString() ?? data['updatedAt'],
-    };
-  } catch {
-    return null;
-  }
+  const snap = await getDoc(doc(getDb(), 'pools', id));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  // Firestore timestamps → ISO strings
+  return {
+    ...(data as Pool),
+    createdAt: data['createdAt']?.toDate?.()?.toISOString() ?? data['createdAt'],
+    updatedAt: data['updatedAt']?.toDate?.()?.toISOString() ?? data['updatedAt'],
+  };
 }
 
 // ---------------------------------------------------------------------------
