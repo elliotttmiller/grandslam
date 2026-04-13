@@ -1,6 +1,6 @@
 {
-  "name": "Grand Slam Bracket - Tennis Pool Competition",
-  "short_name": "Grand Slam",
+  "name": "Perfect Set",
+  "short_name": "Perfect Set",
   "description": "Pick your Grand Slam tennis bracket, compete in pools, earn upset bonuses, and chase the Calendar Slam.",
   "start_url": "/grandslam/",
   "scope": "/grandslam/",
