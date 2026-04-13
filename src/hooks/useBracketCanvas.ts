@@ -42,23 +42,41 @@ export function useBracketCanvas({
 
   // ─── Pointer (mouse / stylus) drag handlers ─────────────────────────────────
 
+  // Minimum pixels the pointer must move before we commit to a drag.
+  // Below this threshold a pointerdown+pointerup is treated as a click so
+  // child elements (match cards) can receive their onClick events normally.
+  const DRAG_THRESHOLD = 6;
+  const pendingDragRef = useRef(false); // pointerdown received, not yet confirmed as drag
+
   const handlePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
     // Ignore touch pointers — handled by our native touch listeners below
     if (e.pointerType === 'touch') return;
-    isDraggingRef.current = true;
+    // Don't intercept clicks on interactive child elements (buttons, etc.)
+    if ((e.target as HTMLElement).closest('button, [role="button"], a')) return;
+    pendingDragRef.current = true;
+    isDraggingRef.current = false;
     startScrollRef.current = {
       x: containerRef.current?.scrollLeft ?? 0,
       y: containerRef.current?.scrollTop ?? 0,
     };
     startClientRef.current = { x: e.clientX, y: e.clientY };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
   }, []);
 
   const handlePointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!isDraggingRef.current || e.pointerType === 'touch') return;
+    if ((!isDraggingRef.current && !pendingDragRef.current) || e.pointerType === 'touch') return;
     const dx = e.clientX - startClientRef.current.x;
     const dy = e.clientY - startClientRef.current.y;
+
+    // Confirm drag only once the pointer exceeds the threshold
+    if (!isDraggingRef.current) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+      isDraggingRef.current = true;
+      pendingDragRef.current = false;
+      // Capture pointer only after confirmed drag so clicks aren't swallowed
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
+    }
+
     cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
       if (containerRef.current) {
@@ -70,9 +88,12 @@ export function useBracketCanvas({
 
   const handlePointerUp = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.pointerType === 'touch') return;
+    if (isDraggingRef.current) {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      if (containerRef.current) containerRef.current.style.cursor = '';
+    }
     isDraggingRef.current = false;
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    if (containerRef.current) containerRef.current.style.cursor = '';
+    pendingDragRef.current = false;
   }, []);
 
   // ─── Native touch + wheel event listeners ────────────────────────────────────

@@ -2,8 +2,11 @@
  * Auth-scoped localStorage helper.
  * 
  * Automatically scopes all storage keys to the current authenticated user's UID.
- * When no user is authenticated, uses a device-local scope.
- * This prevents cache collision when multiple users sign in on the same device.
+ * Each authenticated user gets their own isolated namespace, preventing cache
+ * collision when multiple users sign in on the same device.
+ * 
+ * When no user is authenticated (signed out), a _guest namespace is used so
+ * that signed-out state never leaks previously-authenticated users' cached data.
  */
 
 let currentAuthUserId: string | null = null;
@@ -13,9 +16,12 @@ export function setAuthStorageUserId(userId: string | null): void {
 }
 
 function scopeKey(key: string): string {
-  // If user is authenticated, scope storage to their UID
-  // Otherwise use device-local scope (no prefix)
-  return currentAuthUserId ? `${key}_auth_${currentAuthUserId}` : key;
+  if (currentAuthUserId) {
+    // Authenticated: scope to this user's UID
+    return `${key}_auth_${currentAuthUserId}`;
+  }
+  // Signed out: use a separate guest namespace — never bleed into any user's data
+  return `${key}_guest`;
 }
 
 export function authGetItem(key: string): string | null {
