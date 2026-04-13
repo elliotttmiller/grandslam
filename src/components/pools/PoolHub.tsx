@@ -108,19 +108,23 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
       // 2. If not found locally, fetch from the sync server
       if (!pool) {
         let syncFailed = false;
+        let syncError = '';
         try {
           pool = await syncGetPool(code);
           if (pool) {
             // Cache it locally so we can work offline from here on
             savePool(pool);
           }
-        } catch {
+        } catch (error) {
           syncFailed = true;
+          const err = error as any;
+          syncError = err?.code ?? err?.message ?? String(error);
+          console.error('Pool sync failed when joining:', syncError);
         }
 
         if (!pool) {
           if (syncFailed) {
-            setJoinError('Could not reach the server. Check your connection and try again.');
+            setJoinError(`Could not reach the server (${syncError}). Check your connection and try again.`);
           } else {
             setJoinError('Pool not found. Check the code or ask the creator to share the invite link.');
           }
@@ -167,7 +171,13 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
               <Users className="h-3.5 w-3.5 mr-1.5" />
               Join
             </Button>
-            <Button size="sm" className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" onClick={() => setShowCreate(true)}>
+            <Button 
+              size="sm" 
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" 
+              onClick={() => setShowCreate(true)}
+              disabled={authError}
+              title={authError ? 'Authentication failed — pools cannot be created right now' : undefined}
+            >
               <Plus className="h-3.5 w-3.5 mr-1.5" />
               Create
             </Button>
@@ -189,7 +199,7 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
               </div>
               <div>
                 <p className="font-semibold text-base">No pools yet</p>
-                <p className="text-[13px] text-muted-foreground/70 mt-1.5 max-w-[220px]">
+                <p className="text-[13px] text-muted-foreground/70 mt-1.5 max-w-55">
                   Create your first pool and invite friends to compete!
                 </p>
               </div>
@@ -293,7 +303,7 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 8 }}
               transition={{ duration: 0.18 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-md bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-md bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold">Create a Pool</h3>
@@ -398,7 +408,7 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 8 }}
               transition={{ duration: 0.18 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-sm bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-sm bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold">Join a Pool</h3>

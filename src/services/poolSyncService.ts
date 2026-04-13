@@ -31,17 +31,31 @@ import type { Pool, PoolEntry } from '@/lib/pool-types';
  * not exist.  Throws a `FirebaseError` if the Firestore read fails (e.g.
  * `permission-denied` when security rules block the request, or network
  * unavailability) so callers can distinguish "not found" from "server error"
- * and show an appropriate message. */
+ * and show an appropriate message.
+ * 
+ * On success, converts Firestore Timestamp objects to ISO string format. */
 export async function syncGetPool(id: string): Promise<Pool | null> {
-  const snap = await getDoc(doc(getDb(), 'pools', id));
-  if (!snap.exists()) return null;
-  const data = snap.data();
-  // Firestore timestamps → ISO strings
-  return {
-    ...(data as Pool),
-    createdAt: data['createdAt']?.toDate?.()?.toISOString() ?? data['createdAt'],
-    updatedAt: data['updatedAt']?.toDate?.()?.toISOString() ?? data['updatedAt'],
-  };
+  try {
+    const snap = await getDoc(doc(getDb(), 'pools', id));
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    // Firestore timestamps → ISO strings
+    return {
+      ...(data as Pool),
+      createdAt: data['createdAt']?.toDate?.()?.toISOString() ?? data['createdAt'],
+      updatedAt: data['updatedAt']?.toDate?.()?.toISOString() ?? data['updatedAt'],
+    };
+  } catch (error) {
+    const err = error as any;
+    const errorCode = err?.code ?? 'unknown';
+    if (errorCode === 'permission-denied') {
+      console.error('Pool fetch blocked by Firestore security rules. Auth may not be ready.');
+    } else if (errorCode === 'unavailable') {
+      console.error('Firebase service unavailable when fetching pool.');
+    }
+    // Re-throw so callers can distinguish between "not found" (null) and "error" (throw)
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------------------
