@@ -202,6 +202,8 @@ export function subscribeToPool(
   onUpdate: (pool: Pool) => void,
 ): () => void {
   let unsubscribe: Unsubscribe;
+  let lastPoolData: string = '';
+  
   try {
     unsubscribe = onSnapshot(
       doc(getDb(), 'pools', poolId),
@@ -215,7 +217,13 @@ export function subscribeToPool(
           updatedAt:
             data['updatedAt']?.toDate?.()?.toISOString() ?? data['updatedAt'],
         };
-        onUpdate(pool);
+        
+        // Only trigger update if the data actually changed (avoid flickering from no-op updates)
+        const currentPoolData = JSON.stringify(pool);
+        if (currentPoolData !== lastPoolData) {
+          lastPoolData = currentPoolData;
+          onUpdate(pool);
+        }
       },
       () => {
         // Listener error — ignore silently (network issue or permission denied

@@ -47,7 +47,6 @@ export default function App() {
   const [tbGamesInput, setTbGamesInput] = useState('');
   const [tbSetsInput, setTbSetsInput] = useState('');
   const [appView, setAppView] = useState<AppView>({ page: 'bracket' });
-  const [poolRefreshKey, setPoolRefreshKey] = useState(0);
   // Code from a `?join=POOL_CODE` URL param — passed to PoolHub to pre-fill the join modal.
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null);
   // Set to true when a newly-created pool fails to sync to Firestore, so we can
@@ -844,7 +843,7 @@ export default function App() {
             if (!pool) return <div className="p-8 text-muted-foreground text-sm">Pool not found.</div>;
             return (
               <motion.div
-                key={appView.poolId + poolRefreshKey}
+                key={appView.poolId}
                 initial={{ opacity: 0, x: 18 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 18 }}
@@ -859,7 +858,6 @@ export default function App() {
                 <PoolLeaderboard
                   pool={pool}
                   onNavigate={setAppView}
-                  onPoolUpdate={() => setPoolRefreshKey(k => k + 1)}
                 />
               </motion.div>
             );

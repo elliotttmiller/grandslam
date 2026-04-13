@@ -26,7 +26,7 @@ interface RankedEntry extends PoolEntry {
 interface PoolLeaderboardProps {
   pool: Pool;
   onNavigate: (view: AppView) => void;
-  onPoolUpdate: () => void;
+  onPoolUpdate?: () => void;
 }
 
 export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderboardProps) {
@@ -44,13 +44,13 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
 
   // Subscribe to real-time pool updates via Firestore onSnapshot.
   // Whenever Firestore pushes an update we persist it to localStorage and
-  // ask the parent to re-render with the fresh data.
+  // optionally notify the parent if onPoolUpdate was provided.
   useEffect(() => {
     setIsLive(false);
     const unsubscribe = subscribeToPool(pool.id, (updatedPool) => {
       setIsLive(true);
       savePool(updatedPool);
-      onPoolUpdateRef.current();
+      onPoolUpdateRef.current?.();
     });
     return unsubscribe;
   }, [pool.id]);
