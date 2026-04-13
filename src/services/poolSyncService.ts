@@ -112,8 +112,13 @@ export async function syncAddEntry(
   entry: PoolEntry,
 ): Promise<boolean> {
   try {
+    // Remove undefined fields before writing to Firestore (Firestore rejects undefined)
+    const entryData = Object.fromEntries(
+      Object.entries(entry).filter(([, v]) => v !== undefined)
+    );
+    
     await updateDoc(doc(getDb(), 'pools', poolId), {
-      entries: arrayUnion(entry),
+      entries: arrayUnion(entryData),
       updatedAt: serverTimestamp(),
     });
     return true;
@@ -147,9 +152,15 @@ export async function syncUpdateEntry(
       const snap = await tx.get(ref);
       if (!snap.exists()) return;
       const pool = snap.data() as Pool;
+      
+      // Filter out undefined values from patch before applying
+      const cleanPatch = Object.fromEntries(
+        Object.entries(patch).filter(([, v]) => v !== undefined)
+      );
+      
       const entries = (pool.entries ?? []).map((e) =>
         e.id === entryId
-          ? { ...e, ...patch, updatedAt: new Date().toISOString() }
+          ? { ...e, ...cleanPatch, updatedAt: new Date().toISOString() }
           : e,
       );
       tx.update(ref, { entries, updatedAt: serverTimestamp() });
