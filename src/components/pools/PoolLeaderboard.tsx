@@ -239,7 +239,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
             </div>
             <div className="flex items-center gap-1.5 text-[12px]">
               <Lock className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-muted-foreground/60 truncate max-w-[140px]">{pool.tournamentName}</span>
+              <span className="text-muted-foreground/60 truncate max-w-35">{pool.tournamentName}</span>
             </div>
           </div>
         </div>
@@ -265,7 +265,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
 
           {/* My entry spotlight */}
           {myEntries.length > 0 && (
-            <div className="bg-emerald-500/[0.06] border border-emerald-500/20 rounded-2xl p-4">
+            <div className="bg-emerald-500/6 border border-emerald-500/20 rounded-2xl p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400/70 mb-3">Your Bracket</p>
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-lg shrink-0">
@@ -341,7 +341,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                   className={cn(
                     "flex items-center gap-3 px-4 py-3.5 rounded-2xl border transition-colors",
                     entry.userName === savedUserName
-                      ? "bg-emerald-500/[0.06] border-emerald-500/20"
+                      ? "bg-emerald-500/6 border-emerald-500/20"
                       : "bg-card/50 border-border/30 hover:border-border/50 hover:bg-card/70"
                   )}
                 >
@@ -478,7 +478,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 8 }}
               transition={{ duration: 0.18 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-md bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-md bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold">Import Entry</h3>
@@ -518,7 +518,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 8 }}
               transition={{ duration: 0.18 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-sm bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-sm bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
             >
               <h3 className="text-sm font-bold text-red-400">Delete Pool?</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
