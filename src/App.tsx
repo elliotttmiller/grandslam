@@ -50,6 +50,9 @@ export default function App() {
   const [poolRefreshKey, setPoolRefreshKey] = useState(0);
   // Code from a `?join=POOL_CODE` URL param — passed to PoolHub to pre-fill the join modal.
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null);
+  // Set to true when a newly-created pool fails to sync to Firestore, so we can
+  // warn the creator that others may not be able to join by code.
+  const [poolSyncFailed, setPoolSyncFailed] = useState(false);
 
   // Firebase Authentication state — tracked via onAuthStateChanged at root level
   const [authUser, setAuthUser] = useState<User | null>(null);
@@ -66,7 +69,9 @@ export default function App() {
       // Firestore security rules that require `request.auth != null` without
       // forcing every user to create an email account.
       if (!user) {
-        signInAnonymously().catch(() => {});
+        signInAnonymously().catch((err) => {
+          console.warn('Anonymous sign-in failed — Firestore pool operations may not work:', err);
+        });
       }
     });
     return unsubscribe;
@@ -303,7 +308,14 @@ export default function App() {
     // Awaiting ensures the pool exists in Firestore before the creator
     // navigates away, so other devices can immediately find it by code.
     const synced = await syncCreatePool(pool);
-    if (synced) await syncAddEntry(pool.id, newEntry);
+    if (synced) {
+      await syncAddEntry(pool.id, newEntry);
+      setPoolSyncFailed(false);
+    } else {
+      // Pool was saved locally but not to Firestore — warn the creator.
+      setPoolSyncFailed(true);
+      console.warn('Pool sync failed — pool is accessible locally but may not be joinable from other devices.');
+    }
 
     setAppView({ page: 'pool', poolId: pool.id });
   };
@@ -808,6 +820,11 @@ export default function App() {
                 transition={{ duration: 0.2, ease: 'easeOut' }}
                 className="absolute inset-0 overflow-auto"
               >
+                {poolSyncFailed && (
+                  <p className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2.5 mx-4 mt-4">
+                    ⚠️ This pool could not be saved to the cloud. Others may not be able to join by code until your connection is restored.
+                  </p>
+                )}
                 <PoolLeaderboard
                   pool={pool}
                   onNavigate={setAppView}
