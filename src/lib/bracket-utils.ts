@@ -23,7 +23,7 @@ export type Tournament = {
 };
 
 export const ROUND_NAMES: Record<number, string> = {
-  1: '1st Rd', 2: '2nd Rd', 3: '3rd Rd', 4: 'Rd of 16', 5: 'Quarters', 6: 'Semis', 7: 'Final'
+  1: '1st Rd', 2: '2nd Rd', 3: '3rd Rd', 4: 'Rd of 16', 5: 'Quarters', 6: 'Semis', 7: 'Championship'
 };
 
 export const ROUND_FULL_NAMES: Record<number, string> = {
