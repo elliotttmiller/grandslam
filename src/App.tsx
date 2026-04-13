@@ -63,15 +63,26 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged((user) => {
       setAuthUser(user);
-      setAuthChecked(true);
-      // Sign in anonymously when there is no session so that Firestore operations
-      // (pool reads/writes) always carry a valid auth token.  This satisfies
-      // Firestore security rules that require `request.auth != null` without
-      // forcing every user to create an email account.
       if (!user) {
-        signInAnonymously().catch((err) => {
-          console.warn('Anonymous sign-in failed — Firestore pool operations may not work:', err);
-        });
+        // No existing session — sign in anonymously so Firestore operations
+        // always carry a valid auth token (satisfies `request.auth != null`
+        // security rules) without requiring the user to create an account.
+        // We deliberately defer setAuthChecked(true) until the anonymous
+        // sign-in resolves: this prevents a brief window where pool reads/
+        // writes would run without any auth token.
+        signInAnonymously()
+          .catch((err) => {
+            console.warn(
+              'Anonymous sign-in failed — Firestore pool operations may not work:',
+              err,
+            );
+          })
+          .finally(() => {
+            setAuthChecked(true);
+          });
+      } else {
+        // Named user or freshly-created anonymous user — auth is ready.
+        setAuthChecked(true);
       }
     });
     return unsubscribe;
