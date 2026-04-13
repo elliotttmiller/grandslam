@@ -56,6 +56,7 @@ export function PoolBracketEditor({
   const { containerRef, handlePointerDown, handlePointerMove, handlePointerUp } = useBracketCanvas({
     zoom,
     onZoomChange: setZoom,
+    enabled: activeRound === 0,
   });
 
   const score = useMemo(() => calculateBracketScore(matches), [matches]);
