@@ -75,7 +75,13 @@ export async function syncCreatePool(pool: Pool): Promise<Pool | null> {
     const ref = doc(getDb(), 'pools', pool.id);
     const existing = await getDoc(ref);
     if (existing.exists()) return existing.data() as Pool;
-    await setDoc(ref, { ...pool, updatedAt: serverTimestamp() });
+    
+    // Remove undefined fields before writing to Firestore (Firestore rejects undefined)
+    const poolData = Object.fromEntries(
+      Object.entries(pool).filter(([, v]) => v !== undefined)
+    );
+    
+    await setDoc(ref, { ...poolData, updatedAt: serverTimestamp() });
     return pool;
   } catch (error) {
     const err = error as any;
