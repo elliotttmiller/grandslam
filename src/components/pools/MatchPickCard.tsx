@@ -3,6 +3,7 @@ import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getBasePoints, getUpsetBonus } from '@/lib/scoring';
 import type { Match, Player } from '@/lib/bracket-utils';
+import { forwardRef } from 'react';
 
 interface MatchPickCardProps {
   match: Match;
@@ -11,7 +12,8 @@ interface MatchPickCardProps {
   readOnly?: boolean;
 }
 
-export function MatchPickCard({ match, matchIndex, onSelectWinner, readOnly = false }: MatchPickCardProps) {
+export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
+  ({ match, matchIndex, onSelectWinner, readOnly = false }, ref) => {
   const { player1, player2, winnerId } = match;
   const hasPlayers = !!(player1 && player2);
   const canPick = !readOnly && hasPlayers && !winnerId;
@@ -30,11 +32,11 @@ export function MatchPickCard({ match, matchIndex, onSelectWinner, readOnly = fa
     return (
       <motion.div
         className={cn(
-          'flex items-center gap-3 px-4 py-[15px] transition-all select-none min-h-[56px]',
+          'flex items-center gap-3 px-4 py-3.75 transition-all select-none min-h-14',
           isTop ? 'border-b border-border/15' : '',
           isWinner ? 'bg-emerald-500/[0.14]' : '',
           isLoser ? 'opacity-30' : '',
-          isPickable ? 'cursor-pointer hover:bg-white/[0.05] active:bg-white/[0.09]' : 'cursor-default',
+          isPickable ? 'cursor-pointer hover:bg-white/5 active:bg-white/9' : 'cursor-default',
         )}
         whileTap={isPickable ? { scale: 0.985 } : {}}
         onClick={() => { if (isPickable) onSelectWinner(match.id, player!.id); }}
@@ -116,7 +118,7 @@ export function MatchPickCard({ match, matchIndex, onSelectWinner, readOnly = fa
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           transition={{ duration: 0.2 }}
-          className="flex items-center gap-2 px-4 py-2 border-t border-emerald-500/10 bg-emerald-500/[0.04]"
+          className="flex items-center gap-2 px-4 py-2 border-t border-emerald-500/10 bg-emerald-500/4"
         >
           <span className="text-[11px] font-bold text-emerald-400 tabular-nums">
             +{earnedBase}{earnedUpset > 0 ? ` +${earnedUpset}` : ''} pts
@@ -130,4 +132,6 @@ export function MatchPickCard({ match, matchIndex, onSelectWinner, readOnly = fa
       )}
     </motion.article>
   );
-}
+});
+
+MatchPickCard.displayName = 'MatchPickCard';

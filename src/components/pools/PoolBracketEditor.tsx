@@ -59,15 +59,15 @@ export function PoolBracketEditor({
   });
 
   const score = useMemo(() => calculateBracketScore(matches), [matches]);
-  const finalMatch = useMemo(() => matches.find(m => m.nextMatchId === null), [matches]);
-  const totalMatches = matches.filter(m => m.player1 && m.player2).length;
+  const finalMatch = useMemo(() => matches.find((m: Match) => m.nextMatchId === null), [matches]);
+  const totalMatches = matches.filter((m: Match) => m.player1 && m.player2).length;
 
   // Per-round completion tracking (rounds 1-7)
   const roundCompletion = useMemo(() => {
     const c: Record<number, { total: number; done: number }> = {};
     for (let r = 1; r <= 7; r++) {
-      const rm = matches.filter(m => m.round === r && m.player1 && m.player2);
-      c[r] = { total: rm.length, done: rm.filter(m => m.winnerId).length };
+      const rm = matches.filter((m: Match) => m.round === r && m.player1 && m.player2);
+      c[r] = { total: rm.length, done: rm.filter((m: Match) => m.winnerId).length };
     }
     return c;
   }, [matches]);
@@ -109,7 +109,7 @@ export function PoolBracketEditor({
   const progressPct = totalMatches > 0 ? (score.picksCompleted / totalMatches) * 100 : 0;
 
   const activeRoundMatches = useMemo(
-    () => matches.filter(m => m.round === activeRound).sort((a, b) => a.matchNumber - b.matchNumber),
+    () => matches.filter((m: Match) => m.round === activeRound).sort((a: Match, b: Match) => a.matchNumber - b.matchNumber),
     [matches, activeRound],
   );
 
@@ -120,7 +120,7 @@ export function PoolBracketEditor({
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <header className="flex-none border-b border-border/20 bg-card/50 backdrop-blur-xl px-4 py-2.5 z-20">
-        <div className="flex items-center gap-2.5 min-h-[40px]">
+        <div className="flex items-center gap-2.5 min-h-10">
           <Button
             variant="ghost"
             size="sm"
@@ -129,7 +129,7 @@ export function PoolBracketEditor({
             aria-label={`Back to ${pool.name}`}
           >
             <ArrowLeft className="h-4 w-4 mr-1" aria-hidden="true" />
-            <span className="max-w-[80px] truncate text-[13px]">{pool.name}</span>
+            <span className="max-w-20 truncate text-[13px]">{pool.name}</span>
           </Button>
           <div className="flex-1 min-w-0">
             <div className="text-[13px] font-semibold truncate leading-tight">{entry.bracketName}</div>
@@ -169,8 +169,8 @@ export function PoolBracketEditor({
             className={cn(
               'flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
               activeRound === 0
-                ? 'bg-white/[0.12] text-foreground'
-                : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/[0.04]',
+                ? 'bg-white/12 text-foreground'
+                : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/4',
             )}
           >
             <LayoutGrid className="h-3 w-3" aria-hidden="true" />
@@ -192,8 +192,8 @@ export function PoolBracketEditor({
                 className={cn(
                   'flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
                   isRound
-                    ? 'bg-white/[0.12] text-foreground'
-                    : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/[0.04]',
+                    ? 'bg-white/12 text-foreground'
+                    : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/4',
                 )}
               >
                 {ROUND_NAMES[round]}
@@ -219,11 +219,11 @@ export function PoolBracketEditor({
                 <ChevronDown className="w-4 h-4" aria-hidden="true" />
               </Button>
               <div className="w-full h-px bg-border/30 my-0.5" aria-hidden="true" />
-              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom(z => Math.min(z + 0.2, 2))} aria-label="Zoom in">
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom((z: number) => Math.min(z + 0.2, 2))} aria-label="Zoom in">
                 <ZoomIn className="w-4 h-4" aria-hidden="true" />
               </Button>
               <div className="text-[10px] font-bold text-muted-foreground/70 tabular-nums w-8 text-center" aria-live="polite" aria-label={`Zoom ${Math.round(zoom * 100)}%`}>{Math.round(zoom * 100)}%</div>
-              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} aria-label="Zoom out">
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom((z: number) => Math.max(z - 0.2, 0.2))} aria-label="Zoom out">
                 <ZoomOut className="w-4 h-4" aria-hidden="true" />
               </Button>
               <div className="w-full h-px bg-border/30 my-0.5" aria-hidden="true" />
@@ -307,7 +307,7 @@ export function PoolBracketEditor({
 
               {/* Match cards */}
               <div className="flex flex-col gap-3">
-                {activeRoundMatches.map((match, idx) => (
+                {activeRoundMatches.map((match: Match, idx: number) => (
                   <MatchPickCard
                     key={match.id}
                     match={match}
@@ -331,7 +331,7 @@ export function PoolBracketEditor({
                   >
                     <Button
                       className="w-full h-12 bg-emerald-600 hover:bg-emerald-500 text-white border-0 rounded-2xl font-semibold text-[14px]"
-                      onClick={() => setActiveRound(r => r + 1)}
+                      onClick={() => setActiveRound((r: number) => r + 1)}
                     >
                       Continue to {ROUND_FULL_NAMES[activeRound + 1]} →
                     </Button>
@@ -406,7 +406,7 @@ export function PoolBracketEditor({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 8 }}
               transition={{ duration: 0.18 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-sm bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-sm bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold">Incomplete Bracket</h3>
@@ -436,7 +436,7 @@ export function PoolBracketEditor({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 8 }}
               transition={{ duration: 0.18 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[340px] bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-5 flex flex-col gap-4"
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-85 bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-5 flex flex-col gap-4"
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold">Tiebreaker Picks</h3>
@@ -455,7 +455,7 @@ export function PoolBracketEditor({
                     inputMode="numeric"
                     min={0}
                     value={tbGamesInput}
-                    onChange={e => setTbGamesInput(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTbGamesInput(e.target.value)}
                     className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                     placeholder="e.g. 23"
                   />
@@ -464,7 +464,7 @@ export function PoolBracketEditor({
                   <span className="text-xs font-semibold text-muted-foreground">Total sets in Final</span>
                   <select
                     value={tbSetsInput}
-                    onChange={e => setTbSetsInput(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTbSetsInput(e.target.value)}
                     className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   >
                     <option value="">Select…</option>

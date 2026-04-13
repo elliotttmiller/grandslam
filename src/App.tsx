@@ -322,16 +322,29 @@ export default function App() {
     addEntry(pool.id, newEntry);
 
     // Push pool and initial entry to the sync server (best-effort).
-    // Awaiting ensures the pool exists in Firestore before the creator
-    // navigates away, so other devices can immediately find it by code.
-    const synced = await syncCreatePool(pool);
-    if (synced) {
-      await syncAddEntry(pool.id, newEntry);
-      setPoolSyncFailed(false);
+    // Only attempt sync if authentication is ready. If auth failed or is still
+    // initializing, skip sync — the pool remains in localStorage but won't be
+    // joinable from other devices. Awaiting ensures the pool exists in Firestore
+    // before the creator navigates away, so other devices can immediately find
+    // it by code.
+    if (authChecked && !authError && authUser) {
+      const synced = await syncCreatePool(pool);
+      if (synced) {
+        await syncAddEntry(pool.id, newEntry);
+        setPoolSyncFailed(false);
+      } else {
+        // Pool was saved locally but not to Firestore — warn the creator.
+        setPoolSyncFailed(true);
+        console.warn('Pool sync failed — pool is accessible locally but may not be joinable from other devices.');
+      }
     } else {
-      // Pool was saved locally but not to Firestore — warn the creator.
+      // Auth is not ready — pool will remain local-only.
       setPoolSyncFailed(true);
-      console.warn('Pool sync failed — pool is accessible locally but may not be joinable from other devices.');
+      if (authError) {
+        console.warn('Cannot sync pool — authentication failed. Pool is accessible locally only.');
+      } else if (!authChecked) {
+        console.warn('Cannot sync pool — authentication is still initializing. Pool is accessible locally only.');
+      }
     }
 
     setAppView({ page: 'pool', poolId: pool.id });
@@ -541,7 +554,7 @@ export default function App() {
       />
 
       {/* Framer Motion toast stack */}
-      <div className="fixed bottom-6 right-4 z-[90] flex flex-col gap-2 items-end pointer-events-none">
+      <div className="fixed bottom-6 right-4 z-90 flex flex-col gap-2 items-end pointer-events-none">
         <AnimatePresence>
           {toasts.map((toast) => (
             <motion.div
@@ -550,7 +563,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.95 }}
               transition={{ duration: 0.22 }}
-              className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold text-white max-w-[280px] ${
+              className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold text-white max-w-70 ${
                 toast.type === 'success' ? 'bg-emerald-600' :
                 toast.type === 'error'   ? 'bg-red-600' :
                                            'bg-zinc-700'
@@ -567,8 +580,8 @@ export default function App() {
       {/* Header — 3-column flex: [left shrink-0] [center flex-1] [right shrink-0]
            This prevents the score/auth badges on the right from ever overlapping
            the centered nav tabs on narrow mobile screens. */}
-      <header className="safe-top fixed top-0 left-0 right-0 border-b border-white/[0.06] bg-card/80 backdrop-blur-3xl z-30 shadow-lg">
-        <div className="flex items-center h-[52px] px-3 gap-2 max-w-7xl mx-auto">
+      <header className="safe-top fixed top-0 left-0 right-0 border-b border-white/6 bg-card/80 backdrop-blur-3xl z-30 shadow-lg">
+        <div className="flex items-center h-13 px-3 gap-2 max-w-7xl mx-auto">
 
           {/* Left: menu button + logo + title (all shrink-0, never pushed into center) */}
           <div className="flex items-center gap-2 shrink-0">
@@ -582,7 +595,7 @@ export default function App() {
                 aria-expanded={isSidebarOpen}
                 aria-haspopup="dialog"
               >
-                <Menu className="h-[18px] w-[18px]" aria-hidden="true" />
+                <Menu className="h-4.5 w-4.5" aria-hidden="true" />
               </Button>
             ) : (
               <div className="h-9 w-9" aria-hidden="true" />
@@ -596,7 +609,7 @@ export default function App() {
             {appView.page === 'bracket' && currentTournament && (
               <>
                 <div className="hidden sm:block h-5 w-px bg-white/10" aria-hidden="true" />
-                <span className="text-[12px] font-semibold text-white/55 hidden md:block truncate max-w-[160px]">{currentTournament.name}</span>
+                <span className="text-[12px] font-semibold text-white/55 hidden md:block truncate max-w-40">{currentTournament.name}</span>
               </>
             )}
           </div>
@@ -604,15 +617,15 @@ export default function App() {
           {/* Center: nav tabs — flex-1 keeps it between the two fixed-width columns */}
           <div className="flex-1 flex justify-center">
             <nav aria-label="Main navigation">
-              <div role="tablist" className="flex items-center gap-0.5 bg-white/[0.06] rounded-xl p-1">
+              <div role="tablist" className="flex items-center gap-0.5 bg-white/6 rounded-xl p-1">
                 <button
                   role="tab"
                   aria-selected={appView.page === 'bracket'}
                   onClick={() => setAppView({ page: 'bracket' })}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
                     appView.page === 'bracket'
-                      ? 'bg-white/[0.12] text-foreground shadow-sm'
-                      : 'text-white/45 hover:text-white/75 hover:bg-white/[0.04]'
+                      ? 'bg-white/12 text-foreground shadow-sm'
+                      : 'text-white/45 hover:text-white/75 hover:bg-white/4'
                   }`}
                 >
                   <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
@@ -624,8 +637,8 @@ export default function App() {
                   onClick={() => setAppView({ page: 'pools' })}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
                     appView.page !== 'bracket'
-                      ? 'bg-white/[0.12] text-foreground shadow-sm'
-                      : 'text-white/45 hover:text-white/75 hover:bg-white/[0.04]'
+                      ? 'bg-white/12 text-foreground shadow-sm'
+                      : 'text-white/45 hover:text-white/75 hover:bg-white/4'
                   }`}
                 >
                   <Users className="h-3.5 w-3.5" aria-hidden="true" />
@@ -665,14 +678,14 @@ export default function App() {
                   className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors px-2 py-1 rounded-lg hover:bg-emerald-500/10"
                 >
                   <UserCircle className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline truncate max-w-[80px]">{authUser.email}</span>
+                  <span className="hidden sm:inline truncate max-w-20">{authUser.email}</span>
                   <LogOut className="h-3 w-3 opacity-60" aria-hidden="true" />
                 </button>
               ) : (
                 <button
                   onClick={() => setShowAuthModal(true)}
                   aria-label="Sign in or create account"
-                  className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 hover:text-white/80 transition-colors px-2 py-1 rounded-lg hover:bg-white/[0.06]"
+                  className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 hover:text-white/80 transition-colors px-2 py-1 rounded-lg hover:bg-white/6"
                 >
                   <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
                   <span className="hidden sm:inline">Sign In</span>
@@ -701,7 +714,7 @@ export default function App() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-              className="fixed top-0 left-0 bottom-0 w-[280px] bg-card/95 backdrop-blur-xl border-r border-white/[0.08] shadow-2xl z-50 flex flex-col"
+              className="fixed top-0 left-0 bottom-0 w-70 bg-card/95 backdrop-blur-xl border-r border-white/8 shadow-2xl z-50 flex flex-col"
               role="dialog"
               aria-modal="true"
               aria-label="Select tournament"
@@ -737,7 +750,7 @@ export default function App() {
                       className={`flex flex-col gap-1 p-3 rounded-xl transition-all text-left ${
                         isSelected
                           ? 'bg-emerald-500/10 ring-1 ring-emerald-500/25'
-                          : 'hover:bg-white/[0.05] active:bg-white/[0.08]'
+                          : 'hover:bg-white/5 active:bg-white/8'
                       }`}
                       aria-current={isSelected ? 'true' : undefined}
                     >
@@ -764,7 +777,7 @@ export default function App() {
                           </span>
                         )}
                         {isPast && !isActive && (
-                          <span className="shrink-0 text-[9px] font-bold text-white/25 bg-white/[0.04] px-1.5 py-0.5 rounded-full border border-white/[0.08]">
+                          <span className="shrink-0 text-[9px] font-bold text-white/25 bg-white/4 px-1.5 py-0.5 rounded-full border border-white/8">
                             Past
                           </span>
                         )}
@@ -774,7 +787,7 @@ export default function App() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-1.5 pl-[34px] text-white/35">
+                      <div className="flex items-center gap-1.5 pl-8.5 text-white/35">
                         <Calendar className="h-3 w-3 shrink-0" aria-hidden="true" />
                         <span className="text-[11px]">
                           {new Date(t.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – {new Date(t.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -788,7 +801,7 @@ export default function App() {
               {/* Season summary at bottom of sidebar */}
               {Object.keys(allTournamentScores).length > 0 && (
                 <div className="safe-bottom px-4 pb-5 pt-3 border-t border-white/[0.07]">
-                  <div className="rounded-xl bg-white/[0.04] border border-white/[0.07] p-4 flex flex-col gap-1.5">
+                  <div className="rounded-xl bg-white/4 border border-white/7 p-4 flex flex-col gap-1.5">
                     <span className="text-[10px] font-black uppercase tracking-widest text-white/35">Season Total</span>
                     <span className="text-2xl font-black text-emerald-400">
                       <AnimatedNumber value={seasonTotal} /> <span className="text-sm font-semibold text-white/40">pts</span>
@@ -805,7 +818,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Main Content - View Router */}
-      <div className="fixed top-[var(--header-height)] left-0 right-0 bottom-0 overflow-hidden">
+      <div className="fixed top-(--header-height) left-0 right-0 bottom-0 overflow-hidden">
         <AnimatePresence mode="wait" initial={false}>
           {appView.page === 'pools' && (
             <motion.div
@@ -911,8 +924,8 @@ export default function App() {
                 className={cn(
                   'flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
                   activeRound === 0
-                    ? 'bg-white/[0.12] text-foreground'
-                    : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/[0.04]',
+                    ? 'bg-white/12 text-foreground'
+                    : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/4',
                 )}
               >
                 <LayoutGrid className="h-3 w-3" aria-hidden="true" />
@@ -934,8 +947,8 @@ export default function App() {
                     className={cn(
                       'flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
                       isRound
-                        ? 'bg-white/[0.12] text-foreground'
-                        : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/[0.04]',
+                        ? 'bg-white/12 text-foreground'
+                        : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/4',
                     )}
                   >
                     {ROUND_NAMES[round]}
@@ -1096,7 +1109,7 @@ export default function App() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15, duration: 0.3 }}
-              className="absolute bottom-5 left-4 z-10 bg-background/90 backdrop-blur-md border border-border/50 rounded-xl px-3.5 py-3 shadow-xl text-xs flex flex-col gap-1.5 min-w-[148px]"
+              className="absolute bottom-5 left-4 z-10 bg-background/90 backdrop-blur-md border border-border/50 rounded-xl px-3.5 py-3 shadow-xl text-xs flex flex-col gap-1.5 min-w-37"
               style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}
             >
               <div className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-0.5">Score</div>
@@ -1175,14 +1188,14 @@ export default function App() {
                 {/* Match cards */}
                 <div className="flex flex-col gap-3">
                   {activeRoundMatches.map((match, idx) => (
-                      <MatchPickCard
-                        key={match.id}
-                        match={match}
-                        matchIndex={idx}
-                        onSelectWinner={handleSelectWinner}
-                        readOnly={isLocked}
-                      />
-                    ))}
+                    <MatchPickCard
+                      key={match.id}
+                      match={match}
+                      matchIndex={idx}
+                      onSelectWinner={handleSelectWinner}
+                      readOnly={isLocked}
+                    />
+                  ))}
                 </div>
               </div>
             </div>
@@ -1205,7 +1218,7 @@ export default function App() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 8 }}
                   transition={{ duration: 0.18 }}
-                  className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-[340px] bg-card border border-white/[0.1] rounded-2xl shadow-2xl z-50 p-5 flex flex-col gap-4"
+                  className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-85 bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-5 flex flex-col gap-4"
                 >
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold">Tiebreaker Picks</h3>

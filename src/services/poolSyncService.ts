@@ -51,6 +51,10 @@ export async function syncGetPool(id: string): Promise<Pool | null> {
 /**
  * Write a new pool document.  Idempotent — if the doc already exists the
  * call is a no-op (we don't overwrite an existing pool).
+ * 
+ * Catches and logs errors silently. Returns null on any failure (network,
+ * permission denied, or other Firestore errors) so the app can continue with
+ * local storage as fallback.
  */
 export async function syncCreatePool(pool: Pool): Promise<Pool | null> {
   try {
@@ -59,7 +63,17 @@ export async function syncCreatePool(pool: Pool): Promise<Pool | null> {
     if (existing.exists()) return existing.data() as Pool;
     await setDoc(ref, { ...pool, updatedAt: serverTimestamp() });
     return pool;
-  } catch {
+  } catch (error) {
+    const err = error as any;
+    const errorCode = err?.code ?? 'unknown';
+    const errorMessage = err?.message ?? String(error);
+    if (errorCode === 'permission-denied') {
+      console.error('Pool creation blocked by Firestore security rules:', errorMessage);
+    } else if (errorCode === 'unavailable') {
+      console.error('Firebase service is unavailable (network or service issue):', errorMessage);
+    } else {
+      console.error('Pool creation failed:', errorCode, errorMessage);
+    }
     return null;
   }
 }
@@ -83,7 +97,11 @@ export async function syncAddEntry(
       updatedAt: serverTimestamp(),
     });
     return true;
-  } catch {
+  } catch (error) {
+    const err = error as any;
+    const errorCode = err?.code ?? 'unknown';
+    const errorMessage = err?.message ?? String(error);
+    console.error('Failed to add entry to pool:', errorCode, errorMessage);
     return false;
   }
 }
