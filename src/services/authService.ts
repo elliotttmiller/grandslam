@@ -9,6 +9,7 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInAnonymously as _signInAnonymously,
   signOut as _signOut,
   onAuthStateChanged as _onAuthStateChanged,
   type User,
@@ -34,6 +35,16 @@ export async function signIn(email: string, password: string): Promise<User> {
   } catch (err: unknown) {
     throw new Error(friendlyAuthError(err));
   }
+}
+
+/**
+ * Sign in anonymously so the app always has a valid Firebase auth context,
+ * even for users who haven't created an email account.  This ensures
+ * Firestore operations (pool reads/writes) succeed when security rules
+ * require `request.auth != null`.
+ */
+export async function signInAnonymously(): Promise<void> {
+  await _signInAnonymously(getAuth());
 }
 
 /** Sign out the currently authenticated user. */

@@ -16,7 +16,7 @@ import { AuthModal } from './components/AuthModal';
 import { cn } from './lib/utils';
 import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH } from './lib/pool-storage';
 import { syncCreatePool, syncAddEntry, syncUpdateEntry } from './services/poolSyncService';
-import { onAuthStateChanged, signOut } from './services/authService';
+import { onAuthStateChanged, signOut, signInAnonymously } from './services/authService';
 import { getUserId, setUserName } from './lib/user-identity';
 import { AnimatedNumber } from './components/AnimatedNumber';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
@@ -61,6 +61,13 @@ export default function App() {
     const unsubscribe = onAuthStateChanged((user) => {
       setAuthUser(user);
       setAuthChecked(true);
+      // Sign in anonymously when there is no session so that Firestore operations
+      // (pool reads/writes) always carry a valid auth token.  This satisfies
+      // Firestore security rules that require `request.auth != null` without
+      // forcing every user to create an email account.
+      if (!user) {
+        signInAnonymously().catch(() => {});
+      }
     });
     return unsubscribe;
   }, []);
@@ -292,10 +299,11 @@ export default function App() {
     };
     addEntry(pool.id, newEntry);
 
-    // Push pool and initial entry to the sync server (best-effort)
-    syncCreatePool(pool).then((synced) => {
-      if (synced) syncAddEntry(pool.id, newEntry);
-    });
+    // Push pool and initial entry to the sync server (best-effort).
+    // Awaiting ensures the pool exists in Firestore before the creator
+    // navigates away, so other devices can immediately find it by code.
+    const synced = await syncCreatePool(pool);
+    if (synced) await syncAddEntry(pool.id, newEntry);
 
     setAppView({ page: 'pool', poolId: pool.id });
   };
@@ -620,7 +628,7 @@ export default function App() {
             )}
             {/* Auth button — shown once the initial auth check is complete */}
             {authChecked && (
-              authUser ? (
+              (authUser && !authUser.isAnonymous) ? (
                 <button
                   onClick={handleSignOut}
                   title={`Signed in as ${authUser.email ?? 'user'} — click to sign out`}

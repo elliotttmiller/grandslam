@@ -105,16 +105,25 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
 
       // 2. If not found locally, fetch from the sync server
       if (!pool) {
-        pool = await syncGetPool(code);
-        if (pool) {
-          // Cache it locally so we can work offline from here on
-          savePool(pool);
+        let syncFailed = false;
+        try {
+          pool = await syncGetPool(code);
+          if (pool) {
+            // Cache it locally so we can work offline from here on
+            savePool(pool);
+          }
+        } catch {
+          syncFailed = true;
         }
-      }
 
-      if (!pool) {
-        setJoinError('Pool not found. Check the code or ask the creator to share the invite link.');
-        return;
+        if (!pool) {
+          if (syncFailed) {
+            setJoinError('Could not reach the server. Check your connection and try again.');
+          } else {
+            setJoinError('Pool not found. Check the code or ask the creator to share the invite link.');
+          }
+          return;
+        }
       }
 
       setUserName(joinUserName.trim());
