@@ -6,7 +6,7 @@ import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Button } from './components/ui/button';
-import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown, LogIn, LogOut, UserCircle } from 'lucide-react';
+import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown, LogIn, LogOut, UserCircle, LayoutDashboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PoolHub } from './components/pools/PoolHub';
 import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
@@ -630,14 +630,14 @@ export default function App() {
                   role="tab"
                   aria-selected={appView.page === 'dashboard'}
                   onClick={() => setAppView({ page: 'dashboard' })}
-                  className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
                     appView.page === 'dashboard'
                       ? 'bg-white/12 text-foreground shadow-sm'
                       : 'text-white/45 hover:text-white/75 hover:bg-white/4'
                   }`}
                 >
-                  <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
-                  Dashboard
+                  <LayoutDashboard className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="hidden sm:inline">Dashboard</span>
                 </button>
                 <button
                   role="tab"
@@ -650,7 +650,7 @@ export default function App() {
                   }`}
                 >
                   <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
-                  My Bracket
+                  <span className="hidden sm:inline">My Bracket</span>
                 </button>
                 <button
                   role="tab"
@@ -663,7 +663,7 @@ export default function App() {
                   }`}
                 >
                   <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                  Pools
+                  <span className="hidden sm:inline">Pools</span>
                 </button>
               </div>
             </nav>
