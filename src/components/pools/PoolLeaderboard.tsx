@@ -177,7 +177,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
   };
 
   return (
-    <div className="flex flex-col h-full overflow-auto">
+    <div className="flex flex-col h-full overflow-y-auto overflow-x-hidden">
       {/* Header */}
       <div className="flex-none px-5 py-4 border-b border-border/25 bg-card/30">
         <div className="max-w-4xl mx-auto">

@@ -37,7 +37,7 @@ export default function App() {
   const [selectedTournament, setSelectedTournament] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
-  const [zoom, setZoom] = useState(0.4);
+  const [zoom, setZoom] = useState(0.6);
   const [loading, setLoading] = useState(false);
   const [loadingTournaments, setLoadingTournaments] = useState(true);
   // 0 = full bracket canvas, 1-7 = round-by-round card view
@@ -268,7 +268,7 @@ export default function App() {
 
         const initialMatches = generateBracket(players);
         setMatches(initialMatches);
-        setZoom(0.4);
+        setZoom(0.6);
       } catch (error) {
         console.error("Failed to fetch players:", error);
       } finally {
@@ -589,7 +589,7 @@ export default function App() {
            This prevents the score/auth badges on the right from ever overlapping
            the centered nav tabs on narrow mobile screens. */}
       <header className="safe-top fixed top-0 left-0 right-0 border-b border-white/6 bg-card/80 backdrop-blur-3xl z-30 shadow-lg">
-        <div className="flex items-center h-13 px-3 gap-2 max-w-7xl mx-auto">
+        <div className="flex items-center h-16 px-3 gap-2 max-w-7xl mx-auto">
 
           {/* Left: menu button */}
           <div className="flex items-center shrink-0">
@@ -611,7 +611,7 @@ export default function App() {
             <img
               src="/grandslam/perfect-set-logo.png"
               alt="Perfect Set"
-              className="h-9 w-9 rounded-xl object-contain"
+              className="h-14 w-14 object-contain drop-shadow-lg"
               draggable={false}
             />
           </div>
@@ -877,7 +877,7 @@ export default function App() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 18 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
-                className="absolute inset-0 overflow-auto"
+                className="absolute inset-0 overflow-y-auto overflow-x-hidden"
               >
                 {poolSyncFailed && (
                   <p className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2.5 mx-4 mt-4">
@@ -943,23 +943,23 @@ export default function App() {
           {/* Round / view selector tabs */}
           <div className="flex-none border-b border-border/20 bg-card/20" role="tablist" aria-label="Bracket rounds">
             <div className="flex overflow-x-auto px-3 py-2 gap-1" style={{ scrollbarWidth: 'none' }}>
-              {/* "All" tab — full canvas */}
+              {/* Canvas/draw tab — icon only, replaces "All" */}
               <button
                 role="tab"
+                aria-label="Full bracket draw"
                 aria-selected={activeRound === 0}
                 onClick={() => setActiveRound(0)}
                 className={cn(
-                  'flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
+                  'flex-none flex items-center justify-center px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
                   activeRound === 0
                     ? 'bg-white/12 text-foreground'
                     : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/4',
                 )}
               >
-                <LayoutGrid className="h-3 w-3" aria-hidden="true" />
-                All
+                <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
 
-              {/* Round 1-7 tabs */}
+              {/* Round 1-7 tabs — march madness style naming */}
               {([1, 2, 3, 4, 5, 6, 7] as const).map(round => {
                 const rc = roundCompletion[round];
                 const isComplete = rc && rc.total > 0 && rc.done === rc.total;
@@ -987,117 +987,144 @@ export default function App() {
             </div>
           </div>
 
+          {/* Horizontal toolbar — canvas mode only: score + view controls */}
+          {activeRound === 0 && matches.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex-none border-b border-border/15 bg-card/20 backdrop-blur-sm px-3 py-1.5 flex items-center justify-between gap-2"
+            >
+              {/* Left: score info */}
+              <div className="flex items-center gap-2 bg-background/60 border border-border/30 rounded-xl px-3 py-1.5 text-xs min-w-0 overflow-hidden">
+                <Trophy className="h-3 w-3 text-emerald-400 shrink-0" aria-hidden="true" />
+                <span className="font-black text-emerald-400 tabular-nums shrink-0">
+                  <AnimatedNumber value={score.total} />
+                </span>
+                <span className="text-white/35 shrink-0">pts</span>
+                {score.upsetBonus > 0 && (
+                  <>
+                    <span className="text-white/25 shrink-0">·</span>
+                    <span className="text-amber-400 font-bold shrink-0">⚡<AnimatedNumber value={score.upsetBonus} /></span>
+                  </>
+                )}
+                <span className="text-white/25 shrink-0">·</span>
+                <span className="text-white/50 tabular-nums shrink-0">{score.picksCompleted}/127</span>
+                {finalMatch?.winnerId && selectedTournament && (
+                  <button
+                    onClick={() => {
+                      setTbGamesInput(String(tiebreakerGames[selectedTournament] ?? ''));
+                      setTbSetsInput(String(tiebreakerSets[selectedTournament] ?? ''));
+                      setShowTiebreakerModal(true);
+                    }}
+                    className="text-[10px] text-emerald-400/50 hover:text-emerald-400 transition-colors shrink-0 ml-0.5"
+                    aria-label="Set tiebreaker"
+                  >
+                    {tiebreakerGames[selectedTournament] ? '✓TB' : '+TB'}
+                  </button>
+                )}
+              </div>
+
+              {/* Right: view controls */}
+              <div className="flex items-center gap-0.5 bg-background/60 border border-border/30 rounded-xl px-1.5 py-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
+                  onClick={() => canvasRef.current?.scrollBy({ top: -180, behavior: 'smooth' })}
+                  aria-label="Scroll up"
+                >
+                  <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
+                  onClick={() => canvasRef.current?.scrollBy({ top: 180, behavior: 'smooth' })}
+                  aria-label="Scroll down"
+                >
+                  <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+                </Button>
+                <div className="w-px h-4 bg-border/40 mx-0.5" aria-hidden="true" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
+                  onClick={() => setZoom(z => Math.max(z - 0.1, 0.2))}
+                  aria-label="Zoom out"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" aria-hidden="true" />
+                </Button>
+                <span
+                  className="text-[10px] font-bold text-white/60 w-8 text-center tabular-nums"
+                  aria-live="polite"
+                  aria-label={`Zoom ${Math.round(zoom * 100)}%`}
+                >
+                  {Math.round(zoom * 100)}%
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
+                  onClick={() => setZoom(z => Math.min(z + 0.1, 2))}
+                  aria-label="Zoom in"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" aria-hidden="true" />
+                </Button>
+                <div className="w-px h-4 bg-border/40 mx-0.5" aria-hidden="true" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
+                  onClick={() => {
+                    setZoom(0.6);
+                    if (canvasRef.current) {
+                      canvasRef.current.scrollLeft = 0;
+                      canvasRef.current.scrollTop = 0;
+                    }
+                  }}
+                  aria-label="Reset view to default zoom"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" aria-hidden="true" />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
+                      aria-label="Bracket actions"
+                    >
+                      <MoreHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" side="bottom" sideOffset={8} className="w-44">
+                    <DropdownMenuItem onClick={handleReset}>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Reset Bracket
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleShare}>
+                      <Share2 className="mr-2 h-4 w-4" />
+                      Share Link
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('image')}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Export Image
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('pdf')}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Export PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </motion.div>
+          )}
+
           {/* Main bracket content */}
           <div className="flex-1 relative overflow-hidden">
           {activeRound === 0 ? (
           <>
-          {/* Floating Tournament Selector — lives inside the canvas area so it never covers the tabs */}
-          {currentTournament && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="absolute top-3 left-3 z-20"
-            >
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-card/70 hover:bg-card/90 border border-white/10 hover:border-white/20 rounded-lg transition-all backdrop-blur-sm text-xs font-semibold text-white/80 hover:text-white group"
-                aria-label="Select tournament"
-              >
-                <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="hidden sm:inline max-w-28 truncate">{currentTournament.name}</span>
-                <span className="sm:hidden">{currentTournament.name.substring(0, 3)}</span>
-              </button>
-            </motion.div>
-          )}
-          {/* Floating Action Tools */}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className="absolute top-4 right-4 z-20 cursor-pointer rounded-xl shadow-lg h-9 w-9 opacity-70 hover:opacity-100 border border-border/40 bg-background/70 backdrop-blur-sm flex items-center justify-center p-0 transition-all duration-150"
-              aria-label="Bracket actions"
-            >
-              <MoreHorizontal className="h-4.5 w-4.5" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="bottom" sideOffset={8} className="w-44">
-              <DropdownMenuItem onClick={handleReset}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Reset Bracket
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleShare}>
-                <Share2 className="mr-2 h-4 w-4" />
-                Share Link
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport('image')}>
-                <Download className="mr-2 h-4 w-4" />
-                Export Image
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport('pdf')}>
-                <Download className="mr-2 h-4 w-4" />
-                Export PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Zoom + Scroll Controls */}
-          <div className="absolute bottom-5 right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md"
-            style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
-              onClick={() => canvasRef.current?.scrollBy({ top: -200, behavior: 'smooth' })}
-              aria-label="Scroll up"
-            >
-              <ChevronUp className="w-4 h-4" aria-hidden="true" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
-              onClick={() => canvasRef.current?.scrollBy({ top: 200, behavior: 'smooth' })}
-              aria-label="Scroll down"
-            >
-              <ChevronDown className="w-4 h-4" aria-hidden="true" />
-            </Button>
-            <div className="w-full h-px bg-border/30 my-0.5" aria-hidden="true" />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
-              onClick={() => setZoom(z => Math.min(z + 0.2, 2))}
-              aria-label="Zoom in"
-            >
-              <ZoomIn className="w-4 h-4" aria-hidden="true" />
-            </Button>
-            <div className="text-[10px] text-center font-bold text-muted-foreground/70 w-8" aria-live="polite" aria-label={`Zoom level ${Math.round(zoom * 100)}%`}>
-              {Math.round(zoom * 100)}%
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
-              onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))}
-              aria-label="Zoom out"
-            >
-              <ZoomOut className="w-4 h-4" aria-hidden="true" />
-            </Button>
-            <div className="w-full h-px bg-border/30 my-0.5" aria-hidden="true" />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
-              onClick={() => {
-                setZoom(0.4);
-                if (canvasRef.current) {
-                  canvasRef.current.scrollLeft = 0;
-                  canvasRef.current.scrollTop = 0;
-                }
-              }}
-              aria-label="Reset view to default zoom"
-            >
-              <Maximize2 className="w-4 h-4" aria-hidden="true" />
-            </Button>
-          </div>
-
           {/* Scrollable Canvas */}
           <div 
             ref={canvasRef}
@@ -1148,51 +1175,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Score panel (bottom-left overlay) */}
-          {matches.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15, duration: 0.3 }}
-              className="absolute bottom-5 left-4 z-10 bg-background/90 backdrop-blur-md border border-border/50 rounded-xl px-3.5 py-3 shadow-xl text-xs flex flex-col gap-1.5 min-w-37"
-              style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}
-            >
-              <div className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-0.5">Score</div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-muted-foreground/80">Base</span>
-                <AnimatedNumber value={score.basePoints} className="font-bold tabular-nums" />
-              </div>
-              {score.upsetBonus > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="flex items-center justify-between gap-4"
-                >
-                  <span className="text-amber-400/90">Upset ⚡</span>
-                  <AnimatedNumber value={score.upsetBonus} className="font-bold text-amber-400 tabular-nums" />
-                </motion.div>
-              )}
-              <div className="flex items-center justify-between gap-4 border-t border-border/30 pt-1.5 mt-0.5">
-                <span className="font-bold text-emerald-400">Total</span>
-                <AnimatedNumber value={score.total} className="font-black text-emerald-400 tabular-nums" />
-              </div>
-              <div className="text-[10px] text-muted-foreground/50 tabular-nums">
-                {score.picksCompleted}/127 picks
-              </div>
-              {finalMatch?.winnerId && selectedTournament && (
-                <button
-                  onClick={() => {
-                    setTbGamesInput(String(tiebreakerGames[selectedTournament] ?? ''));
-                    setTbSetsInput(String(tiebreakerSets[selectedTournament] ?? ''));
-                    setShowTiebreakerModal(true);
-                  }}
-                  className="mt-0.5 text-[10px] text-emerald-400/60 hover:text-emerald-400 underline underline-offset-2 text-left transition-colors"
-                >
-                  {tiebreakerGames[selectedTournament] ? '✓ Tiebreaker set' : '+ Set tiebreaker'}
-                </button>
-              )}
-            </motion.div>
-          )}
           </> /* end activeRound === 0 */
           ) : (
             /* ── Round card list ── */
