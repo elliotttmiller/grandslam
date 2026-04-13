@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Match, Player, ROUND_NAMES } from '../lib/bracket-utils';
 import { getBasePoints, getUpsetBonus } from '../lib/scoring';
 import { cn } from '../lib/utils';
@@ -54,9 +54,9 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
     return (
       <motion.div
         className={cn(
-          "flex items-center justify-between px-3 py-3 text-[13px] select-none min-h-[44px]",
+          "flex items-center justify-between px-3 py-3 text-[13px] select-none min-h-11",
           isTop ? "border-b border-border/30" : "",
-          isWinner ? "bg-emerald-500/[0.12] font-semibold text-emerald-300" : "",
+          isWinner ? "bg-emerald-500/12 font-semibold text-emerald-300" : "",
           isLoser ? "opacity-30" : "",
           canSelect ? "cursor-pointer" : "cursor-default",
           !player ? "text-muted-foreground/40 italic" : ""
@@ -78,11 +78,11 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
       >
         <div className="flex items-center gap-2 overflow-hidden min-w-0">
           {player?.seed ? (
-            <span className="text-[10px] text-muted-foreground/70 w-[18px] text-center shrink-0 font-mono leading-none">
+            <span className="text-[10px] text-muted-foreground/70 w-4.5 text-center shrink-0 font-mono leading-none">
               {player.seed}
             </span>
           ) : (
-            <span className="w-[18px] shrink-0" aria-hidden="true" />
+            <span className="w-4.5 shrink-0" aria-hidden="true" />
           )}
           <span className={cn(
             "truncate leading-tight",
@@ -135,7 +135,7 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
       </AnimatePresence>
 
       <div className={cn(
-        "w-[14rem] overflow-hidden transition-all duration-200 rounded-xl border",
+        "w-56 overflow-hidden transition-all duration-200 rounded-xl border",
         "bg-card/70 backdrop-blur-sm shadow-sm",
         match.winnerId
           ? "border-emerald-500/30 border-l-[3px] border-l-emerald-500 shadow-emerald-950/30 shadow-md"
@@ -154,7 +154,7 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             transition={{ duration: 0.2 }}
-            className="flex items-center gap-1.5 px-3 py-1.5 border-t border-emerald-500/10 bg-emerald-500/[0.04]"
+            className="flex items-center gap-1.5 px-3 py-1.5 border-t border-emerald-500/10 bg-emerald-500/4"
           >
             <span className="text-[10px] font-bold text-emerald-400">
               +{earnedBase}{earnedUpset > 0 ? `+${earnedUpset}` : ''} pts
@@ -204,7 +204,7 @@ export function BracketTree({ matchId, matches, onSelectWinner, showScore = true
         </div>
       )}
       <div className="flex items-center">
-        <div className="w-6 h-px bg-gradient-to-r from-border/20 to-border/50" />
+        <div className="w-6 h-px bg-linear-to-r from-border/20 to-border/50" />
         <MatchCard match={match} onSelectWinner={onSelectWinner} showScore={showScore} readOnly={readOnly} />
       </div>
     </div>
