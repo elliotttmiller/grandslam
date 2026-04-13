@@ -23,6 +23,19 @@ import {
 import { getDb } from '@/lib/firebase';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 
+// Helper: Recursively remove undefined values from objects/arrays
+function removeUndefined<T>(obj: T): T {
+  if (Array.isArray(obj)) {
+    return obj.map(removeUndefined) as T;
+  }
+  if (obj !== null && typeof obj === 'object') {
+    return Object.fromEntries(
+      Object.entries(obj).filter(([, v]) => v !== undefined).map(([k, v]) => [k, removeUndefined(v)])
+    ) as T;
+  }
+  return obj;
+}
+
 // ---------------------------------------------------------------------------
 // Read
 // ---------------------------------------------------------------------------
@@ -76,10 +89,8 @@ export async function syncCreatePool(pool: Pool): Promise<Pool | null> {
     const existing = await getDoc(ref);
     if (existing.exists()) return existing.data() as Pool;
     
-    // Remove undefined fields before writing to Firestore (Firestore rejects undefined)
-    const poolData = Object.fromEntries(
-      Object.entries(pool).filter(([, v]) => v !== undefined)
-    );
+    // Remove undefined fields recursively (including entries array)
+    const poolData = removeUndefined(pool);
     
     await setDoc(ref, { ...poolData, updatedAt: serverTimestamp() });
     return pool;
@@ -113,9 +124,7 @@ export async function syncAddEntry(
 ): Promise<boolean> {
   try {
     // Remove undefined fields before writing to Firestore (Firestore rejects undefined)
-    const entryData = Object.fromEntries(
-      Object.entries(entry).filter(([, v]) => v !== undefined)
-    );
+    const entryData = removeUndefined(entry);
     
     await updateDoc(doc(getDb(), 'pools', poolId), {
       entries: arrayUnion(entryData),
@@ -158,11 +167,15 @@ export async function syncUpdateEntry(
         Object.entries(patch).filter(([, v]) => v !== undefined)
       );
       
-      const entries = (pool.entries ?? []).map((e) =>
-        e.id === entryId
+      const entries = (pool.entries ?? []).map((e) => {
+        const updatedEntry = e.id === entryId
           ? { ...e, ...cleanPatch, updatedAt: new Date().toISOString() }
-          : e,
-      );
+          : e;
+        // Filter out undefined values from each entry before writing back to Firestore
+        return Object.fromEntries(
+          Object.entries(updatedEntry).filter(([, v]) => v !== undefined)
+        );
+      });
       tx.update(ref, { entries, updatedAt: serverTimestamp() });
     });
     return true;
