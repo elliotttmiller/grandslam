@@ -1210,15 +1210,15 @@ export default function App() {
                 {/* Match cards — Round 1 grouped in pairs to show which R2 match they feed */}
                 {activeRound === 1 ? (
                   <div className="flex flex-col gap-4">
-                    {Array.from({ length: Math.ceil(activeRoundMatches.length / 2) }, (_, i) => {
-                      const m1 = activeRoundMatches[i * 2];
-                      const m2 = activeRoundMatches[i * 2 + 1];
+                    {Array.from({ length: Math.ceil(activeRoundMatches.length / 2) }, (_, pairIndex) => {
+                      const m1 = activeRoundMatches[pairIndex * 2];
+                      const m2 = activeRoundMatches[pairIndex * 2 + 1];
                       if (!m1) return null;
                       return (
-                        <div key={`r1-group-${i}`} className="flex flex-col gap-1.5 rounded-2xl border border-border/15 bg-white/[0.02] p-2.5">
+                        <div key={`r1-group-${pairIndex}`} className="flex flex-col gap-1.5 rounded-2xl border border-border/15 bg-white/[0.02] p-2.5">
                           <MatchPickCard
                             match={m1}
-                            matchIndex={i * 2}
+                            matchIndex={pairIndex * 2}
                             onSelectWinner={handleSelectWinner}
                             readOnly={isLocked}
                           />
@@ -1231,7 +1231,7 @@ export default function App() {
                               </div>
                               <MatchPickCard
                                 match={m2}
-                                matchIndex={i * 2 + 1}
+                                matchIndex={pairIndex * 2 + 1}
                                 onSelectWinner={handleSelectWinner}
                                 readOnly={isLocked}
                               />

@@ -169,7 +169,12 @@
 .round-card-scroll {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .round-card-scroll {
+    scroll-behavior: smooth;
+  }
 }
 
 /* Ensure buttons have fast tap response */
