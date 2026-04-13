@@ -591,80 +591,25 @@ export default function App() {
       <header className="safe-top fixed top-0 left-0 right-0 border-b border-white/6 bg-card/80 backdrop-blur-3xl z-30 shadow-lg">
         <div className="flex items-center h-13 px-3 gap-2 max-w-7xl mx-auto">
 
-          {/* Left: menu button + title (shrink-0, never pushed into center) */}
-          <div className="flex items-center gap-2 shrink-0">
-            {appView.page === 'bracket' ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-white/60 hover:text-white hover:bg-white/8 h-9 w-9 rounded-xl"
-                onClick={() => setIsSidebarOpen(true)}
-                aria-label="Open tournament selector"
-                aria-expanded={isSidebarOpen}
-                aria-haspopup="dialog"
-              >
-                <Menu className="h-4.5 w-4.5" aria-hidden="true" />
-              </Button>
-            ) : (
-              <div className="h-9 w-9" aria-hidden="true" />
-            )}
-            <h1 className="text-[13px] font-black uppercase tracking-widest hidden sm:block text-white/80">Grand Slam</h1>
-            {appView.page === 'bracket' && currentTournament && (
-              <>
-                <div className="hidden sm:block h-5 w-px bg-white/10" aria-hidden="true" />
-                <span className="text-[12px] font-semibold text-white/55 hidden md:block truncate max-w-40">{currentTournament.name}</span>
-              </>
-            )}
+          {/* Left: menu button */}
+          <div className="flex items-center shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white/60 hover:text-white hover:bg-white/8 h-9 w-9 rounded-xl"
+              onClick={() => setIsSidebarOpen(true)}
+              aria-label="Open navigation menu"
+              aria-expanded={isSidebarOpen}
+              aria-haspopup="dialog"
+            >
+              <Menu className="h-4.5 w-4.5" aria-hidden="true" />
+            </Button>
           </div>
 
-          {/* Center: nav tabs — flex-1 keeps it between the two fixed-width columns */}
-          <div className="flex-1 flex justify-center">
-            <nav aria-label="Main navigation">
-              <div role="tablist" className="flex items-center gap-0.5 bg-white/6 rounded-xl p-1">
-                <button
-                  role="tab"
-                  aria-selected={appView.page === 'dashboard'}
-                  onClick={() => setAppView({ page: 'dashboard' })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
-                    appView.page === 'dashboard'
-                      ? 'bg-white/12 text-foreground shadow-sm'
-                      : 'text-white/45 hover:text-white/75 hover:bg-white/4'
-                  }`}
-                >
-                  <LayoutDashboard className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span className="hidden sm:inline">Dashboard</span>
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={appView.page === 'bracket'}
-                  onClick={() => setAppView({ page: 'bracket' })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
-                    appView.page === 'bracket'
-                      ? 'bg-white/12 text-foreground shadow-sm'
-                      : 'text-white/45 hover:text-white/75 hover:bg-white/4'
-                  }`}
-                >
-                  <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span className="hidden sm:inline">My Bracket</span>
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={appView.page === 'pools' || appView.page === 'pool' || appView.page === 'pool-entry'}
-                  onClick={() => setAppView({ page: 'pools' })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
-                    (appView.page === 'pools' || appView.page === 'pool' || appView.page === 'pool-entry')
-                      ? 'bg-white/12 text-foreground shadow-sm'
-                      : 'text-white/45 hover:text-white/75 hover:bg-white/4'
-                  }`}
-                >
-                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span className="hidden sm:inline">Pools</span>
-                </button>
-              </div>
-            </nav>
-          </div>
+          {/* Center: spacer to balance layout */}
+          <div className="flex-1" />
 
-          {/* Right: score + lock badge + auth (shrink-0, icon-only on mobile) */}
+          {/* Right: auth account menu */}
           <div className="flex items-center gap-1.5 shrink-0">
             {appView.page === 'bracket' && matches.length > 0 && score.total > 0 && (
               <span className="flex items-center gap-1 text-[11px] font-bold bg-emerald-500/15 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20" aria-label={`Score: ${score.total} points`}>
@@ -698,7 +643,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Sidebar Tournament Selector */}
+      {/* Sidebar Navigation */}
       <AnimatePresence>
         {isSidebarOpen && (
           <>
@@ -719,22 +664,80 @@ export default function App() {
               className="fixed top-0 left-0 bottom-0 w-70 bg-card/95 backdrop-blur-xl border-r border-white/8 shadow-2xl z-50 flex flex-col"
               role="dialog"
               aria-modal="true"
-              aria-label="Select tournament"
+              aria-label="Navigation menu"
             >
-              <div className="safe-top flex items-center justify-between px-5 pt-5 pb-3">
-                <h2 className="text-[11px] font-black uppercase tracking-widest text-white/40">Select Tournament</h2>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-white/50 hover:text-white rounded-xl" onClick={() => setIsSidebarOpen(false)} aria-label="Close tournament selector">
+              <div className="safe-top flex items-center justify-between px-5 pt-5 pb-4">
+                <h2 className="text-[11px] font-black uppercase tracking-widest text-white/40">Menu</h2>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-white/50 hover:text-white rounded-xl" onClick={() => setIsSidebarOpen(false)} aria-label="Close navigation menu">
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              
-              <div className="flex-1 flex flex-col gap-0.5 overflow-y-auto custom-scrollbar px-3 pb-3">
-                {loadingTournaments ? (
-                  <div className="flex items-center justify-center py-12 gap-2 text-xs text-white/40">
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    Loading tournaments…
+
+              {/* Navigation Tabs */}
+              <div className="px-3 pb-4 flex flex-col gap-1">
+                <button
+                  onClick={() => {
+                    setAppView({ page: 'dashboard' });
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-semibold transition-all ${
+                    appView.page === 'dashboard'
+                      ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/25'
+                      : 'text-white/70 hover:text-white/90 hover:bg-white/5'
+                  }`}
+                >
+                  <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+                  Dashboard
+                </button>
+
+                <button
+                  onClick={() => {
+                    setAppView({ page: 'bracket' });
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-semibold transition-all ${
+                    appView.page === 'bracket'
+                      ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/25'
+                      : 'text-white/70 hover:text-white/90 hover:bg-white/5'
+                  }`}
+                >
+                  <Trophy className="h-4 w-4" aria-hidden="true" />
+                  Bracket Viewer
+                </button>
+
+                <button
+                  onClick={() => {
+                    setAppView({ page: 'pools' });
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-semibold transition-all ${
+                    (appView.page === 'pools' || appView.page === 'pool' || appView.page === 'pool-entry')
+                      ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/25'
+                      : 'text-white/70 hover:text-white/90 hover:bg-white/5'
+                  }`}
+                >
+                  <Users className="h-4 w-4" aria-hidden="true" />
+                  My Pools
+                </button>
+              </div>
+
+              {/* Divider */}
+              <div className="mx-3 h-px bg-white/8 mb-4" aria-hidden="true" />
+
+              {/* Tournament Selector (only in bracket view) */}
+              {appView.page === 'bracket' && (
+                <>
+                  <div className="px-5 pb-2">
+                    <h3 className="text-[11px] font-black uppercase tracking-widest text-white/40">Tournaments</h3>
                   </div>
-                ) : tournaments.map((t, index) => {
+                  
+                  <div className="flex-1 flex flex-col gap-0.5 overflow-y-auto custom-scrollbar px-3 pb-3">
+                {loadingTournaments ? (
+                    <div className="flex items-center justify-center py-12 gap-2 text-xs text-white/40">
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      Loading tournaments…
+                    </div>
+                  ) : tournaments.map((t, index) => {
                   const tScore = allTournamentScores[t.id];
                   const isSelected = selectedTournament === t.id;
                   const now = new Date();
@@ -798,7 +801,9 @@ export default function App() {
                     </button>
                   );
                 })}
-              </div>
+                  </div>
+                </>
+              )}
 
               {/* Season summary at bottom of sidebar */}
               {Object.keys(allTournamentScores).length > 0 && (
@@ -929,6 +934,25 @@ export default function App() {
               transition={{ duration: 0.2, ease: 'easeOut' }}
               className="absolute inset-0 overflow-hidden bg-muted/5 flex flex-col"
             >
+          {/* Floating Tournament Selector */}
+          {currentTournament && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="absolute top-3 left-3 z-20"
+            >
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-card/70 hover:bg-card/90 border border-white/10 hover:border-white/20 rounded-lg transition-all backdrop-blur-sm text-xs font-semibold text-white/80 hover:text-white group"
+                aria-label="Select tournament"
+              >
+                <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline max-w-28 truncate">{currentTournament.name}</span>
+                <span className="sm:hidden">{currentTournament.name.substring(0, 3)}</span>
+              </button>
+            </motion.div>
+          )}
+
           {/* Round / view selector tabs */}
           <div className="flex-none border-b border-border/20 bg-card/20" role="tablist" aria-label="Bracket rounds">
             <div className="flex overflow-x-auto px-3 py-2 gap-1" style={{ scrollbarWidth: 'none' }}>
