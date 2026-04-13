@@ -606,8 +606,15 @@ export default function App() {
             </Button>
           </div>
 
-          {/* Center: spacer to balance layout */}
-          <div className="flex-1" />
+          {/* Center: app logo */}
+          <div className="flex-1 flex justify-center items-center">
+            <img
+              src="/grandslam/perfect-set-logo.png"
+              alt="Perfect Set"
+              className="h-9 w-9 rounded-xl object-contain"
+              draggable={false}
+            />
+          </div>
 
           {/* Right: auth account menu */}
           <div className="flex items-center gap-1.5 shrink-0">
