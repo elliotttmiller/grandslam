@@ -13,6 +13,8 @@ import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
 import { PoolBracketEditor } from './components/pools/PoolBracketEditor';
 import { MatchPickCard } from './components/pools/MatchPickCard';
 import { AuthModal } from './components/AuthModal';
+import { AccountMenu } from './components/AccountMenu';
+import { Dashboard } from './components/Dashboard';
 import { cn } from './lib/utils';
 import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH } from './lib/pool-storage';
 import { setAuthStorageUserId, authGetItem, authSetItem, authRemoveItem } from './lib/auth-storage';
@@ -24,6 +26,7 @@ import { CelebrationOverlay } from './components/CelebrationOverlay';
 import type { User } from 'firebase/auth';
 
 export type AppView =
+  | { page: 'dashboard' }
   | { page: 'bracket' }
   | { page: 'pools' }
   | { page: 'pool'; poolId: string }
@@ -47,7 +50,7 @@ export default function App() {
   const [showTiebreakerModal, setShowTiebreakerModal] = useState(false);
   const [tbGamesInput, setTbGamesInput] = useState('');
   const [tbSetsInput, setTbSetsInput] = useState('');
-  const [appView, setAppView] = useState<AppView>({ page: 'bracket' });
+  const [appView, setAppView] = useState<AppView>({ page: 'dashboard' });
   // Code from a `?join=POOL_CODE` URL param — passed to PoolHub to pre-fill the join modal.
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null);
   // Set to true when a newly-created pool fails to sync to Firestore, so we can
@@ -625,6 +628,19 @@ export default function App() {
               <div role="tablist" className="flex items-center gap-0.5 bg-white/6 rounded-xl p-1">
                 <button
                   role="tab"
+                  aria-selected={appView.page === 'dashboard'}
+                  onClick={() => setAppView({ page: 'dashboard' })}
+                  className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
+                    appView.page === 'dashboard'
+                      ? 'bg-white/12 text-foreground shadow-sm'
+                      : 'text-white/45 hover:text-white/75 hover:bg-white/4'
+                  }`}
+                >
+                  <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
+                  Dashboard
+                </button>
+                <button
+                  role="tab"
                   aria-selected={appView.page === 'bracket'}
                   onClick={() => setAppView({ page: 'bracket' })}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
@@ -638,10 +654,10 @@ export default function App() {
                 </button>
                 <button
                   role="tab"
-                  aria-selected={appView.page !== 'bracket'}
+                  aria-selected={appView.page === 'pools' || appView.page === 'pool' || appView.page === 'pool-entry'}
                   onClick={() => setAppView({ page: 'pools' })}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
-                    appView.page !== 'bracket'
+                    (appView.page === 'pools' || appView.page === 'pool' || appView.page === 'pool-entry')
                       ? 'bg-white/12 text-foreground shadow-sm'
                       : 'text-white/45 hover:text-white/75 hover:bg-white/4'
                   }`}
@@ -675,27 +691,13 @@ export default function App() {
             )}
             {/* Auth button — shown once the initial auth check is complete */}
             {authChecked && (
-              (authUser && !authUser.isAnonymous) ? (
-                <button
-                  onClick={handleSignOut}
-                  title={`Signed in as ${authUser.email ?? 'user'} — click to sign out`}
-                  aria-label={`Signed in as ${authUser.email ?? 'user'}. Click to sign out.`}
-                  className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors px-2 py-1 rounded-lg hover:bg-emerald-500/10"
-                >
-                  <UserCircle className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline truncate max-w-20">{authUser.email}</span>
-                  <LogOut className="h-3 w-3 opacity-60" aria-hidden="true" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  aria-label="Sign in or create account"
-                  className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 hover:text-white/80 transition-colors px-2 py-1 rounded-lg hover:bg-white/6"
-                >
-                  <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span className="hidden sm:inline">Sign In</span>
-                </button>
-              )
+              <AccountMenu
+                authChecked={authChecked}
+                authUser={authUser}
+                onSignOut={handleSignOut}
+                onSignInClick={() => setShowAuthModal(true)}
+                onMyPoolsClick={() => setAppView({ page: 'pools' })}
+              />
             )}
           </div>
         </div>
@@ -825,6 +827,21 @@ export default function App() {
       {/* Main Content - View Router */}
       <div className="fixed top-(--header-height) left-0 right-0 bottom-0 overflow-hidden">
         <AnimatePresence mode="wait" initial={false}>
+          {appView.page === 'dashboard' && (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, x: 18 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 18 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="absolute inset-0"
+            >
+              <Dashboard
+                onNavigate={setAppView}
+                onCreatePool={() => setAppView({ page: 'pools' })}
+              />
+            </motion.div>
+          )}
           {appView.page === 'pools' && (
             <motion.div
               key="pools"
