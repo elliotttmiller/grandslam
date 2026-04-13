@@ -591,7 +591,7 @@ export default function App() {
       <header className="safe-top fixed top-0 left-0 right-0 border-b border-white/6 bg-card/80 backdrop-blur-3xl z-30 shadow-lg">
         <div className="flex items-center h-13 px-3 gap-2 max-w-7xl mx-auto">
 
-          {/* Left: menu button + logo + title (all shrink-0, never pushed into center) */}
+          {/* Left: menu button + title (shrink-0, never pushed into center) */}
           <div className="flex items-center gap-2 shrink-0">
             {appView.page === 'bracket' ? (
               <Button
@@ -608,11 +608,6 @@ export default function App() {
             ) : (
               <div className="h-9 w-9" aria-hidden="true" />
             )}
-            <img
-              src={`${import.meta.env.BASE_URL}tennis_logo.png`}
-              alt="Grand Slam"
-              className="h-6 w-6 transition-transform hover:rotate-12 duration-500 shrink-0"
-            />
             <h1 className="text-[13px] font-black uppercase tracking-widest hidden sm:block text-white/80">Grand Slam</h1>
             {appView.page === 'bracket' && currentTournament && (
               <>
