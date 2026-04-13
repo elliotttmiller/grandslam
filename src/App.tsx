@@ -23,6 +23,7 @@ import { onAuthStateChanged, signOut, signInAnonymously } from './services/authS
 import { getUserId, setUserName } from './lib/user-identity';
 import { AnimatedNumber } from './components/AnimatedNumber';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
+import { BracketLoadingSkeleton, RoundListSkeleton } from './components/BracketLoadingSkeleton';
 import type { User } from 'firebase/auth';
 
 export type AppView =
@@ -1129,22 +1130,7 @@ export default function App() {
             onPointerLeave={handlePointerUp}
           >
             {loading ? (
-              <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground/60">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
-                >
-                  <RefreshCw className="h-6 w-6" />
-                </motion.div>
-                <motion.span
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className="text-sm font-medium"
-                >
-                  Building bracket…
-                </motion.span>
-              </div>
+              <BracketLoadingSkeleton />
             ) : finalMatch && (
               <div 
                 className="min-w-max min-h-max"
@@ -1169,6 +1155,8 @@ export default function App() {
           </div>
 
           </> /* end activeRound === 0 */
+          ) : loading ? (
+            <RoundListSkeleton />
           ) : (
             /* ── Round card list ── */
             <div
