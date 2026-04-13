@@ -130,7 +130,7 @@ function SkeletonPlayerRow({ isTop }: { isTop: boolean }) {
 function SkeletonPickCard() {
   return (
     <div className="rounded-2xl border border-border/30 bg-card/40 overflow-hidden">
-      <SkeletonPlayerRow isTop />
+      <SkeletonPlayerRow isTop={true} />
       <div className="flex items-center px-4 py-1.5 gap-3">
         <div className="h-px flex-1 bg-border/10" />
         <div className="skeleton w-4 h-2 rounded-sm" />
