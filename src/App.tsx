@@ -57,6 +57,7 @@ export default function App() {
   // Firebase Authentication state — tracked via onAuthStateChanged at root level
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [authError, setAuthError] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Subscribe to auth state changes once on mount
@@ -71,17 +72,22 @@ export default function App() {
         // sign-in resolves: this prevents a brief window where pool reads/
         // writes would run without any auth token.
         signInAnonymously()
+          .then(() => {
+            setAuthError(false);
+          })
           .catch((err) => {
             console.warn(
               'Anonymous sign-in failed — Firestore pool operations may not work:',
               err,
             );
+            setAuthError(true);
           })
           .finally(() => {
             setAuthChecked(true);
           });
       } else {
         // Named user or freshly-created anonymous user — auth is ready.
+        setAuthError(false);
         setAuthChecked(true);
       }
     });
@@ -816,6 +822,7 @@ export default function App() {
                 onCreatePool={handleCreatePool}
                 initialJoinCode={pendingJoinCode ?? undefined}
                 onJoinHandled={() => setPendingJoinCode(null)}
+                authError={authError}
               />
             </motion.div>
           )}
