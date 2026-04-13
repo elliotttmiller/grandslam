@@ -157,11 +157,19 @@
 /* Bracket canvas GPU acceleration */
 .bracket-canvas {
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .bracket-inner {
   will-change: transform;
   transition: transform 0.15s ease-out;
+}
+
+/* Round card list — natural iOS momentum scroll */
+.round-card-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  scroll-behavior: smooth;
 }
 
 /* Ensure buttons have fast tap response */

@@ -37,7 +37,7 @@ export default function App() {
   const [selectedTournament, setSelectedTournament] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
-  const [zoom, setZoom] = useState(0.6);
+  const [zoom, setZoom] = useState(0.7);
   const [loading, setLoading] = useState(false);
   const [loadingTournaments, setLoadingTournaments] = useState(true);
   // 0 = full bracket canvas, 1-7 = round-by-round card view
@@ -268,7 +268,7 @@ export default function App() {
 
         const initialMatches = generateBracket(players);
         setMatches(initialMatches);
-        setZoom(0.6);
+        setZoom(0.7);
       } catch (error) {
         console.error("Failed to fetch players:", error);
       } finally {
@@ -993,10 +993,10 @@ export default function App() {
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-              className="flex-none border-b border-border/15 bg-card/20 backdrop-blur-sm px-3 py-1.5 flex items-center justify-between gap-2"
+              className="flex-none border-b border-border/15 bg-card/20 backdrop-blur-sm px-2 py-1.5 flex items-center gap-2"
             >
               {/* Left: score info */}
-              <div className="flex items-center gap-2 bg-background/60 border border-border/30 rounded-xl px-3 py-1.5 text-xs min-w-0 overflow-hidden">
+              <div className="flex items-center gap-1.5 bg-background/60 border border-border/30 rounded-xl px-2.5 py-1.5 text-xs min-w-0 overflow-hidden flex-1">
                 <Trophy className="h-3 w-3 text-emerald-400 shrink-0" aria-hidden="true" />
                 <span className="font-black text-emerald-400 tabular-nums shrink-0">
                   <AnimatedNumber value={score.total} />
@@ -1055,13 +1055,6 @@ export default function App() {
                 >
                   <ZoomOut className="w-3.5 h-3.5" aria-hidden="true" />
                 </Button>
-                <span
-                  className="text-[10px] font-bold text-white/60 w-8 text-center tabular-nums"
-                  aria-live="polite"
-                  aria-label={`Zoom ${Math.round(zoom * 100)}%`}
-                >
-                  {Math.round(zoom * 100)}%
-                </span>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1077,7 +1070,7 @@ export default function App() {
                   size="icon"
                   className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
                   onClick={() => {
-                    setZoom(0.6);
+                    setZoom(0.7);
                     if (canvasRef.current) {
                       canvasRef.current.scrollLeft = 0;
                       canvasRef.current.scrollTop = 0;
@@ -1178,7 +1171,9 @@ export default function App() {
           </> /* end activeRound === 0 */
           ) : (
             /* ── Round card list ── */
-            <div className="h-full overflow-y-auto custom-scrollbar">
+            <div
+              className="h-full overflow-y-auto overflow-x-hidden custom-scrollbar round-card-scroll"
+            >
               <div className="px-4 py-4 max-w-lg mx-auto" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
 
                 {/* Round header with completion ring */}
@@ -1212,18 +1207,53 @@ export default function App() {
                   );
                 })()}
 
-                {/* Match cards */}
-                <div className="flex flex-col gap-3">
-                  {activeRoundMatches.map((match, idx) => (
-                    <MatchPickCard
-                      key={match.id}
-                      match={match}
-                      matchIndex={idx}
-                      onSelectWinner={handleSelectWinner}
-                      readOnly={isLocked}
-                    />
-                  ))}
-                </div>
+                {/* Match cards — Round 1 grouped in pairs to show which R2 match they feed */}
+                {activeRound === 1 ? (
+                  <div className="flex flex-col gap-4">
+                    {Array.from({ length: Math.ceil(activeRoundMatches.length / 2) }, (_, i) => {
+                      const m1 = activeRoundMatches[i * 2];
+                      const m2 = activeRoundMatches[i * 2 + 1];
+                      if (!m1) return null;
+                      return (
+                        <div key={`r1-group-${i}`} className="flex flex-col gap-1.5 rounded-2xl border border-border/15 bg-white/[0.02] p-2.5">
+                          <MatchPickCard
+                            match={m1}
+                            matchIndex={i * 2}
+                            onSelectWinner={handleSelectWinner}
+                            readOnly={isLocked}
+                          />
+                          {m2 && (
+                            <>
+                              <div className="flex items-center gap-2 px-1" aria-hidden="true">
+                                <div className="h-px flex-1 bg-border/20" />
+                                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/30">winner advances</span>
+                                <div className="h-px flex-1 bg-border/20" />
+                              </div>
+                              <MatchPickCard
+                                match={m2}
+                                matchIndex={i * 2 + 1}
+                                onSelectWinner={handleSelectWinner}
+                                readOnly={isLocked}
+                              />
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {activeRoundMatches.map((match, idx) => (
+                      <MatchPickCard
+                        key={match.id}
+                        match={match}
+                        matchIndex={idx}
+                        onSelectWinner={handleSelectWinner}
+                        readOnly={isLocked}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
