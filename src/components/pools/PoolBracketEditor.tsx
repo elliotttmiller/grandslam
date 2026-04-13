@@ -33,7 +33,7 @@ export function PoolBracketEditor({
   readOnly = false,
 }: PoolBracketEditorProps) {
   const [matches, setMatches] = useState<Match[]>(entry.matches);
-  const [zoom, setZoom] = useState(0.4);
+  const [zoom, setZoom] = useState(0.6);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [showTiebreaker, setShowTiebreaker] = useState(false);
   const [tbGamesInput, setTbGamesInput] = useState(String(entry.tiebreakerGames ?? ''));
@@ -162,23 +162,23 @@ export function PoolBracketEditor({
       {/* Round / view selector tabs */}
       <div className="flex-none border-b border-border/20 bg-card/20" role="tablist" aria-label="Bracket rounds">
         <div className="flex overflow-x-auto px-3 py-2 gap-1" style={{ scrollbarWidth: 'none' }}>
-          {/* "All" tab — full canvas */}
+          {/* Canvas/draw tab — icon only */}
           <button
             role="tab"
+            aria-label="Full bracket draw"
             aria-selected={activeRound === 0}
             onClick={() => setActiveRound(0)}
             className={cn(
-              'flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
+              'flex-none flex items-center justify-center px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
               activeRound === 0
                 ? 'bg-white/12 text-foreground'
                 : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/4',
             )}
           >
-            <LayoutGrid className="h-3 w-3" aria-hidden="true" />
-            All
+            <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
 
-          {/* Round 1-7 tabs */}
+          {/* Round 1-7 tabs — march madness style naming */}
           {([1, 2, 3, 4, 5, 6, 7] as const).map(round => {
             const rc = roundCompletion[round];
             const isComplete = rc && rc.total > 0 && rc.done === rc.total;
@@ -206,45 +206,95 @@ export function PoolBracketEditor({
         </div>
       </div>
 
+      {/* Horizontal toolbar — canvas mode only */}
+      {activeRound === 0 && (
+        <div className="flex-none border-b border-border/15 bg-card/20 backdrop-blur-sm px-3 py-1.5 flex items-center justify-between gap-2">
+          {/* Left: score info */}
+          {score.total > 0 ? (
+            <div className="flex items-center gap-2 bg-background/60 border border-border/30 rounded-xl px-3 py-1.5 text-xs min-w-0 overflow-hidden">
+              <span className="font-black text-emerald-400 tabular-nums shrink-0">{score.total}</span>
+              <span className="text-white/35 shrink-0">pts</span>
+              <span className="text-white/25 shrink-0">·</span>
+              <span className="text-white/50 tabular-nums shrink-0">{score.picksCompleted}/{totalMatches}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-xs text-white/30 px-1">
+              <LayoutGrid className="h-3 w-3" aria-hidden="true" />
+              <span>Make picks to start scoring</span>
+            </div>
+          )}
+
+          {/* Right: zoom controls */}
+          <div className="flex items-center gap-0.5 bg-background/60 border border-border/30 rounded-xl px-1.5 py-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
+              onClick={() => containerRef.current?.scrollBy({ top: -180, behavior: 'smooth' })}
+              aria-label="Scroll up"
+            >
+              <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
+              onClick={() => containerRef.current?.scrollBy({ top: 180, behavior: 'smooth' })}
+              aria-label="Scroll down"
+            >
+              <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+            </Button>
+            <div className="w-px h-4 bg-border/40 mx-0.5" aria-hidden="true" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
+              onClick={() => setZoom((z: number) => Math.max(z - 0.1, 0.2))}
+              aria-label="Zoom out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" aria-hidden="true" />
+            </Button>
+            <span
+              className="text-[10px] font-bold text-white/60 w-8 text-center tabular-nums"
+              aria-live="polite"
+              aria-label={`Zoom ${Math.round(zoom * 100)}%`}
+            >
+              {Math.round(zoom * 100)}%
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
+              onClick={() => setZoom((z: number) => Math.min(z + 0.1, 2))}
+              aria-label="Zoom in"
+            >
+              <ZoomIn className="w-3.5 h-3.5" aria-hidden="true" />
+            </Button>
+            <div className="w-px h-4 bg-border/40 mx-0.5" aria-hidden="true" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
+              onClick={() => {
+                setZoom(0.6);
+                if (containerRef.current) {
+                  containerRef.current.scrollLeft = 0;
+                  containerRef.current.scrollTop = 0;
+                }
+              }}
+              aria-label="Reset view to default zoom"
+            >
+              <Maximize2 className="w-3.5 h-3.5" aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Main content */}
       <main className="flex-1 relative overflow-hidden bg-muted/5">
         {activeRound === 0 ? (
           /* ── Full bracket canvas ── */
           <>
-            {/* Zoom + Scroll controls */}
-            <div className="absolute bottom-4 right-4 z-10 flex flex-col items-center gap-1 bg-background/80 backdrop-blur-sm p-1.5 rounded-xl border border-border/40 shadow-md">
-              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => containerRef.current?.scrollBy({ top: -200, behavior: 'smooth' })} aria-label="Scroll up">
-                <ChevronUp className="w-4 h-4" aria-hidden="true" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => containerRef.current?.scrollBy({ top: 200, behavior: 'smooth' })} aria-label="Scroll down">
-                <ChevronDown className="w-4 h-4" aria-hidden="true" />
-              </Button>
-              <div className="w-full h-px bg-border/30 my-0.5" aria-hidden="true" />
-              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom((z: number) => Math.min(z + 0.2, 2))} aria-label="Zoom in">
-                <ZoomIn className="w-4 h-4" aria-hidden="true" />
-              </Button>
-              <div className="text-[10px] font-bold text-muted-foreground/70 tabular-nums w-8 text-center" aria-live="polite" aria-label={`Zoom ${Math.round(zoom * 100)}%`}>{Math.round(zoom * 100)}%</div>
-              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation" onClick={() => setZoom((z: number) => Math.max(z - 0.2, 0.2))} aria-label="Zoom out">
-                <ZoomOut className="w-4 h-4" aria-hidden="true" />
-              </Button>
-              <div className="w-full h-px bg-border/30 my-0.5" aria-hidden="true" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 rounded-lg hover:bg-white/10 touch-manipulation"
-                onClick={() => {
-                  setZoom(0.4);
-                  if (containerRef.current) {
-                    containerRef.current.scrollLeft = 0;
-                    containerRef.current.scrollTop = 0;
-                  }
-                }}
-                aria-label="Reset view to default zoom"
-              >
-                <Maximize2 className="w-4 h-4" aria-hidden="true" />
-              </Button>
-            </div>
-
             {/* Scrollable bracket */}
             <div
               ref={containerRef}

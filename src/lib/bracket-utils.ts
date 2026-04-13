@@ -23,12 +23,12 @@ export type Tournament = {
 };
 
 export const ROUND_NAMES: Record<number, string> = {
-  1: 'R128', 2: 'R64', 3: 'R32', 4: 'R16', 5: 'QF', 6: 'SF', 7: 'F'
+  1: '1st Rd', 2: '2nd Rd', 3: '3rd Rd', 4: 'Rd of 16', 5: 'Quarters', 6: 'Semis', 7: 'Final'
 };
 
 export const ROUND_FULL_NAMES: Record<number, string> = {
-  1: 'Round of 128', 2: 'Round of 64', 3: 'Round of 32', 4: 'Round of 16',
-  5: 'Quarterfinals', 6: 'Semifinals', 7: 'Final'
+  1: 'First Round', 2: 'Second Round', 3: 'Third Round', 4: 'Round of 16',
+  5: 'Quarterfinals', 6: 'Semifinals', 7: 'Championship'
 };
 
 export const BASE_POINTS: Record<number, number> = {

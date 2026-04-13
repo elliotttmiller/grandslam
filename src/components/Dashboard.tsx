@@ -57,7 +57,7 @@ export function Dashboard({ onNavigate, onCreatePool }: DashboardProps) {
   };
 
   return (
-    <div className="flex-1 overflow-auto">
+    <div className="flex-1 overflow-y-auto overflow-x-hidden">
       <motion.div
         className="min-h-full bg-linear-to-b from-background to-background p-6 sm:p-8"
         initial={{ opacity: 0 }}
