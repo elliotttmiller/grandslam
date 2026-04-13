@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserCircle, LogOut, LogIn, UserPlus, LayoutGrid } from 'lucide-react';
+import { UserCircle, LogOut, LogIn, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { User } from 'firebase/auth';
 
@@ -9,7 +9,6 @@ interface AccountMenuProps {
   authUser: User | null;
   onSignOut: () => Promise<void>;
   onSignInClick: () => void;
-  onMyPoolsClick: () => void;
 }
 
 export function AccountMenu({
@@ -17,7 +16,6 @@ export function AccountMenu({
   authUser,
   onSignOut,
   onSignInClick,
-  onMyPoolsClick,
 }: AccountMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -26,11 +24,6 @@ export function AccountMenu({
   const handleSignOut = async () => {
     setIsOpen(false);
     await onSignOut();
-  };
-
-  const handleMyPools = () => {
-    setIsOpen(false);
-    onMyPoolsClick();
   };
 
   const handleSignIn = () => {
@@ -91,16 +84,6 @@ export function AccountMenu({
                       {authUser?.email}
                     </p>
                   </div>
-
-                  {/* My Pools */}
-                  <button
-                    role="menuitem"
-                    onClick={handleMyPools}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-foreground hover:bg-white/6 transition-colors text-left border-b border-white/5 last:border-b-0"
-                  >
-                    <LayoutGrid className="h-4 w-4 text-muted-foreground/60 shrink-0" aria-hidden="true" />
-                    <span>My Pools</span>
-                  </button>
 
                   {/* Sign Out */}
                   <button

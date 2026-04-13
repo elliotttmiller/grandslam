@@ -636,7 +636,6 @@ export default function App() {
                 authUser={authUser}
                 onSignOut={handleSignOut}
                 onSignInClick={() => setShowAuthModal(true)}
-                onMyPoolsClick={() => setAppView({ page: 'pools' })}
               />
             )}
           </div>
