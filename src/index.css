@@ -228,7 +228,8 @@ textarea {
 
   /* Touch target minimum (44px × 44px for mobile, 48px recommended for accessibility) */
   .touch-target {
-    @apply min-h-11 min-w-11;
+    min-height: 44px;
+    min-width: 44px;
   }
 
   /* Safe area padding for mobile notches */
@@ -249,22 +250,51 @@ textarea {
 
   /* Gesture-friendly interactions */
   .gesture-interactive {
-    @apply touch-target gpu-accelerated cursor-pointer select-none transition-all duration-150;
+    min-height: 44px;
+    min-width: 44px;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    perspective: 1000px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 150ms ease-out;
   }
 
   /* Dense spacing for mobile */
   .mobile-dense {
-    @apply gap-2 p-2 md:gap-3 md:p-3;
+    gap: 0.5rem;
+    padding: 0.5rem;
+  }
+  @media (min-width: 768px) {
+    .mobile-dense {
+      gap: 0.75rem;
+      padding: 0.75rem;
+    }
   }
 
   /* Standard mobile spacing */
   .mobile-standard {
-    @apply gap-3 p-3 md:gap-4 md:p-4;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+  @media (min-width: 768px) {
+    .mobile-standard {
+      gap: 1rem;
+      padding: 1rem;
+    }
   }
 
   /* Loose mobile spacing */
   .mobile-loose {
-    @apply gap-4 p-4 md:gap-6 md:p-6;
+    gap: 1rem;
+    padding: 1rem;
+  }
+  @media (min-width: 768px) {
+    .mobile-loose {
+      gap: 1.5rem;
+      padding: 1.5rem;
+    }
   }
 }
 
@@ -384,11 +414,11 @@ textarea {
   /* Desktop-only hover states */
   button:hover,
   [role="button"]:hover {
-    @apply transition-all duration-200;
+    transition: all 200ms ease-out;
   }
 
   .group:hover {
-    @apply transition-all duration-200;
+    transition: all 200ms ease-out;
   }
 }
 
@@ -396,13 +426,15 @@ textarea {
   /* Mobile touch interactions - remove hover effects */
   button:hover,
   [role="button"]:hover {
-    @apply hover:bg-transparent;
+    background-color: transparent;
   }
 
   /* Active/pressed state for touch */
   button:active,
   [role="button"]:active {
-    @apply opacity-75 scale-95 transition-all duration-75;
+    opacity: 0.75;
+    transform: scale(0.95);
+    transition: all 75ms ease-out;
   }
 }
 
@@ -493,11 +525,19 @@ select:focus {
 
 /* ========== LOADING STATES ========== */
 .skeleton {
-  @apply animate-shimmer bg-card/60;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200px 100%;
+  animation: shimmer 2s infinite;
+  background-color: rgba(9, 9, 9, 0.6);
 }
 
 .loading-pulse {
-  @apply animate-pulse-soft;
+  animation: pulse-soft 2s ease-in-out infinite;
 }
 
 /* ========== ACCESSIBILITY & FOCUS STATES ========== */
@@ -511,5 +551,7 @@ button:focus-visible,
 [role="button"]:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  @apply ring-2 ring-offset-2 ring-emerald-500;
+  outline: 2px solid hsl(142 76% 36%);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px hsl(142 76% 36% / 0.1);
 }
