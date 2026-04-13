@@ -833,7 +833,7 @@ export default function App() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 18 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="absolute inset-0"
+              className="absolute inset-0 flex flex-col"
             >
               <Dashboard
                 onNavigate={setAppView}
@@ -848,7 +848,7 @@ export default function App() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 18 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="absolute inset-0"
+              className="absolute inset-0 flex flex-col"
             >
               <PoolHub
                 onNavigate={setAppView}
@@ -895,7 +895,7 @@ export default function App() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 18 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
-                className="absolute inset-0"
+                className="absolute inset-0 flex flex-col"
               >
                 <PoolBracketEditor
                   pool={pool}
