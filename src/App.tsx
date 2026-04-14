@@ -66,6 +66,7 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalDefaultMode, setAuthModalDefaultMode] = useState<'sign-in' | 'sign-up'>('sign-in');
 
   // Subscribe to auth state changes once on mount
   useEffect(() => {
@@ -97,6 +98,16 @@ export default function App() {
 
   const handleSignOut = async () => {
     await signOut();
+  };
+
+  const handleSignInClick = () => {
+    setAuthModalDefaultMode('sign-in');
+    setShowAuthModal(true);
+  };
+
+  const handleSignUpClick = () => {
+    setAuthModalDefaultMode('sign-up');
+    setShowAuthModal(true);
   };
 
   // App view ref — lets the celebration effect read current page without adding
@@ -544,6 +555,7 @@ export default function App() {
       {/* Authentication modal */}
       <AuthModal
         open={showAuthModal}
+        defaultMode={authModalDefaultMode}
         onClose={() => setShowAuthModal(false)}
         onSuccess={(user) => {
           setAuthUser(user);
@@ -643,7 +655,8 @@ export default function App() {
                 authChecked={authChecked}
                 authUser={authUser}
                 onSignOut={handleSignOut}
-                onSignInClick={() => setShowAuthModal(true)}
+                onSignInClick={handleSignInClick}
+                onSignUpClick={handleSignUpClick}
               />
             )}
           </div>

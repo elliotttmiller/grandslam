@@ -9,6 +9,7 @@ interface AccountMenuProps {
   authUser: User | null;
   onSignOut: () => Promise<void>;
   onSignInClick: () => void;
+  onSignUpClick: () => void;
 }
 
 export function AccountMenu({
@@ -16,6 +17,7 @@ export function AccountMenu({
   authUser,
   onSignOut,
   onSignInClick,
+  onSignUpClick,
 }: AccountMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -29,6 +31,11 @@ export function AccountMenu({
   const handleSignIn = () => {
     setIsOpen(false);
     onSignInClick();
+  };
+
+  const handleSignUp = () => {
+    setIsOpen(false);
+    onSignUpClick();
   };
 
   if (!authChecked) {
@@ -110,7 +117,7 @@ export function AccountMenu({
                   {/* Sign Up */}
                   <button
                     role="menuitem"
-                    onClick={handleSignIn}
+                    onClick={handleSignUp}
                     className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors text-left"
                   >
                     <UserPlus className="h-4 w-4 shrink-0" aria-hidden="true" />

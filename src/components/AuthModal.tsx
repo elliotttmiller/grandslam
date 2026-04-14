@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, LogIn, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,14 +10,21 @@ interface AuthModalProps {
   onClose: () => void;
   onSuccess: (user: User) => void;
   onContinueAsGuest?: () => Promise<void>;
+  defaultMode?: 'sign-in' | 'sign-up';
 }
 
-export function AuthModal({ open, onClose, onSuccess, onContinueAsGuest }: AuthModalProps) {
-  const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
+export function AuthModal({ open, onClose, onSuccess, onContinueAsGuest, defaultMode = 'sign-in' }: AuthModalProps) {
+  const [mode, setMode] = useState<'sign-in' | 'sign-up'>(defaultMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Reset mode to the requested default each time the modal opens so stale
+  // state from a previous session never causes the wrong form to appear.
+  useEffect(() => {
+    if (open) setMode(defaultMode);
+  }, [open, defaultMode]);
 
   const resetForm = () => {
     setEmail('');
