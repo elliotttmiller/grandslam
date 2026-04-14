@@ -49,11 +49,7 @@ export async function signInAnonymously(): Promise<void> {
 
 /** Sign out the currently authenticated user. */
 export async function signOut(): Promise<void> {
-  try {
-    await _signOut(getAuth());
-  } catch {
-    // Ignore sign-out errors — the local session is considered cleared.
-  }
+  await _signOut(getAuth());
 }
 
 /**
