@@ -56,6 +56,10 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
   }, [pool.id]);
 
   const savedUserName = localStorage.getItem('gs_user_name') ?? '';
+  const currentUserId = getUserId();
+  // Show delete button only if the current user created the pool.
+  // For legacy pools without `createdBy`, fall back to showing the button.
+  const canDeletePool = !pool.createdBy || pool.createdBy === currentUserId;
 
   const rankedEntries = useMemo((): RankedEntry[] => {
     const scored = pool.entries.map(e => ({
@@ -455,15 +459,17 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
               <Plus className="h-3.5 w-3.5 mr-1.5" />
               Import Entry
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10"
-              onClick={() => setShowDeleteConfirm(true)}
-            >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              Delete Pool
-            </Button>
+            {canDeletePool && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                Delete Pool
+              </Button>
+            )}
           </div>
         </div>
       </div>
