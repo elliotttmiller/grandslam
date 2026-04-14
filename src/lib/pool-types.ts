@@ -23,6 +23,8 @@ export interface Pool {
   createdAt: string;
   officialMatches: Match[];
   entries: PoolEntry[];
+  /** Persistent device-local user identifier of the pool creator. */
+  createdBy?: string;
   /** ISO timestamp of last server-side modification. */
   updatedAt?: string;
 }

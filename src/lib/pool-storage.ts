@@ -56,7 +56,8 @@ export function createPool(
   name: string,
   tournamentId: string,
   tournamentName: string,
-  officialMatches: Match[]
+  officialMatches: Match[],
+  createdBy?: string
 ): Pool {
   const pool: Pool = {
     id: generatePoolCode(),
@@ -66,6 +67,7 @@ export function createPool(
     createdAt: new Date().toISOString(),
     officialMatches,
     entries: [],
+    ...(createdBy ? { createdBy } : {}),
   };
   savePool(pool);
   return pool;

@@ -320,9 +320,9 @@ export default function App() {
     const officialMatches = await generateOfficialDraw(tournamentId, tournamentName);
     // Persist user name so subsequent joins pre-fill the field
     setUserName(userName);
-    const pool = createPool(poolName, tournamentId, tournamentName, officialMatches);
     const entryId = generateId();
     const userId = getUserId();
+    const pool = createPool(poolName, tournamentId, tournamentName, officialMatches, userId);
     const newEntry = {
       id: entryId,
       userId,
@@ -940,7 +940,7 @@ export default function App() {
                     setAppView({ page: 'pool', poolId: pool.id });
                   }}
                   onBack={() => setAppView({ page: 'pool', poolId: pool.id })}
-                  readOnly={entry.isSubmitted}
+                  readOnly={entry.isSubmitted || (entry.userId !== undefined && entry.userId !== getUserId())}
                 />
               </motion.div>
             );
