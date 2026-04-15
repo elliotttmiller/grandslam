@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useBracketCanvas } from './hooks/useBracketCanvas';
-import { fetchTournamentPlayers, fetchTournamentsWithDates, TournamentData } from './services/geminiService';
+import { fetchTournamentPlayers, fetchTournamentsWithDates, TournamentData, CACHE_KEY_TOURNAMENTS } from './services/geminiService';
 import { generateBracket, advancePlayer, Match, Player, ROUND_NAMES, ROUND_FULL_NAMES } from './lib/bracket-utils';
 import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
@@ -250,6 +250,28 @@ export default function App() {
       }
     }
     initTournaments();
+  }, []);
+
+  // Refresh Grand Slam tournament dates — clears user-scoped cache then re-fetches
+  const handleRefreshTournaments = useCallback(async () => {
+    authRemoveItem(CACHE_KEY_TOURNAMENTS);
+    setLoadingTournaments(true);
+    try {
+      const data = await fetchTournamentsWithDates();
+      const now = new Date();
+      const sorted = data.sort((a, b) => {
+        const diffA = new Date(a.startDate).getTime() - now.getTime();
+        const diffB = new Date(b.startDate).getTime() - now.getTime();
+        if (diffA < 0 && diffB >= 0) return 1;
+        if (diffA >= 0 && diffB < 0) return -1;
+        return Math.abs(diffA) - Math.abs(diffB);
+      });
+      setTournaments(sorted);
+    } catch (error) {
+      console.error('Failed to refresh tournaments:', error);
+    } finally {
+      setLoadingTournaments(false);
+    }
   }, []);
 
   // Initialize bracket with AI
@@ -759,8 +781,16 @@ export default function App() {
               {/* Tournament Selector (only in bracket view) */}
               {appView.page === 'bracket' && (
                 <>
-                  <div className="px-5 pb-2">
+                  <div className="px-5 pb-2 flex items-center justify-between">
                     <h3 className="text-[11px] font-black uppercase tracking-widest text-white/40">Tournaments</h3>
+                    <button
+                      onClick={handleRefreshTournaments}
+                      disabled={loadingTournaments}
+                      className="text-white/30 hover:text-white/60 transition-colors disabled:opacity-40"
+                      aria-label="Refresh Grand Slam tournament dates"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${loadingTournaments ? 'animate-spin' : ''}`} aria-hidden="true" />
+                    </button>
                   </div>
                   
                   <div className="flex-1 flex flex-col gap-0.5 overflow-y-auto custom-scrollbar px-3 pb-3">
