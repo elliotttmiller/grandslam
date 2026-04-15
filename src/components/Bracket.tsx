@@ -12,9 +12,16 @@ interface MatchCardProps {
   onSelectWinner: (matchId: string, winnerId: string) => void;
   showScore?: boolean;
   readOnly?: boolean;
+  officialWinnerId?: string | null;
 }
 
-export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = false }: MatchCardProps) {
+export function MatchCard({
+  match,
+  onSelectWinner,
+  showScore = true,
+  readOnly = false,
+  officialWinnerId,
+}: MatchCardProps) {
   // Track when the winner was just set to trigger animations
   const [justPicked, setJustPicked] = useState(false);
   const prevWinnerIdRef = useRef<string | null>(match.winnerId);
@@ -44,19 +51,27 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
   const earnedBase = winner ? getBasePoints(match.round) : 0;
   const earnedUpset = winner ? getUpsetBonus(winner.seed, loser?.seed, match.round) : 0;
   const isUpset = earnedUpset > 0;
+  const hasOfficialResult = officialWinnerId !== undefined && officialWinnerId !== null;
+  const isCorrectPick = !!match.winnerId && hasOfficialResult && match.winnerId === officialWinnerId;
+  const isIncorrectPick = !!match.winnerId && hasOfficialResult && match.winnerId !== officialWinnerId;
 
   const renderPlayer = (player: Player | null, isTop: boolean) => {
     const isWinner = match.winnerId === player?.id;
     const isLoser = match.winnerId && match.winnerId !== player?.id;
     const canSelect = !readOnly && match.player1 && match.player2 && !match.winnerId;
     const isQualifier = player?.name?.startsWith(QUALIFIER_PREFIX) || player?.name === TBD_NAME;
+    const isWinnerIncorrect = isWinner && hasOfficialResult && player?.id !== officialWinnerId;
 
     return (
       <motion.div
         className={cn(
           "flex items-center justify-between px-3 py-3 text-[13px] select-none min-h-11",
           isTop ? "border-b border-border/30" : "",
-          isWinner ? "bg-emerald-500/12 font-semibold text-emerald-300" : "",
+          isWinner
+            ? isWinnerIncorrect
+              ? "bg-red-500/12 font-semibold text-red-300"
+              : "bg-emerald-500/12 font-semibold text-emerald-300"
+            : "",
           isLoser ? "opacity-30" : "",
           canSelect ? "cursor-pointer" : "cursor-default",
           !player ? "text-muted-foreground/40 italic" : ""
@@ -87,7 +102,11 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
           <span className={cn(
             "truncate leading-tight",
             isQualifier && !isWinner ? "text-muted-foreground/60 text-[12px]" : "",
-            isWinner ? "text-emerald-300" : ""
+            isWinner
+              ? isWinnerIncorrect
+                ? "text-red-300"
+                : "text-emerald-300"
+              : ""
           )}>
             {player ? player.name : 'TBD'}
           </span>
@@ -97,7 +116,10 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 500, damping: 20 }}
-            className="text-[10px] ml-2 shrink-0 text-emerald-400 font-black"
+            className={cn(
+              "text-[10px] ml-2 shrink-0 font-black",
+              isWinnerIncorrect ? "text-red-400" : "text-emerald-400",
+            )}
             aria-hidden="true"
           >✓</motion.span>
         )}
@@ -138,7 +160,9 @@ export function MatchCard({ match, onSelectWinner, showScore = true, readOnly = 
         "w-56 overflow-hidden transition-all duration-200 rounded-xl border",
         "bg-card/70 backdrop-blur-sm shadow-sm",
         match.winnerId
-          ? "border-emerald-500/30 border-l-[3px] border-l-emerald-500 shadow-emerald-950/30 shadow-md"
+          ? isIncorrectPick
+            ? "border-red-500/30 border-l-[3px] border-l-red-500 shadow-red-950/20 shadow-md"
+            : "border-emerald-500/30 border-l-[3px] border-l-emerald-500 shadow-emerald-950/30 shadow-md"
           : "border-border/40 border-l-[3px] border-l-border/20",
         !match.winnerId ? "group-hover:border-border/70 group-hover:shadow-md" : "",
         justPicked ? "shadow-emerald-500/20 shadow-lg" : ""
@@ -187,9 +211,17 @@ interface BracketTreeProps {
   onSelectWinner: (matchId: string, winnerId: string) => void;
   showScore?: boolean;
   readOnly?: boolean;
+  officialWinnersByMatchId?: Record<string, string | null>;
 }
 
-export function BracketTree({ matchId, matches, onSelectWinner, showScore = true, readOnly = false }: BracketTreeProps) {
+export function BracketTree({
+  matchId,
+  matches,
+  onSelectWinner,
+  showScore = true,
+  readOnly = false,
+  officialWinnersByMatchId,
+}: BracketTreeProps) {
   const match = matches.find(m => m.id === matchId);
   if (!match) return null;
 
@@ -199,13 +231,33 @@ export function BracketTree({ matchId, matches, onSelectWinner, showScore = true
     <div className="flex items-center gap-0">
       {children.length === 2 && (
         <div className="flex flex-col justify-center gap-2">
-          <BracketTree matchId={children[0].id} matches={matches} onSelectWinner={onSelectWinner} showScore={showScore} readOnly={readOnly} />
-          <BracketTree matchId={children[1].id} matches={matches} onSelectWinner={onSelectWinner} showScore={showScore} readOnly={readOnly} />
+          <BracketTree
+            matchId={children[0].id}
+            matches={matches}
+            onSelectWinner={onSelectWinner}
+            showScore={showScore}
+            readOnly={readOnly}
+            officialWinnersByMatchId={officialWinnersByMatchId}
+          />
+          <BracketTree
+            matchId={children[1].id}
+            matches={matches}
+            onSelectWinner={onSelectWinner}
+            showScore={showScore}
+            readOnly={readOnly}
+            officialWinnersByMatchId={officialWinnersByMatchId}
+          />
         </div>
       )}
       <div className="flex items-center">
         <div className="w-6 h-px bg-linear-to-r from-border/20 to-border/50" />
-        <MatchCard match={match} onSelectWinner={onSelectWinner} showScore={showScore} readOnly={readOnly} />
+        <MatchCard
+          match={match}
+          onSelectWinner={onSelectWinner}
+          showScore={showScore}
+          readOnly={readOnly}
+          officialWinnerId={officialWinnersByMatchId?.[match.id]}
+        />
       </div>
     </div>
   );
