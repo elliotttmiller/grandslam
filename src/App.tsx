@@ -26,6 +26,7 @@ import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { BracketLoadingSkeleton, RoundListSkeleton } from './components/BracketLoadingSkeleton';
 import { AuthGate } from './components/AuthGate';
 import { MastersTournamentModal } from './components/MastersTournamentModal';
+import { DevPanel } from './components/DevPanel';
 import { MASTERS_TOURNAMENTS, GRAND_SLAM_STATIC_INFO, surfaceColor, type MastersTournament } from './lib/masters-tournaments';
 import type { Pool } from './lib/pool-types';
 
@@ -42,6 +43,16 @@ export default function App() {
   const [tournaments, setTournaments] = useState<TournamentData[]>([]);
   const [selectedTournament, setSelectedTournament] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Compute once — the URL search params don't change after initial load.
+  const isDevMode = useMemo(
+    () => import.meta.env.DEV || new URLSearchParams(window.location.search).get('dev') === '1',
+    [],
+  );
+
+  // Bumped whenever the dev panel mutates localStorage pools so dependent views re-read.
+  const [devPoolVersion, setDevPoolVersion] = useState(0);
+  const handleDevPoolChanged = useCallback(() => setDevPoolVersion(v => v + 1), []);
   const [matches, setMatches] = useState<Match[]>([]);
   const [zoom, setZoom] = useState(0.7);
   const [loading, setLoading] = useState(false);
@@ -1169,7 +1180,7 @@ export default function App() {
               className="absolute inset-0 flex flex-col"
             >
               <PoolHub
-                key={authUser?.uid ?? 'guest'}
+                key={`${authUser?.uid ?? 'guest'}-${devPoolVersion}`}
                 onNavigate={setAppView}
                 tournaments={tournaments}
                 onCreatePool={handleCreatePool}
@@ -1641,6 +1652,15 @@ export default function App() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Developer panel — only visible in Vite dev mode or when ?dev=1 is in the URL */}
+      {isDevMode && (
+        <DevPanel
+          authUser={authUser}
+          onNavigate={setAppView}
+          onPoolChanged={handleDevPoolChanged}
+        />
+      )}
     </div>
   );
 }
