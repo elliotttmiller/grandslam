@@ -288,7 +288,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
             <p className="text-xs text-white/50 leading-relaxed mb-3">
               Creates a <strong className="text-white/70">Madrid 2025</strong> pool with
               {' '}<strong className="text-white/70">5 simulated users</strong> — each with a different
-              bracket prediction: Sinner wins, Alcaraz wins, Djokovic run, Zverev wins, and a partial entry.
+              bracket prediction: Zverev wins, Draper wins, Ruud dark horse, Medvedev deep run, and a partial entry.
             </p>
 
             <div className="flex gap-2">
