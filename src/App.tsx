@@ -25,7 +25,7 @@ import { AnimatedNumber } from './components/AnimatedNumber';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { BracketLoadingSkeleton, RoundListSkeleton } from './components/BracketLoadingSkeleton';
 import { MastersTournamentModal } from './components/MastersTournamentModal';
-import { MASTERS_TOURNAMENTS, type MastersTournament } from './lib/masters-tournaments';
+import { MASTERS_TOURNAMENTS, GRAND_SLAM_STATIC_INFO, type MastersTournament } from './lib/masters-tournaments';
 import type { User } from 'firebase/auth';
 
 export type AppView =
@@ -837,10 +837,10 @@ export default function App() {
                 </>
               )}
 
-              {/* Masters 1000 Tournament Search — always visible */}
+              {/* Tournament Search — always visible (Grand Slams + Masters 1000) */}
               <div className={cn('flex flex-col', appView.page === 'bracket' ? 'border-t border-white/[0.07] pt-4 mt-1 max-h-64 overflow-hidden' : 'flex-1 overflow-hidden')}>
                 <div className="px-5 pb-2 shrink-0">
-                  <h3 className="text-[11px] font-black uppercase tracking-widest text-white/40">Masters 1000</h3>
+                  <h3 className="text-[11px] font-black uppercase tracking-widest text-white/40">Tournaments</h3>
                 </div>
                 {/* Search input */}
                 <div className="px-3 pb-2 shrink-0">
@@ -852,73 +852,166 @@ export default function App() {
                       value={mastersSearchQuery}
                       onChange={e => setMastersSearchQuery(e.target.value)}
                       className="w-full bg-white/[0.05] border border-white/[0.09] rounded-xl pl-8.5 pr-3 py-2 text-[12px] text-white/80 placeholder-white/25 focus:outline-none focus:ring-1 focus:ring-amber-500/40 focus:border-amber-500/30 transition-all"
-                      aria-label="Search ATP Masters 1000 tournaments"
+                      aria-label="Search all tournaments"
                     />
                   </div>
                 </div>
                 {/* Tournament list */}
                 <div className="flex-1 flex flex-col gap-0.5 overflow-y-auto custom-scrollbar px-3 pb-3">
                   {(() => {
-                    const filtered = MASTERS_TOURNAMENTS.filter(t =>
-                      mastersSearchQuery.trim() === '' ||
-                      t.name.toLowerCase().includes(mastersSearchQuery.toLowerCase()) ||
-                      t.shortName.toLowerCase().includes(mastersSearchQuery.toLowerCase()) ||
-                      t.location.toLowerCase().includes(mastersSearchQuery.toLowerCase())
+                    const q = mastersSearchQuery.toLowerCase().trim();
+
+                    // Build enriched Grand Slam entries using dynamic dates when available
+                    const filteredSlams = GRAND_SLAM_STATIC_INFO.map(info => {
+                      const dynamic = tournaments.find(t => t.id === info.id);
+                      return {
+                        ...info,
+                        name: dynamic?.name ?? info.shortName,
+                        startDate: dynamic?.startDate ?? '',
+                        endDate: dynamic?.endDate ?? '',
+                        logo: dynamic?.logo,
+                      };
+                    }).filter(t =>
+                      !q ||
+                      t.name.toLowerCase().includes(q) ||
+                      t.shortName.toLowerCase().includes(q) ||
+                      t.location.toLowerCase().includes(q)
                     );
-                    if (filtered.length === 0) {
+
+                    const filteredMasters = MASTERS_TOURNAMENTS.filter(t =>
+                      !q ||
+                      t.name.toLowerCase().includes(q) ||
+                      t.shortName.toLowerCase().includes(q) ||
+                      t.location.toLowerCase().includes(q)
+                    );
+
+                    if (filteredSlams.length === 0 && filteredMasters.length === 0) {
                       return <p className="text-[12px] text-white/30 text-center py-6">No tournaments match "{mastersSearchQuery}"</p>;
                     }
-                    return filtered.map(t => {
-                      const now = new Date();
-                      const start = new Date(t.approxStart);
-                      const end = new Date(t.approxEnd);
-                      const isActive = now >= start && now <= end;
-                      const isPast = now > end;
-                      const surfaceTag = t.surface === 'Clay'
-                        ? 'text-orange-400 bg-orange-500/10 border-orange-500/20'
-                        : t.surface === 'Indoor Hard'
-                          ? 'text-violet-400 bg-violet-500/10 border-violet-500/20'
-                          : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-                      return (
-                        <button
-                          key={t.id}
-                          onClick={() => {
-                            setSelectedMastersTournament(t);
-                            setIsSidebarOpen(false);
-                          }}
-                          className="flex flex-col gap-1 p-3 rounded-xl transition-all text-left hover:bg-white/5 active:bg-white/8"
-                          aria-label={`View details for ${t.name}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-400/60" aria-hidden="true" />
-                            <span className="text-[13px] font-semibold truncate flex-1 min-w-0 text-white/80">
-                              {t.shortName}
-                            </span>
-                            {isActive && (
-                              <span className="shrink-0 text-[9px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded-full border border-emerald-500/25">
-                                Live
-                              </span>
-                            )}
-                            {isPast && !isActive && (
-                              <span className="shrink-0 text-[9px] font-bold text-white/25 bg-white/4 px-1.5 py-0.5 rounded-full border border-white/8">
-                                Past
-                              </span>
-                            )}
-                            <span className={cn('shrink-0 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full border', surfaceTag)}>
-                              {t.surface === 'Indoor Hard' ? 'Indoor' : t.surface}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 pl-[22px] text-white/30">
-                            <Calendar className="h-3 w-3 shrink-0" aria-hidden="true" />
-                            <span className="text-[11px] truncate">
-                              {new Date(t.approxStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                              {' – '}
-                              {new Date(t.approxEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    });
+
+                    return (
+                      <>
+                        {filteredSlams.length > 0 && (
+                          <>
+                            <p className="px-2 pt-1 pb-1 text-[10px] font-black uppercase tracking-widest text-white/25">Grand Slams</p>
+                            {filteredSlams.map(t => {
+                              const now = new Date();
+                              const start = t.startDate ? new Date(t.startDate) : null;
+                              const end = t.endDate ? new Date(t.endDate) : null;
+                              const isActive = start && end ? now >= start && now <= end : false;
+                              const isPast = end ? now > end : false;
+                              const surfaceTag = t.surface === 'Clay'
+                                ? 'text-orange-400 bg-orange-500/10 border-orange-500/20'
+                                : t.surface === 'Grass'
+                                  ? 'text-green-400 bg-green-500/10 border-green-500/20'
+                                  : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+                              return (
+                                <button
+                                  key={t.id}
+                                  onClick={() => {
+                                    setSelectedTournament(t.id);
+                                    setAppView({ page: 'bracket' });
+                                    setIsSidebarOpen(false);
+                                  }}
+                                  className="flex flex-col gap-1 p-3 rounded-xl transition-all text-left hover:bg-white/5 active:bg-white/8"
+                                  aria-label={`View bracket for ${t.name}`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    {t.logo ? (
+                                      <img src={t.logo} alt="" className="h-4 w-4 object-contain shrink-0" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                    ) : (
+                                      <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-400/60" aria-hidden="true" />
+                                    )}
+                                    <span className="text-[13px] font-semibold truncate flex-1 min-w-0 text-white/80">
+                                      {t.shortName}
+                                    </span>
+                                    {isActive && (
+                                      <span className="shrink-0 text-[9px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded-full border border-emerald-500/25">
+                                        Live
+                                      </span>
+                                    )}
+                                    {isPast && !isActive && (
+                                      <span className="shrink-0 text-[9px] font-bold text-white/25 bg-white/4 px-1.5 py-0.5 rounded-full border border-white/8">
+                                        Past
+                                      </span>
+                                    )}
+                                    <span className={cn('shrink-0 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full border', surfaceTag)}>
+                                      {t.surface}
+                                    </span>
+                                  </div>
+                                  {start && end && (
+                                    <div className="flex items-center gap-1.5 pl-[22px] text-white/30">
+                                      <Calendar className="h-3 w-3 shrink-0" aria-hidden="true" />
+                                      <span className="text-[11px] truncate">
+                                        {start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                        {' – '}
+                                        {end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                      </span>
+                                    </div>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </>
+                        )}
+                        {filteredMasters.length > 0 && (
+                          <>
+                            <p className="px-2 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-white/25">Masters 1000</p>
+                            {filteredMasters.map(t => {
+                              const now = new Date();
+                              const start = new Date(t.approxStart);
+                              const end = new Date(t.approxEnd);
+                              const isActive = now >= start && now <= end;
+                              const isPast = now > end;
+                              const surfaceTag = t.surface === 'Clay'
+                                ? 'text-orange-400 bg-orange-500/10 border-orange-500/20'
+                                : t.surface === 'Indoor Hard'
+                                  ? 'text-violet-400 bg-violet-500/10 border-violet-500/20'
+                                  : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+                              return (
+                                <button
+                                  key={t.id}
+                                  onClick={() => {
+                                    setSelectedMastersTournament(t);
+                                    setIsSidebarOpen(false);
+                                  }}
+                                  className="flex flex-col gap-1 p-3 rounded-xl transition-all text-left hover:bg-white/5 active:bg-white/8"
+                                  aria-label={`View details for ${t.name}`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-400/60" aria-hidden="true" />
+                                    <span className="text-[13px] font-semibold truncate flex-1 min-w-0 text-white/80">
+                                      {t.shortName}
+                                    </span>
+                                    {isActive && (
+                                      <span className="shrink-0 text-[9px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded-full border border-emerald-500/25">
+                                        Live
+                                      </span>
+                                    )}
+                                    {isPast && !isActive && (
+                                      <span className="shrink-0 text-[9px] font-bold text-white/25 bg-white/4 px-1.5 py-0.5 rounded-full border border-white/8">
+                                        Past
+                                      </span>
+                                    )}
+                                    <span className={cn('shrink-0 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full border', surfaceTag)}>
+                                      {t.surface === 'Indoor Hard' ? 'Indoor' : t.surface}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 pl-[22px] text-white/30">
+                                    <Calendar className="h-3 w-3 shrink-0" aria-hidden="true" />
+                                    <span className="text-[11px] truncate">
+                                      {new Date(t.approxStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                      {' – '}
+                                      {new Date(t.approxEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </>
+                        )}
+                      </>
+                    );
                   })()}
                 </div>
               </div>
