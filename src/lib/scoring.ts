@@ -58,7 +58,7 @@ export function calculateBracketScore(matches: Match[]): BracketScore {
   let basePoints = 0;
   let upsetBonus = 0;
   let picksCompleted = 0;
-  const totalRounds = matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 7;
+  const totalRounds = matches.length > 0 ? matches.reduce((max, m) => Math.max(max, m.round), 0) : 7;
 
   for (const match of matches) {
     if (!match.winnerId) continue;
@@ -87,7 +87,7 @@ export function calculatePoolEntryScore(
   let basePoints = 0;
   let upsetBonus = 0;
   let picksCompleted = 0;
-  const totalRounds = entryMatches.length > 0 ? Math.max(...entryMatches.map(m => m.round)) : 7;
+  const totalRounds = entryMatches.length > 0 ? entryMatches.reduce((max, m) => Math.max(max, m.round), 0) : 7;
 
   for (const match of entryMatches) {
     if (!match.winnerId) continue;

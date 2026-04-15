@@ -159,8 +159,10 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
 
       const entryId = generateId();
       const bracketName = joinBracketName.trim() || `${joinUserName.trim()}'s Bracket`;
-      // Use Firebase UID when available for cross-device entry ownership
-      const userId = authUser?.uid ?? getUserId();
+      // Use Firebase UID for cross-device entry ownership.
+      // The auth gate ensures authUser is always a real account here,
+      // but fall back to the device UUID as a safety net.
+      const userId = authUser!.uid;
 
       const newEntry = {
         id: entryId,

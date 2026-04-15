@@ -67,8 +67,10 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
       setIsLive(true);
       savePool(updatedPool);
       setPoolData(updatedPool);
-      // Don't clobber an in-progress edit of official matches
-      setEditingOfficialMatches(prev => prev === null ? null : prev);
+      // Preserve an in-progress results edit: leave editingOfficialMatches
+      // untouched so Firestore snapshots don't clobber unsaved local edits.
+      // The no-op functional update (prev => prev) intentionally does nothing.
+      setEditingOfficialMatches(prev => prev);
       onPoolUpdateRef.current?.();
     });
     return unsubscribe;
@@ -221,14 +223,15 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
     }
 
     const entryId = generateId();
-    const bracketName = `${savedUserName || authUser!.email?.split('@')[0] || 'My'}'s Bracket`;
+    const displayName = savedUserName || authUser!.email?.split('@')[0] || 'Participant';
+    const bracketName = `${displayName}'s Bracket`;
     const freshPool = getPool(poolData.id);
     if (!freshPool) return;
 
     const entry = {
       id: entryId,
       userId: authUser!.uid,
-      userName: savedUserName || authUser!.email?.split('@')[0] || 'Participant',
+      userName: displayName,
       bracketName,
       matches: freshPool.officialMatches.map(m => ({ ...m, winnerId: null })),
       isSubmitted: false,
