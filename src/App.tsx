@@ -6,12 +6,15 @@ import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Button } from './components/ui/button';
-import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown, LogIn, LogOut, UserCircle, LayoutDashboard, Search, FlaskConical } from 'lucide-react';
+import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown, LogIn, LogOut, UserCircle, LayoutDashboard, Search, FlaskConical, Globe, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PoolHub } from './components/pools/PoolHub';
 import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
 import { PoolBracketEditor } from './components/pools/PoolBracketEditor';
 import { MatchPickCard } from './components/pools/MatchPickCard';
+import { LeagueHub } from './components/leagues/LeagueHub';
+import { MyLeagues } from './components/leagues/MyLeagues';
+import { LeagueDetail } from './components/leagues/LeagueDetail';
 import { AuthModal } from './components/AuthModal';
 import { AccountMenu } from './components/AccountMenu';
 import { Dashboard } from './components/Dashboard';
@@ -39,7 +42,10 @@ export type AppView =
   | { page: 'bracket' }
   | { page: 'pools' }
   | { page: 'pool'; poolId: string }
-  | { page: 'pool-entry'; poolId: string; entryId: string };
+  | { page: 'pool-entry'; poolId: string; entryId: string }
+  | { page: 'leagues' }
+  | { page: 'my-leagues' }
+  | { page: 'league-detail'; leagueId: string };
 
 export default function App() {
   const [tournaments, setTournaments] = useState<TournamentData[]>([]);
@@ -912,6 +918,36 @@ export default function App() {
                   My Pools
                 </button>
 
+                <button
+                  onClick={() => {
+                    setAppView({ page: 'leagues' });
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-semibold transition-all ${
+                    (appView.page === 'leagues' || appView.page === 'league-detail')
+                      ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/25'
+                      : 'text-white/70 hover:text-white/90 hover:bg-white/5'
+                  }`}
+                >
+                  <Globe className="h-4 w-4" aria-hidden="true" />
+                  Leagues
+                </button>
+
+                <button
+                  onClick={() => {
+                    setAppView({ page: 'my-leagues' });
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-semibold transition-all ${
+                    appView.page === 'my-leagues'
+                      ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/25'
+                      : 'text-white/70 hover:text-white/90 hover:bg-white/5'
+                  }`}
+                >
+                  <Star className="h-4 w-4" aria-hidden="true" />
+                  My Leagues
+                </button>
+
                 {/* Simulator nav item */}
                 <button
                   onClick={() => {
@@ -1294,6 +1330,55 @@ export default function App() {
               </motion.div>
             );
           })()}
+          {appView.page === 'leagues' && (
+            <motion.div
+              key="leagues"
+              initial={{ opacity: 0, x: 18 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 18 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="absolute inset-0 flex flex-col"
+            >
+              <LeagueHub
+                onNavigate={setAppView}
+                authUser={authUser}
+                onRequireAuth={handleRequireAuth}
+              />
+            </motion.div>
+          )}
+          {appView.page === 'my-leagues' && (
+            <motion.div
+              key="my-leagues"
+              initial={{ opacity: 0, x: 18 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 18 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="absolute inset-0 flex flex-col"
+            >
+              <MyLeagues
+                onNavigate={setAppView}
+                authUser={authUser}
+              />
+            </motion.div>
+          )}
+          {appView.page === 'league-detail' && (
+            <motion.div
+              key={`league-${appView.leagueId}`}
+              initial={{ opacity: 0, x: 18 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 18 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="absolute inset-0 flex flex-col"
+            >
+              <LeagueDetail
+                leagueId={appView.leagueId}
+                onNavigate={setAppView}
+                authUser={authUser}
+                tournaments={tournaments}
+                onGenerateOfficialDraw={generateOfficialDraw}
+              />
+            </motion.div>
+          )}
           {appView.page === 'bracket' && (
             <motion.main
               key="bracket"

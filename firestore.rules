@@ -12,5 +12,21 @@ service cloud.firestore {
                          && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
+    // League documents — same auth constraints as pools.
+    // Any authenticated non-anonymous user can read public leagues and write
+    // to leagues they are a member of or have created.
+    match /leagues/{leagueId} {
+      allow read: if request.auth != null
+                  && request.auth.token.firebase.sign_in_provider != 'anonymous';
+      allow create: if request.auth != null
+                    && request.auth.token.firebase.sign_in_provider != 'anonymous'
+                    && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+                    && request.auth.token.firebase.sign_in_provider != 'anonymous';
+      allow delete: if request.auth != null
+                    && request.auth.token.firebase.sign_in_provider != 'anonymous'
+                    && resource.data.createdBy == request.auth.uid;
+    }
+
   }
 }
