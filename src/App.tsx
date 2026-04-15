@@ -16,8 +16,8 @@ import { AuthModal } from './components/AuthModal';
 import { AccountMenu } from './components/AccountMenu';
 import { Dashboard } from './components/Dashboard';
 import { cn } from './lib/utils';
-import { createPool, addEntry, getPool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH } from './lib/pool-storage';
-import { setAuthStorageUserId, authGetItem, authSetItem, authRemoveItem } from './lib/auth-storage';
+import { createPool, addEntry, getPool, getPools, savePool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH, POOLS_STORAGE_KEY } from './lib/pool-storage';
+import { setAuthStorageUserId, getCurrentAuthUserId, collectAndClearScopedData, authGetItem, authSetItem, authRemoveItem } from './lib/auth-storage';
 import { syncCreatePool, syncAddEntry, syncUpdateEntry } from './services/poolSyncService';
 import { onAuthStateChanged, signOut, signInAnonymously } from './services/authService';
 import { getUserId, setUserName } from './lib/user-identity';
@@ -25,7 +25,8 @@ import { AnimatedNumber } from './components/AnimatedNumber';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { BracketLoadingSkeleton, RoundListSkeleton } from './components/BracketLoadingSkeleton';
 import { MastersTournamentModal } from './components/MastersTournamentModal';
-import { MASTERS_TOURNAMENTS, GRAND_SLAM_STATIC_INFO, type MastersTournament } from './lib/masters-tournaments';
+import { MASTERS_TOURNAMENTS, GRAND_SLAM_STATIC_INFO, surfaceColor, type MastersTournament } from './lib/masters-tournaments';
+import type { Pool } from './lib/pool-types';
 import type { User } from 'firebase/auth';
 
 export type AppView =
@@ -67,7 +68,10 @@ export default function App() {
   const [mastersSearchQuery, setMastersSearchQuery] = useState('');
   const [selectedMastersTournament, setSelectedMastersTournament] = useState<MastersTournament | null>(null);
 
-  // Firebase Authentication state — tracked via onAuthStateChanged at root level
+  // Tracks the auth user across re-renders for the migration logic
+  const prevAuthUserRef = useRef<{ uid: string; isAnonymous: boolean } | null>(null);
+  // True only during the first onAuthStateChanged callback (page load / session restore)
+  const isFirstAuthCallbackRef = useRef(true);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState(false);
@@ -77,27 +81,68 @@ export default function App() {
   // Subscribe to auth state changes once on mount
   useEffect(() => {
     const unsubscribe = onAuthStateChanged((user) => {
-      setAuthUser(user);
-      
-      // Scope storage to the current user's UID to prevent cache collision
-      // when multiple users sign in on the same device
+      const isFirstCall = isFirstAuthCallbackRef.current;
+      isFirstAuthCallbackRef.current = false;
+
       if (user) {
-        setAuthStorageUserId(user.uid);
+        // On a fresh sign-in (not the initial session-restore on page load), migrate
+        // any data the user created while not signed in (guest namespace) or while
+        // using an anonymous/different account.
+        if (!isFirstCall) {
+          const prevUser = prevAuthUserRef.current;
+          const prevUserId = prevUser?.uid ?? null; // null → guest namespace
+
+          // Collect and remove all data from the previous namespace.
+          const prevData = collectAndClearScopedData(prevUserId);
+
+          // If transitioning from an anonymous session, also check the guest namespace.
+          let guestData: Record<string, string> = {};
+          if (prevUser?.isAnonymous) {
+            guestData = collectAndClearScopedData(null);
+          }
+
+          // Switch to the new user's namespace.
+          setAuthStorageUserId(user.uid);
+
+          // Merge all collected data into the new namespace.
+          const allPrev = { ...guestData, ...prevData };
+
+          // Pools: parse and upsert individually (existing pools take priority).
+          const poolsRaw = allPrev[POOLS_STORAGE_KEY];
+          if (poolsRaw) {
+            try {
+              const oldPools: Pool[] = JSON.parse(poolsRaw);
+              const existing = getPools();
+              const existingIds = new Set(existing.map((p: Pool) => p.id));
+              for (const pool of oldPools) {
+                if (!existingIds.has(pool.id)) {
+                  savePool(pool);
+                }
+              }
+            } catch { /* ignore */ }
+          }
+
+          // Other data (bracket states, etc.): copy only if not already present.
+          for (const [baseKey, value] of Object.entries(allPrev)) {
+            if (baseKey === POOLS_STORAGE_KEY) continue;
+            if (!authGetItem(baseKey)) {
+              authSetItem(baseKey, value);
+            }
+          }
+        } else {
+          // Page load / session restore — just switch namespace, no migration needed.
+          setAuthStorageUserId(user.uid);
+        }
+
+        prevAuthUserRef.current = { uid: user.uid, isAnonymous: user.isAnonymous };
       } else {
         setAuthStorageUserId(null);
+        prevAuthUserRef.current = null;
       }
-      
-      if (!user) {
-        // No existing session — user must either sign in/sign up with email,
-        // or explicitly choose to continue as a guest (which triggers anonymous sign-in).
-        // We mark auth as checked but let the user decide their auth method.
-        setAuthError(false);
-        setAuthChecked(true);
-      } else {
-        // Named user or existing session — auth is ready.
-        setAuthError(false);
-        setAuthChecked(true);
-      }
+
+      setAuthUser(user);
+      setAuthError(false);
+      setAuthChecked(true);
     });
     return unsubscribe;
   }, []);
@@ -130,13 +175,16 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const toastCounter = useRef(0);
+
+  // Re-load the bracket state for the selected tournament when the auth user changes
+  // (namespace may have switched; this ensures we always read from the right scope).
   useEffect(() => {
     if (!selectedTournament) return;
     const saved = authGetItem(`bracket_state_${selectedTournament}`);
     if (saved) {
       setMatches(JSON.parse(saved));
     }
-  }, [selectedTournament]);
+  }, [selectedTournament, authUser?.uid]);
 
   // Save bracket to localStorage whenever matches change
   useEffect(() => {
@@ -162,6 +210,23 @@ export default function App() {
     localStorage.setItem('tiebreaker_sets', JSON.stringify(tiebreakerSets));
   }, [tiebreakerSets]);
 
+  // Sort tournaments so the closest upcoming (or currently live) appear first,
+  // followed by past tournaments (most recently ended first).
+  function sortByUpcomingFirst(a: TournamentData, b: TournamentData): number {
+    const now = new Date();
+    const endA = new Date(a.endDate);
+    const endB = new Date(b.endDate);
+    const startA = new Date(a.startDate);
+    const startB = new Date(b.startDate);
+    const isPastA = endA < now;
+    const isPastB = endB < now;
+    if (!isPastA && isPastB) return -1;
+    if (isPastA && !isPastB) return 1;
+    if (!isPastA && !isPastB) return startA.getTime() - startB.getTime();
+    // Both past: most recently ended first
+    return endB.getTime() - endA.getTime();
+  }
+
   // Fetch tournaments on mount
   useEffect(() => {
     async function initTournaments() {
@@ -177,10 +242,8 @@ export default function App() {
           endDate: t.approxEnd,
           type: 'masters' as const,
         }));
-        // Sort all tournaments soonest to latest by start date
-        const sorted = [...grandSlams, ...mastersTournaments].sort((a, b) =>
-          new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
-        );
+        // Sort: closest upcoming first, then past tournaments most-recent first
+        const sorted = [...grandSlams, ...mastersTournaments].sort(sortByUpcomingFirst);
         
         setTournaments(sorted);
         
@@ -265,9 +328,7 @@ export default function App() {
         endDate: t.approxEnd,
         type: 'masters' as const,
       }));
-      const sorted = [...grandSlams, ...mastersTournaments].sort((a, b) =>
-        new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
-      );
+      const sorted = [...grandSlams, ...mastersTournaments].sort(sortByUpcomingFirst);
       setTournaments(sorted);
     } catch (error) {
       console.error('Failed to refresh tournaments:', error);
@@ -904,7 +965,7 @@ export default function App() {
                 </>
               )}
 
-              {/* Tournament Search — always visible (Grand Slams + Masters 1000) */}
+              {/* Tournament Search — always visible (Grand Slams + Masters 1000 combined, sorted by date) */}
               <div className={cn('flex flex-col', appView.page === 'bracket' ? 'border-t border-white/[0.07] pt-4 mt-1 max-h-64 overflow-hidden' : 'flex-1 overflow-hidden')}>
                 <div className="px-5 pb-2 shrink-0">
                   <h3 className="text-[11px] font-black uppercase tracking-widest text-white/40">Tournaments</h3>
@@ -923,170 +984,127 @@ export default function App() {
                     />
                   </div>
                 </div>
-                {/* Tournament list */}
+                {/* Tournament list — unified, sorted by upcoming-first */}
                 <div className="flex-1 flex flex-col gap-0.5 overflow-y-auto custom-scrollbar px-3 pb-3">
                   {(() => {
                     const q = mastersSearchQuery.toLowerCase().trim();
+                    const now = new Date();
 
-                    // Build enriched Grand Slam entries using dynamic dates when available
-                    const filteredSlams = GRAND_SLAM_STATIC_INFO.map(info => {
-                      const dynamic = tournaments.find(t => t.id === info.id);
-                      return {
-                        ...info,
-                        name: dynamic?.name ?? info.shortName,
-                        startDate: dynamic?.startDate ?? '',
-                        endDate: dynamic?.endDate ?? '',
-                        logo: dynamic?.logo,
-                      };
-                    }).filter(t =>
+                    // Build a unified enriched list from the tournaments state
+                    // (which already contains both Grand Slams and Masters with accurate dates).
+                    const enriched = tournaments.map(t => {
+                      if (t.type === 'masters') {
+                        const info = MASTERS_TOURNAMENTS.find(m => m.id === t.id);
+                        return {
+                          id: t.id,
+                          name: t.name,
+                          shortName: info?.shortName ?? t.name,
+                          startDate: t.startDate,
+                          endDate: t.endDate,
+                          surface: (info?.surface ?? 'Hard') as MastersTournament['surface'],
+                          location: info?.location ?? '',
+                          country: info?.country ?? '',
+                          logo: t.logo,
+                          type: 'masters' as const,
+                        };
+                      } else {
+                        const info = GRAND_SLAM_STATIC_INFO.find(s => s.id === t.id);
+                        return {
+                          id: t.id,
+                          name: t.name,
+                          shortName: info?.shortName ?? t.name,
+                          startDate: t.startDate,
+                          endDate: t.endDate,
+                          surface: (info?.surface ?? 'Hard') as MastersTournament['surface'],
+                          location: info?.location ?? '',
+                          country: info?.country ?? '',
+                          logo: t.logo,
+                          type: 'grand-slam' as const,
+                        };
+                      }
+                    });
+
+                    // Filter by search query
+                    const filtered = enriched.filter(t =>
                       !q ||
                       t.name.toLowerCase().includes(q) ||
                       t.shortName.toLowerCase().includes(q) ||
                       t.location.toLowerCase().includes(q)
                     );
 
-                    const filteredMasters = MASTERS_TOURNAMENTS.filter(t =>
-                      !q ||
-                      t.name.toLowerCase().includes(q) ||
-                      t.shortName.toLowerCase().includes(q) ||
-                      t.location.toLowerCase().includes(q)
-                    );
-
-                    if (filteredSlams.length === 0 && filteredMasters.length === 0) {
+                    if (filtered.length === 0 && q) {
                       return <p className="text-[12px] text-white/30 text-center py-6">No tournaments match "{mastersSearchQuery}"</p>;
                     }
 
-                    return (
-                      <>
-                        {filteredSlams.length > 0 && (
-                          <>
-                            <p className="px-2 pt-1 pb-1 text-[10px] font-black uppercase tracking-widest text-white/25">Grand Slams</p>
-                            {filteredSlams.map(t => {
-                              const now = new Date();
-                              const start = t.startDate ? new Date(t.startDate) : null;
-                              const end = t.endDate ? new Date(t.endDate) : null;
-                              const isActive = start && end ? now >= start && now <= end : false;
-                              const isPast = end ? now > end : false;
-                              const surfaceTag = t.surface === 'Clay'
-                                ? 'text-orange-400 bg-orange-500/10 border-orange-500/20'
-                                : t.surface === 'Grass'
-                                  ? 'text-green-400 bg-green-500/10 border-green-500/20'
-                                  : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-                              return (
-                                <button
-                                  key={t.id}
-                                  onClick={() => {
-                                    setSelectedMastersTournament({
-                                      id: t.id,
-                                      name: t.name,
-                                      shortName: t.shortName,
-                                      location: t.location,
-                                      country: t.country,
-                                      surface: t.surface,
-                                      approxStart: t.startDate,
-                                      approxEnd: t.endDate,
-                                    });
-                                    setIsSidebarOpen(false);
-                                  }}
-                                  className="flex flex-col gap-1 p-3 rounded-xl transition-all text-left hover:bg-white/5 active:bg-white/8"
-                                  aria-label={`Open AI tournament details for ${t.name}`}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    {t.logo ? (
-                                      <img src={t.logo} alt="" className="h-4 w-4 object-contain shrink-0" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                    ) : (
-                                      <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-400/60" aria-hidden="true" />
-                                    )}
-                                    <span className="text-[13px] font-semibold truncate flex-1 min-w-0 text-white/80">
-                                      {t.shortName}
-                                    </span>
-                                    {isActive && (
-                                      <span className="shrink-0 text-[9px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded-full border border-emerald-500/25">
-                                        Live
-                                      </span>
-                                    )}
-                                    {isPast && !isActive && (
-                                      <span className="shrink-0 text-[9px] font-bold text-white/25 bg-white/4 px-1.5 py-0.5 rounded-full border border-white/8">
-                                        Past
-                                      </span>
-                                    )}
-                                    <span className={cn('shrink-0 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full border', surfaceTag)}>
-                                      {t.surface}
-                                    </span>
-                                  </div>
-                                  {start && end && (
-                                    <div className="flex items-center gap-1.5 pl-[22px] text-white/30">
-                                      <Calendar className="h-3 w-3 shrink-0" aria-hidden="true" />
-                                      <span className="text-[11px] truncate">
-                                        {start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                        {' – '}
-                                        {end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                                      </span>
-                                    </div>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </>
-                        )}
-                        {filteredMasters.length > 0 && (
-                          <>
-                            <p className="px-2 pt-2 pb-1 text-[10px] font-black uppercase tracking-widest text-white/25">Masters 1000</p>
-                            {filteredMasters.map(t => {
-                              const now = new Date();
-                              const start = new Date(t.approxStart);
-                              const end = new Date(t.approxEnd);
-                              const isActive = now >= start && now <= end;
-                              const isPast = now > end;
-                              const surfaceTag = t.surface === 'Clay'
-                                ? 'text-orange-400 bg-orange-500/10 border-orange-500/20'
-                                : t.surface === 'Indoor Hard'
-                                  ? 'text-violet-400 bg-violet-500/10 border-violet-500/20'
-                                  : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-                              return (
-                                <button
-                                  key={t.id}
-                                  onClick={() => {
-                                    setSelectedMastersTournament(t);
-                                    setIsSidebarOpen(false);
-                                  }}
-                                  className="flex flex-col gap-1 p-3 rounded-xl transition-all text-left hover:bg-white/5 active:bg-white/8"
-                                  aria-label={`View details for ${t.name}`}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-400/60" aria-hidden="true" />
-                                    <span className="text-[13px] font-semibold truncate flex-1 min-w-0 text-white/80">
-                                      {t.shortName}
-                                    </span>
-                                    {isActive && (
-                                      <span className="shrink-0 text-[9px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded-full border border-emerald-500/25">
-                                        Live
-                                      </span>
-                                    )}
-                                    {isPast && !isActive && (
-                                      <span className="shrink-0 text-[9px] font-bold text-white/25 bg-white/4 px-1.5 py-0.5 rounded-full border border-white/8">
-                                        Past
-                                      </span>
-                                    )}
-                                    <span className={cn('shrink-0 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full border', surfaceTag)}>
-                                      {t.surface === 'Indoor Hard' ? 'Indoor' : t.surface}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 pl-[22px] text-white/30">
-                                    <Calendar className="h-3 w-3 shrink-0" aria-hidden="true" />
-                                    <span className="text-[11px] truncate">
-                                      {new Date(t.approxStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                      {' – '}
-                                      {new Date(t.approxEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                                    </span>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </>
-                        )}
-                      </>
-                    );
+                    // Already sorted by sortByUpcomingFirst via the tournaments state;
+                    // re-sort here because the enriched list preserves that order but we
+                    // want to be explicit and avoid ordering bugs after filter.
+                    filtered.sort((a, b) => sortByUpcomingFirst(
+                      a as TournamentData,
+                      b as TournamentData,
+                    ));
+
+                    return filtered.map(t => {
+                      const start = t.startDate ? new Date(t.startDate) : null;
+                      const end = t.endDate ? new Date(t.endDate) : null;
+                      const isActive = start && end ? now >= start && now <= end : false;
+                      const isPast = end ? end < now : false;
+                      const surfaceTagClass = surfaceColor(t.surface);
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setSelectedMastersTournament({
+                              id: t.id,
+                              name: t.name,
+                              shortName: t.shortName,
+                              location: t.location,
+                              country: t.country,
+                              surface: t.surface,
+                              approxStart: t.startDate,
+                              approxEnd: t.endDate,
+                            });
+                            setIsSidebarOpen(false);
+                          }}
+                          className="flex flex-col gap-1 p-3 rounded-xl transition-all text-left hover:bg-white/5 active:bg-white/8"
+                          aria-label={`View details for ${t.name}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {t.logo ? (
+                              <img src={t.logo} alt="" className="h-4 w-4 object-contain shrink-0" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            ) : (
+                              <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-400/60" aria-hidden="true" />
+                            )}
+                            <span className="text-[13px] font-semibold truncate flex-1 min-w-0 text-white/80">
+                              {t.shortName}
+                            </span>
+                            {isActive && (
+                              <span className="shrink-0 text-[9px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded-full border border-emerald-500/25">
+                                Live
+                              </span>
+                            )}
+                            {isPast && !isActive && (
+                              <span className="shrink-0 text-[9px] font-bold text-white/25 bg-white/4 px-1.5 py-0.5 rounded-full border border-white/8">
+                                Past
+                              </span>
+                            )}
+                            <span className={cn('shrink-0 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full border', surfaceTagClass)}>
+                              {t.surface === 'Indoor Hard' ? 'Indoor' : t.surface}
+                            </span>
+                          </div>
+                          {start && end && (
+                            <div className="flex items-center gap-1.5 pl-[22px] text-white/30">
+                              <Calendar className="h-3 w-3 shrink-0" aria-hidden="true" />
+                              <span className="text-[11px] truncate">
+                                {start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                {' – '}
+                                {end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </span>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    });
                   })()}
                 </div>
               </div>
@@ -1138,6 +1156,7 @@ export default function App() {
               className="absolute inset-0 flex flex-col"
             >
               <PoolHub
+                key={authUser?.uid ?? 'guest'}
                 onNavigate={setAppView}
                 tournaments={tournaments}
                 onCreatePool={handleCreatePool}
