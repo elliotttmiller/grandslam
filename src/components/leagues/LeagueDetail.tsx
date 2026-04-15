@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Trophy, Users, Calendar, Globe, Lock, Shield,
-  Copy, Check, ChevronRight, Plus, Loader2, X, Medal,
+  Copy, Check, ChevronRight, Plus, Loader2, X, Medal, BarChart3, Sparkles, TrendingUp, TrendingDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -51,11 +51,13 @@ export function LeagueDetail({
   onGenerateOfficialDraw,
 }: LeagueDetailProps) {
   const [league, setLeague] = useState<League | null>(getLeague(leagueId));
-  const [activeTab, setActiveTab] = useState<'standings' | 'pools' | 'members'>('standings');
+  const [activeTab, setActiveTab] = useState<'hub' | 'standings' | 'pools' | 'members'>('hub');
   const [copied, setCopied] = useState(false);
   const [joiningPool, setJoiningPool] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showHubInsightsModal, setShowHubInsightsModal] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [previousRanks, setPreviousRanks] = useState<Record<string, number>>({});
 
   const userId = authUser?.uid ?? '';
   const isOwner = league?.createdBy === userId;
@@ -63,9 +65,14 @@ export function LeagueDetail({
 
   // Real-time subscription
   useEffect(() => {
+    setPreviousRanks({});
     const unsubscribe = subscribeToLeague(leagueId, (updated) => {
       saveLeague(updated);
-      setLeague(updated);
+      setLeague(prevLeague => {
+        const prior = prevLeague ?? updated;
+        setPreviousRanks(buildRankMap(computeStandings(prior)));
+        return updated;
+      });
     });
     return unsubscribe;
   }, [leagueId]);
@@ -232,7 +239,7 @@ export function LeagueDetail({
         {/* Tabs */}
         <div className="max-w-4xl mx-auto px-4">
           <div className="flex gap-1">
-            {(['standings', 'pools', 'members'] as const).map(tab => (
+            {(['hub', 'standings', 'pools', 'members'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -253,6 +260,22 @@ export function LeagueDetail({
       {/* Tab content */}
       <div className="flex-1 max-w-4xl mx-auto w-full px-4 py-6">
         <AnimatePresence mode="wait">
+          {activeTab === 'hub' && (
+            <motion.div
+              key="hub"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <HubTab
+                league={league}
+                standings={standings}
+                leagueTournaments={leagueTournaments}
+                onOpenInsights={() => setShowHubInsightsModal(true)}
+              />
+            </motion.div>
+          )}
           {activeTab === 'standings' && (
             <motion.div
               key="standings"
@@ -261,7 +284,7 @@ export function LeagueDetail({
               exit={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.2 }}
             >
-              <StandingsTab standings={standings} userId={userId} />
+              <StandingsTab standings={standings} userId={userId} previousRanks={previousRanks} />
             </motion.div>
           )}
           {activeTab === 'pools' && (
@@ -324,6 +347,14 @@ export function LeagueDetail({
 
       {/* Delete confirm */}
       <AnimatePresence>
+        {showHubInsightsModal && (
+          <LeagueInsightsModal
+            league={league}
+            standings={standings}
+            leagueTournaments={leagueTournaments}
+            onClose={() => setShowHubInsightsModal(false)}
+          />
+        )}
         {showDeleteConfirm && (
           <>
             <motion.div
@@ -354,10 +385,174 @@ export function LeagueDetail({
 }
 
 // ---------------------------------------------------------------------------
+// Hub tab
+// ---------------------------------------------------------------------------
+
+interface HubTabProps {
+  league: League;
+  standings: LeagueStanding[];
+  leagueTournaments: TournamentData[];
+  onOpenInsights: () => void;
+}
+
+function HubTab({ league, standings, leagueTournaments, onOpenInsights }: HubTabProps) {
+  const poolIds = Object.values(league.tournamentPoolIds);
+  const now = new Date();
+  const activeTournamentCount = leagueTournaments.filter(t => {
+    const start = new Date(t.startDate);
+    const end = new Date(t.endDate);
+    return now >= start && now <= end;
+  }).length;
+  const completedResults = buildLeagueResults(league, leagueTournaments).slice(0, 3);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground/40 mb-1">
+            League dashboard
+          </p>
+          <h2 className="text-lg font-black tracking-tight text-foreground">Hub</h2>
+        </div>
+        <Button size="sm" variant="outline" className="rounded-xl" onClick={onOpenInsights}>
+          <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
+          View insights
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <HubStatCard label="Leader" value={standings[0]?.userName ?? '—'} detail={`${standings[0]?.totalPoints ?? 0} pts`} />
+        <HubStatCard label="Members" value={String(league.members.length)} detail="Competing this season" />
+        <HubStatCard label="Tournament pools" value={String(poolIds.length)} detail={`${activeTournamentCount} active now`} />
+        <HubStatCard label="Scheduled events" value={String(leagueTournaments.length)} detail={`Calendar year ${league.year}`} />
+      </div>
+
+      <div className="bg-card/40 border border-white/6 rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles className="h-4 w-4 text-emerald-300" />
+          <h3 className="text-sm font-bold">Recent tournament results</h3>
+        </div>
+        {completedResults.length === 0 ? (
+          <p className="text-sm text-muted-foreground/70 py-2">Completed results will appear here once pools finish.</p>
+        ) : (
+          <div className="space-y-2">
+            {completedResults.map(result => (
+              <div key={result.pool.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/8 bg-background/30 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{result.tournamentName}</p>
+                  <p className="text-[11px] text-muted-foreground/60">
+                    Winner: <span className="text-emerald-300 font-semibold">{result.winnerName}</span>
+                  </p>
+                </div>
+                <p className="text-xs font-black text-emerald-400 shrink-0">
+                  {result.winnerPoints} pts
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HubStatCard({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="bg-card/40 border border-white/6 rounded-xl p-3">
+      <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/45 mb-1">{label}</p>
+      <p className="text-base font-black text-foreground truncate">{value}</p>
+      <p className="text-[11px] text-muted-foreground/60 mt-0.5">{detail}</p>
+    </div>
+  );
+}
+
+function LeagueInsightsModal({
+  league,
+  standings,
+  leagueTournaments,
+  onClose,
+}: {
+  league: League;
+  standings: LeagueStanding[];
+  leagueTournaments: TournamentData[];
+  onClose: () => void;
+}) {
+  const results = buildLeagueResults(league, leagueTournaments);
+  const pointsTotal = standings.reduce((sum, s) => sum + s.totalPoints, 0);
+  const averagePoints = standings.length > 0 ? Math.round(pointsTotal / standings.length) : 0;
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/70 backdrop-blur-[2px] z-50"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <motion.div
+        initial={{ opacity: 0, y: 12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 12, scale: 0.98 }}
+        className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-2xl mx-auto bg-card border border-white/10 rounded-2xl shadow-2xl p-5 max-h-[80vh] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-base font-bold">League Hub Insights</h3>
+            <p className="text-xs text-muted-foreground/65">{league.name} · {league.year}</p>
+          </div>
+          <Button variant="ghost" size="icon" className="rounded-xl" onClick={onClose} aria-label="Close insights">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+          <HubStatCard label="Total points" value={String(pointsTotal)} detail="Across all members" />
+          <HubStatCard label="Average points" value={String(averagePoints)} detail="Per member" />
+          <HubStatCard label="Pools linked" value={String(Object.keys(league.tournamentPoolIds).length)} detail="Created so far" />
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground/40 mb-2">Recent results</p>
+          {results.length === 0 ? (
+            <p className="text-sm text-muted-foreground/70 py-3">No completed results yet.</p>
+          ) : (
+            results.slice(0, 8).map(result => (
+              <div key={result.pool.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/8 bg-background/30 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{result.tournamentName}</p>
+                  <p className="text-[11px] text-muted-foreground/60">
+                    {result.winnerName} won with {result.winnerPoints} pts
+                  </p>
+                </div>
+                <span className="text-[11px] text-muted-foreground/55 shrink-0">
+                  {result.endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Standings tab
 // ---------------------------------------------------------------------------
 
-function StandingsTab({ standings, userId }: { standings: LeagueStanding[]; userId: string }) {
+function StandingsTab({
+  standings,
+  userId,
+  previousRanks,
+}: {
+  standings: LeagueStanding[];
+  userId: string;
+  previousRanks: Record<string, number>;
+}) {
   if (standings.length === 0) {
     return (
       <div className="text-center py-16">
@@ -400,9 +595,12 @@ function StandingsTab({ standings, userId }: { standings: LeagueStanding[]; user
               <p className={cn('font-semibold truncate text-sm', isMe ? 'text-emerald-300' : 'text-foreground')}>
                 {s.userName}{isMe && <span className="ml-1.5 text-[10px] text-emerald-400/70">(you)</span>}
               </p>
-              <p className="text-[11px] text-muted-foreground/50">
-                {s.tournamentsPlayed} tournament{s.tournamentsPlayed !== 1 ? 's' : ''} played
-              </p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="text-[11px] text-muted-foreground/50">
+                  {s.tournamentsPlayed} tournament{s.tournamentsPlayed !== 1 ? 's' : ''} played
+                </p>
+                <RankChangeBadge currentRank={rank} previousRank={previousRanks[s.userId]} />
+              </div>
             </div>
             <span className="text-base font-black text-emerald-400">
               {s.totalPoints}
@@ -412,6 +610,28 @@ function StandingsTab({ standings, userId }: { standings: LeagueStanding[]; user
         );
       })}
     </div>
+  );
+}
+
+function RankChangeBadge({ currentRank, previousRank }: { currentRank: number; previousRank?: number }) {
+  if (typeof previousRank !== 'number') return null;
+  const delta = previousRank - currentRank;
+  if (delta === 0) return null;
+
+  if (delta > 0) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-300/85 bg-emerald-500/10 border border-emerald-500/25 rounded-full px-1.5 py-0.5">
+        <TrendingUp className="h-2.5 w-2.5" />
+        +{delta}
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-300/85 bg-amber-500/10 border border-amber-500/25 rounded-full px-1.5 py-0.5">
+      <TrendingDown className="h-2.5 w-2.5" />
+      {delta}
+    </span>
   );
 }
 
@@ -629,4 +849,46 @@ function computeStandings(league: League): LeagueStanding[] {
   }
 
   return Array.from(standingMap.values()).sort((a, b) => b.totalPoints - a.totalPoints);
+}
+
+function buildRankMap(standings: LeagueStanding[]): Record<string, number> {
+  const rankMap: Record<string, number> = {};
+  standings.forEach((standing, i) => {
+    rankMap[standing.userId] = i + 1;
+  });
+  return rankMap;
+}
+
+function buildLeagueResults(league: League, leagueTournaments: TournamentData[]) {
+  const tournamentsById = new Map(leagueTournaments.map(t => [t.id, t]));
+  return Object.entries(league.tournamentPoolIds)
+    .map(([tournamentId, poolId]) => {
+      const pool = getPool(poolId);
+      const tournament = tournamentsById.get(tournamentId);
+      if (!pool || !tournament) return null;
+
+      const endDate = new Date(tournament.endDate);
+      if (endDate > new Date()) return null;
+      if (pool.entries.length === 0) return null;
+
+      let winnerName = '—';
+      let winnerPoints = 0;
+      for (const entry of pool.entries) {
+        const score = calculatePoolEntryScore(entry.matches, pool.officialMatches);
+        if (score.total > winnerPoints || winnerName === '—') {
+          winnerName = entry.userName;
+          winnerPoints = score.total;
+        }
+      }
+
+      return {
+        pool,
+        tournamentName: tournament.name,
+        winnerName,
+        winnerPoints,
+        endDate,
+      };
+    })
+    .filter((result): result is NonNullable<typeof result> => result !== null)
+    .sort((a, b) => b.endDate.getTime() - a.endDate.getTime());
 }
