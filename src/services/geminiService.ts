@@ -16,6 +16,7 @@ const FALLBACK_MODEL = "gemini-2.5-flash";
 
 const CACHE_KEY_TOURNAMENTS = 'tennis_tournaments_cache_v5';
 const CACHE_KEY_PLAYERS_PREFIX = 'tennis_players_cache_v5_';
+const CACHE_KEY_MASTERS_PREFIX = 'tennis_masters_details_v1_';
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
 export interface TournamentData {
@@ -281,3 +282,176 @@ const FALLBACK_PLAYERS = [
   { name: "Nuno Borges", seed: 31, country: "POR" },
   { name: "Jacob Fearnley", seed: 32, country: "GBR" },
 ];
+
+// ─── ATP Masters 1000 details ────────────────────────────────────────────────
+
+export interface MastersSeededPlayer {
+  seed: number;
+  name: string;
+  country: string;
+  ranking?: number;
+}
+
+export interface MastersTournamentDetails {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  location: string;
+  venue: string;
+  surface: string;
+  drawSize: number;
+  prizeMoney?: string;
+  seedings: MastersSeededPlayer[];
+  /** Whether seedings are official or AI-predicted */
+  seedingsStatus: 'official' | 'predicted';
+  /** Any extra contextual notes returned by AI */
+  notes?: string;
+}
+
+/**
+ * Fetch comprehensive details for an ATP Masters 1000 tournament using the Gemini AI.
+ * Returns cached results for 24 hours to avoid hitting rate limits.
+ */
+export async function fetchMastersTournamentDetails(
+  tournamentId: string,
+  tournamentName: string,
+): Promise<MastersTournamentDetails> {
+  const cacheKey = `${CACHE_KEY_MASTERS_PREFIX}${tournamentId}`;
+
+  // Check cache first
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    try {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_EXPIRY) {
+        return data as MastersTournamentDetails;
+      }
+    } catch {
+      // Ignore corrupt cache
+    }
+  }
+
+  const prompt = `Today is ${TODAY_STR}. Find the most accurate and up-to-date information about the 2026 ATP Masters 1000 men's singles tournament: "${tournamentName}".
+
+Return a JSON object with these fields:
+- "id": "${tournamentId}"
+- "name": full official tournament name including year (e.g. "2026 BNP Paribas Open")
+- "startDate": main draw start date in YYYY-MM-DD format
+- "endDate": final date in YYYY-MM-DD format
+- "location": city and country (e.g. "Indian Wells, California, USA")
+- "venue": full venue/stadium name (e.g. "Indian Wells Tennis Garden")
+- "surface": court surface (e.g. "Hard", "Clay", "Indoor Hard")
+- "drawSize": number of players in main draw (usually 96 for Masters 1000)
+- "prizeMoney": total prize money string (e.g. "$8,800,000") or null if unknown
+- "seedings": JSON array of the top 16 seeds, each object with "seed" (number), "name" (string), "country" (3-letter code), "ranking" (ATP ranking number). If official seedings are not yet available, provide AI-predicted seedings based on current ATP rankings with surface adjustments.
+- "seedingsStatus": "official" if official draw has been released, otherwise "predicted"
+- "notes": one sentence of current context about this tournament (e.g. defending champion, key absences) or null
+
+Do not include any markdown formatting. Return only the JSON object.`;
+
+  const seedingSchema = {
+    type: Type.OBJECT,
+    properties: {
+      seed: { type: Type.INTEGER },
+      name: { type: Type.STRING },
+      country: { type: Type.STRING },
+      ranking: { type: Type.INTEGER, nullable: true },
+    },
+    required: ['seed', 'name', 'country'],
+  };
+
+  const schema = {
+    type: Type.OBJECT,
+    properties: {
+      id: { type: Type.STRING },
+      name: { type: Type.STRING },
+      startDate: { type: Type.STRING },
+      endDate: { type: Type.STRING },
+      location: { type: Type.STRING },
+      venue: { type: Type.STRING },
+      surface: { type: Type.STRING },
+      drawSize: { type: Type.INTEGER },
+      prizeMoney: { type: Type.STRING, nullable: true },
+      seedings: { type: Type.ARRAY, items: seedingSchema },
+      seedingsStatus: { type: Type.STRING },
+      notes: { type: Type.STRING, nullable: true },
+    },
+    required: ['id', 'name', 'startDate', 'endDate', 'location', 'venue', 'surface', 'drawSize', 'seedings', 'seedingsStatus'],
+  };
+
+  let data: MastersTournamentDetails | null = null;
+
+  // Tier 1: Grounded Search (most accurate real-time data)
+  try {
+    const response = await ai.models.generateContent({
+      model: GROUNDING_MODEL,
+      contents: prompt,
+      config: { tools: [{ googleSearch: {} }] },
+    });
+    const text = response.text || '';
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && end > start) {
+      data = JSON.parse(text.substring(start, end + 1));
+    }
+  } catch (e) {
+    console.warn('Masters Tier 1 (Grounded) error:', e);
+  }
+
+  // Tier 2: Primary Model (Structured output)
+  if (!data || !data.seedings?.length) {
+    try {
+      const response = await ai.models.generateContent({
+        model: PRIMARY_MODEL,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        },
+      });
+      data = JSON.parse(response.text || 'null');
+    } catch (e) {
+      console.warn('Masters Tier 2 (Primary) error:', e);
+    }
+  }
+
+  // Tier 3: Fallback Model
+  if (!data || !data.seedings?.length) {
+    try {
+      const response = await ai.models.generateContent({
+        model: FALLBACK_MODEL,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+        },
+      });
+      data = JSON.parse(response.text || 'null');
+    } catch (e) {
+      console.warn('Masters Tier 3 (Fallback) error:', e);
+    }
+  }
+
+  if (data && data.seedings) {
+    localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+    return data;
+  }
+
+  // Last-resort fallback using static data
+  const fallback: MastersTournamentDetails = {
+    id: tournamentId,
+    name: `2026 ${tournamentName}`,
+    startDate: '',
+    endDate: '',
+    location: 'Location unavailable',
+    venue: 'Venue unavailable',
+    surface: 'Hard',
+    drawSize: 96,
+    seedings: FALLBACK_PLAYERS.slice(0, 16).map(p => ({ ...p, ranking: p.seed })),
+    seedingsStatus: 'predicted',
+    notes: 'Live data unavailable. Showing approximate predicted seedings.',
+  };
+  return fallback;
+}
