@@ -27,4 +27,6 @@ export interface Pool {
   createdBy?: string;
   /** ISO timestamp of last server-side modification. */
   updatedAt?: string;
+  /** League ID this pool belongs to, if it was auto-created for a league. */
+  leagueId?: string;
 }
