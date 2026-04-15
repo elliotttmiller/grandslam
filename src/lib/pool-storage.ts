@@ -61,6 +61,7 @@ export function updateOfficialMatches(poolId: string, officialMatches: Match[]):
 }
 
 
+export function createPool(
   name: string,
   tournamentId: string,
   tournamentName: string,

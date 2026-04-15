@@ -335,8 +335,8 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
           <div className="flex items-center gap-5 mt-4 flex-wrap">
             <div className="flex items-center gap-1.5 text-[12px]">
               <Users className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="font-bold">{pool.entries.length}</span>
-              <span className="text-muted-foreground/60">{pool.entries.length === 1 ? 'entry' : 'entries'}</span>
+              <span className="font-bold">{poolData.entries.length}</span>
+              <span className="text-muted-foreground/60">{poolData.entries.length === 1 ? 'entry' : 'entries'}</span>
             </div>
             {leaderScore > 0 && (
               <div className="flex items-center gap-1.5 text-[12px]">
@@ -357,7 +357,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
             </div>
             <div className="flex items-center gap-1.5 text-[12px]">
               <Lock className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-muted-foreground/60 truncate max-w-35">{pool.tournamentName}</span>
+              <span className="text-muted-foreground/60 truncate max-w-35">{poolData.tournamentName}</span>
             </div>
           </div>
         </div>
@@ -369,10 +369,10 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
           {/* Stats strip */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
-              { label: 'Entries', value: pool.entries.length, color: '' },
+              { label: 'Entries', value: poolData.entries.length, color: '' },
               { label: 'Submitted', value: submittedCount, color: 'text-emerald-400' },
               { label: 'Leader', value: leaderScore > 0 ? `${leaderScore} pts` : '—', color: 'text-amber-400' },
-              { label: 'Avg picks', value: `${avgCompletion}%`, color: '' },
+              { label: 'Avg correct', value: enteredResultsCount > 0 ? `${avgCorrect}%` : '—', color: '' },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-card/50 border border-border/25 rounded-2xl px-4 py-3 flex flex-col items-center text-center">
                 <span className={cn('text-xl font-black tabular-nums', color)}>{value}</span>
@@ -399,13 +399,15 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
                   </div>
                   <div className="flex items-baseline gap-2 mt-0.5">
                     <span className="text-xl font-black text-emerald-400 tabular-nums">{myEntries[0].score.total}</span>
-                    <span className="text-[11px] text-muted-foreground/55">pts · {myEntries[0].score.picksCompleted}/{TOTAL_BRACKET_MATCHES} picks</span>
+                    <span className="text-[11px] text-muted-foreground/55">
+                      pts · {myEntries[0].score.picksCompleted} correct{enteredResultsCount > 0 ? ` of ${enteredResultsCount}` : ''}
+                    </span>
                   </div>
                   <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden mt-1.5">
                     <motion.div
                       className="h-full bg-emerald-500 rounded-full"
                       initial={{ width: 0 }}
-                      animate={{ width: `${(myEntries[0].score.picksCompleted / TOTAL_BRACKET_MATCHES) * 100}%` }}
+                      animate={{ width: enteredResultsCount > 0 ? `${(myEntries[0].score.picksCompleted / enteredResultsCount) * 100}%` : '0%' }}
                       transition={{ duration: 0.5, ease: 'easeOut' }}
                     />
                   </div>
@@ -413,7 +415,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
                 <Button
                   size="sm"
                   className="shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white border-0 rounded-xl"
-                  onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: myEntries[0].id })}
+                  onClick={() => onNavigate({ page: 'pool-entry', poolId: poolData.id, entryId: myEntries[0].id })}
                 >
                   {myEntries[0].isSubmitted ? 'View' : 'Edit Picks'}
                 </Button>
@@ -427,16 +429,18 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
             <div className="flex gap-2">
               {myEntries.length === 0 ? (
                 <Button size="sm" className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" onClick={handleCreateEntry}>
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  Create My Entry
+                  {!isAuthed
+                    ? <><LogIn className="h-3.5 w-3.5 mr-1.5" />Sign In to Enter</>
+                    : <><Plus className="h-3.5 w-3.5 mr-1.5" />Create My Entry</>
+                  }
                 </Button>
               ) : myEntries.some(e => !e.isSubmitted) ? (
-                <Button size="sm" className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: myEntries.find(e => !e.isSubmitted)!.id })}>
+                <Button size="sm" className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" onClick={() => onNavigate({ page: 'pool-entry', poolId: poolData.id, entryId: myEntries.find(e => !e.isSubmitted)!.id })}>
                   Continue My Bracket
                   <ChevronRight className="h-3.5 w-3.5 ml-1" />
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: myEntries[0].id })}>
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => onNavigate({ page: 'pool-entry', poolId: poolData.id, entryId: myEntries[0].id })}>
                   View My Bracket
                 </Button>
               )}
@@ -458,7 +462,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
                   transition={{ delay: i * 0.04, duration: 0.2 }}
                   className={cn(
                     "flex items-center gap-3 px-4 py-3.5 rounded-2xl border transition-colors",
-                    entry.userName === savedUserName
+                    isMyEntry(entry)
                       ? "bg-emerald-500/6 border-emerald-500/20"
                       : "bg-card/50 border-border/30 hover:border-border/50 hover:bg-card/70"
                   )}
@@ -480,7 +484,9 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
                     <div className="text-[11px] text-muted-foreground/55 truncate">{entry.bracketName}</div>
                     {/* Mobile stats row */}
                     <div className="flex items-center gap-3 mt-1 sm:hidden">
-                      <span className="text-[11px] text-muted-foreground/50 tabular-nums">{entry.score.picksCompleted}/{TOTAL_BRACKET_MATCHES}</span>
+                      <span className="text-[11px] text-muted-foreground/50 tabular-nums">
+                        {entry.score.picksCompleted}{enteredResultsCount > 0 ? `/${enteredResultsCount}` : ''} correct
+                      </span>
                       {entry.score.upsetBonus > 0 && (
                         <span className="text-[11px] text-amber-400 font-bold tabular-nums">⚡+{entry.score.upsetBonus}</span>
                       )}
@@ -490,9 +496,9 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
                       <div
                         className={cn(
                           'h-full rounded-full transition-all duration-500',
-                          entry.score.picksCompleted === TOTAL_BRACKET_MATCHES ? 'bg-emerald-500' : 'bg-emerald-500/50',
+                          enteredResultsCount > 0 && entry.score.picksCompleted === enteredResultsCount ? 'bg-emerald-500' : 'bg-emerald-500/50',
                         )}
-                        style={{ width: `${(entry.score.picksCompleted / TOTAL_BRACKET_MATCHES) * 100}%` }}
+                        style={{ width: enteredResultsCount > 0 ? `${(entry.score.picksCompleted / enteredResultsCount) * 100}%` : '0%' }}
                         aria-hidden="true"
                       />
                     </div>
@@ -503,7 +509,9 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
                     <span className={cn("tabular-nums", entry.score.upsetBonus > 0 ? "text-amber-400 font-bold" : "text-muted-foreground/40")} title="Upset bonus">
                       {entry.score.upsetBonus > 0 ? `+${entry.score.upsetBonus}` : '—'}
                     </span>
-                    <span className="text-muted-foreground/50 tabular-nums" title="Picks completed">{entry.score.picksCompleted}/{TOTAL_BRACKET_MATCHES}</span>
+                    <span className="text-muted-foreground/50 tabular-nums" title="Correct picks">
+                      {entry.score.picksCompleted}{enteredResultsCount > 0 ? `/${enteredResultsCount}` : ''}
+                    </span>
                   </div>
                   {/* Gap from leader */}
                   {entry.rank > 1 && leaderScore > 0 && (
@@ -524,7 +532,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
                       variant="ghost"
                       size="sm"
                       className="h-7 px-2.5 text-[11px] rounded-lg text-muted-foreground/60 hover:text-foreground"
-                      onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: entry.id })}
+                      onClick={() => onNavigate({ page: 'pool-entry', poolId: poolData.id, entryId: entry.id })}
                       aria-label={`View ${entry.userName}'s bracket`}
                     >
                       View
@@ -548,8 +556,8 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
           <div className="border border-border/30 rounded-2xl p-5 bg-card/30">
             <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 text-muted-foreground/60">Invite Others</h3>
             <div className="flex items-center gap-4 mb-4 flex-wrap">
-              <div className="font-mono text-2xl font-black tracking-[0.3em] bg-muted/15 px-4 py-2.5 rounded-xl border border-border/25" aria-label={`Pool code: ${pool.id}`}>
-                {pool.id}
+              <div className="font-mono text-2xl font-black tracking-[0.3em] bg-muted/15 px-4 py-2.5 rounded-xl border border-border/25" aria-label={`Pool code: ${poolData.id}`}>
+                {poolData.id}
               </div>
               <div className="flex flex-col gap-2">
                 <Button variant="outline" size="sm" className="rounded-xl" onClick={handleCopyInviteLink}>
@@ -585,6 +593,85 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
               </Button>
             )}
           </div>
+          {/* Official Results Editor — pool creator only */}
+          <AnimatePresence>
+            {showResultsPanel && editingOfficialMatches && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                transition={{ duration: 0.2 }}
+                className="border border-blue-500/30 rounded-2xl bg-blue-500/5 p-5 flex flex-col gap-4"
+              >
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4 text-blue-400" aria-hidden="true" />
+                    <h3 className="text-[11px] font-black uppercase tracking-widest text-blue-400">Official Results</h3>
+                    <span className="text-[10px] text-muted-foreground/50">
+                      {editingOfficialMatches.filter(m => m.winnerId).length} / {editingOfficialMatches.filter(m => m.player1 && m.player2).length} decided
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" className="rounded-xl" onClick={handleCancelResults} disabled={savingResults}>
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="rounded-xl bg-blue-600 hover:bg-blue-500 text-white border-0"
+                      onClick={handleSaveResults}
+                      disabled={savingResults}
+                    >
+                      {savingResults
+                        ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden="true" />Saving…</>
+                        : 'Save Results'
+                      }
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Round tabs */}
+                <div className="flex gap-1 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }} role="tablist" aria-label="Rounds">
+                  {Array.from({ length: totalRounds }, (_, i) => i + 1).map(round => (
+                    <button
+                      key={round}
+                      role="tab"
+                      aria-selected={resultsActiveRound === round}
+                      onClick={() => setResultsActiveRound(round)}
+                      className={cn(
+                        'flex-none px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
+                        resultsActiveRound === round
+                          ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                          : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/4',
+                      )}
+                    >
+                      {getRoundName(round, totalRounds)}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Match cards */}
+                <div className="flex flex-col gap-2">
+                  {editingOfficialMatches
+                    .filter(m => m.round === resultsActiveRound)
+                    .sort((a, b) => a.matchNumber - b.matchNumber)
+                    .map((match, i) => (
+                      <MatchPickCard
+                        key={match.id}
+                        match={match}
+                        matchIndex={i}
+                        onSelectWinner={handleResultWinner}
+                        readOnly={false}
+                      />
+                    ))}
+                </div>
+
+                <p className="text-[10px] text-blue-400/60 leading-relaxed">
+                  Select the winner for each match. Results are broadcast to all participants in real-time when you save.
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
         </div>
       </div>
 

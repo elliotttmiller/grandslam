@@ -182,7 +182,7 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
     }
   };
 
-
+  return (
     <div className="flex flex-col h-full overflow-y-auto overflow-x-hidden">
       <div className="flex-none px-5 py-5 border-b border-border/25">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
