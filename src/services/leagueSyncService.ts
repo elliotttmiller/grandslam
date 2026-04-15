@@ -84,11 +84,12 @@ export async function syncGetPublicLeagues(year?: number): Promise<League[]> {
   }
 }
 
-/** Fetch all leagues where userId appears in the members array. */
+/** Fetch all leagues where userId appears in the memberIds array. */
 export async function syncGetUserLeagues(userId: string): Promise<League[]> {
   try {
     const col = collection(getDb(), 'leagues');
-    const q = query(col, where('members', 'array-contains', { userId }));
+    // memberIds is a flat string[] — Firestore array-contains works correctly with scalar values.
+    const q = query(col, where('memberIds', 'array-contains', userId));
     const snaps = await getDocs(q);
     return snaps.docs.map(d => toLeague(d.data() as Record<string, unknown>));
   } catch (error) {
@@ -128,6 +129,7 @@ export async function syncAddLeagueMember(
     const memberData = removeUndefined(member);
     await updateDoc(doc(getDb(), 'leagues', leagueId), {
       members: arrayUnion(memberData),
+      memberIds: arrayUnion(member.userId),
       updatedAt: serverTimestamp(),
     });
     return true;
@@ -148,7 +150,8 @@ export async function syncRemoveLeagueMember(
       if (!snap.exists()) return;
       const league = snap.data() as League;
       const members = (league.members ?? []).filter(m => m.userId !== userId);
-      tx.update(ref, { members, updatedAt: serverTimestamp() });
+      const memberIds = (league.memberIds ?? []).filter((id: string) => id !== userId);
+      tx.update(ref, { members, memberIds, updatedAt: serverTimestamp() });
     });
     return true;
   } catch (error) {

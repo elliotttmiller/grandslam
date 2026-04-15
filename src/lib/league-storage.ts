@@ -62,6 +62,7 @@ export function createLeague(
     createdByName,
     createdAt: new Date().toISOString(),
     members: [{ userId: createdBy, userName: createdByName, joinedAt: new Date().toISOString() }],
+    memberIds: [createdBy],
     tournamentPoolIds: {},
   };
   saveLeague(league);
@@ -73,6 +74,7 @@ export function addMember(leagueId: string, member: LeagueMember): boolean {
   if (!league) return false;
   if (league.members.some(m => m.userId === member.userId)) return false; // already a member
   league.members.push(member);
+  league.memberIds = [...new Set([...(league.memberIds ?? []), member.userId])];
   saveLeague(league);
   return true;
 }
@@ -81,6 +83,7 @@ export function removeMember(leagueId: string, userId: string): void {
   const league = getLeague(leagueId);
   if (!league) return;
   league.members = league.members.filter(m => m.userId !== userId);
+  league.memberIds = (league.memberIds ?? []).filter(id => id !== userId);
   saveLeague(league);
 }
 

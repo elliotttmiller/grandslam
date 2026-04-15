@@ -25,6 +25,11 @@ export interface League {
   updatedAt?: string; // ISO timestamp
   members: LeagueMember[];
   /**
+   * Flat list of member UIDs — kept in sync with `members` — enables efficient
+   * Firestore `array-contains` queries without exact object matching.
+   */
+  memberIds: string[];
+  /**
    * Maps each tournament ID to the Pool ID that was auto-created for that
    * tournament within this league.  Populated lazily as tournaments approach.
    */
