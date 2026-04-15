@@ -939,12 +939,20 @@ export default function App() {
                                 <button
                                   key={t.id}
                                   onClick={() => {
-                                    setSelectedTournament(t.id);
-                                    setAppView({ page: 'bracket' });
+                                    setSelectedMastersTournament({
+                                      id: t.id,
+                                      name: t.name,
+                                      shortName: t.shortName,
+                                      location: t.location,
+                                      country: t.country,
+                                      surface: t.surface,
+                                      approxStart: t.startDate,
+                                      approxEnd: t.endDate,
+                                    });
                                     setIsSidebarOpen(false);
                                   }}
                                   className="flex flex-col gap-1 p-3 rounded-xl transition-all text-left hover:bg-white/5 active:bg-white/8"
-                                  aria-label={`View bracket for ${t.name}`}
+                                  aria-label={`View details for ${t.name}`}
                                 >
                                   <div className="flex items-center gap-2">
                                     {t.logo ? (

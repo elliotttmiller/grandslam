@@ -9,7 +9,7 @@ export interface MastersTournament {
   shortName: string;
   location: string;
   country: string;
-  surface: 'Hard' | 'Clay' | 'Indoor Hard';
+  surface: 'Hard' | 'Clay' | 'Indoor Hard' | 'Grass';
   /** Approximate start date in YYYY-MM-DD format */
   approxStart: string;
   /** Approximate end date in YYYY-MM-DD format */
@@ -118,15 +118,16 @@ export interface GrandSlamStaticInfo {
   id: string;
   shortName: string;
   location: string;
+  country: string;
   surface: 'Hard' | 'Clay' | 'Grass';
 }
 
 /** Static metadata for the four Grand Slam tournaments. */
 export const GRAND_SLAM_STATIC_INFO: GrandSlamStaticInfo[] = [
-  { id: 'ao',  shortName: 'Australian Open', location: 'Melbourne, Australia',      surface: 'Hard'  },
-  { id: 'rg',  shortName: 'Roland Garros',   location: 'Paris, France',             surface: 'Clay'  },
-  { id: 'wim', shortName: 'Wimbledon',        location: 'London, United Kingdom',    surface: 'Grass' },
-  { id: 'uso', shortName: 'US Open',          location: 'New York, USA',             surface: 'Hard'  },
+  { id: 'ao',  shortName: 'Australian Open', location: 'Melbourne, Australia',   country: 'AUS', surface: 'Hard'  },
+  { id: 'rg',  shortName: 'Roland Garros',   location: 'Paris, France',          country: 'FRA', surface: 'Clay'  },
+  { id: 'wim', shortName: 'Wimbledon',        location: 'London, United Kingdom', country: 'GBR', surface: 'Grass' },
+  { id: 'uso', shortName: 'US Open',          location: 'New York, USA',          country: 'USA', surface: 'Hard'  },
 ];
 
 /** Surface colour token (Tailwind class string) */
@@ -135,5 +136,6 @@ export function surfaceColor(surface: MastersTournament['surface']): string {
     case 'Clay':         return 'text-orange-400 bg-orange-500/10 border-orange-500/20';
     case 'Hard':         return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
     case 'Indoor Hard':  return 'text-violet-400 bg-violet-500/10 border-violet-500/20';
+    case 'Grass':        return 'text-green-400 bg-green-500/10 border-green-500/20';
   }
 }
