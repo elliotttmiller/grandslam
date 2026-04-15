@@ -1276,6 +1276,7 @@ export default function App() {
                 <PoolBracketEditor
                   pool={pool}
                   entry={entry}
+                  officialMatches={pool.officialMatches}
                   onSave={(updatedMatches) => {
                     updateEntry(pool.id, entry.id, updatedMatches);
                     // Best-effort sync to server

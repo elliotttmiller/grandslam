@@ -10,13 +10,17 @@ interface MatchPickCardProps {
   matchIndex: number;
   onSelectWinner: (matchId: string, winnerId: string) => void;
   readOnly?: boolean;
+  officialWinnerId?: string | null;
 }
 
 export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
-  ({ match, matchIndex, onSelectWinner, readOnly = false }, ref) => {
+  ({ match, matchIndex, onSelectWinner, readOnly = false, officialWinnerId }, ref) => {
   const { player1, player2, winnerId } = match;
   const hasPlayers = !!(player1 && player2);
   const canPick = !readOnly && hasPlayers && !winnerId;
+  const hasOfficialResult = officialWinnerId !== undefined && officialWinnerId !== null;
+  const isCorrectPick = !!winnerId && hasOfficialResult && winnerId === officialWinnerId;
+  const isIncorrectPick = !!winnerId && hasOfficialResult && winnerId !== officialWinnerId;
 
   const winner = winnerId ? (player1?.id === winnerId ? player1 : player2) : null;
   const loser = winner ? (player1?.id === winner.id ? player2 : player1) : null;
@@ -28,13 +32,18 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
     const isLoser = player ? (!!winnerId && winnerId !== player.id) : false;
     const isQualifier = !player || player.name.startsWith('Qualifier') || player.name === 'TBD';
     const isPickable = canPick && !!player && !isQualifier;
+    const isWinnerIncorrect = isWinner && hasOfficialResult && player?.id !== officialWinnerId;
 
     return (
       <motion.div
         className={cn(
           'flex items-center gap-3 px-4 py-3.75 transition-all select-none min-h-14',
           isTop ? 'border-b border-border/15' : '',
-          isWinner ? 'bg-emerald-500/[0.14]' : '',
+          isWinner
+            ? isWinnerIncorrect
+              ? 'bg-red-500/[0.14]'
+              : 'bg-emerald-500/[0.14]'
+            : '',
           isLoser ? 'opacity-30' : '',
           isPickable ? 'cursor-pointer hover:bg-white/5 active:bg-white/9' : 'cursor-default',
         )}
@@ -49,7 +58,11 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
         {/* Seed */}
         <span className={cn(
           'w-6 text-center text-[11px] font-mono shrink-0 tabular-nums',
-          isWinner ? 'text-emerald-400/80' : 'text-muted-foreground/35',
+          isWinner
+            ? isWinnerIncorrect
+              ? 'text-red-400/80'
+              : 'text-emerald-400/80'
+            : 'text-muted-foreground/35',
         )}>
           {player?.seed ?? '—'}
         </span>
@@ -58,7 +71,11 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
         <div className="flex-1 min-w-0">
           <p className={cn(
             'text-[15px] leading-snug font-medium truncate',
-            isWinner ? 'text-emerald-300 font-semibold'
+            isWinner ? (
+              isWinnerIncorrect
+                ? 'text-red-300 font-semibold'
+                : 'text-emerald-300 font-semibold'
+            )
               : isQualifier ? 'text-muted-foreground/45 italic text-[13px]'
                 : 'text-foreground/90',
           )}>
@@ -75,9 +92,14 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 500, damping: 20 }}
-            className="shrink-0 h-7 w-7 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center"
+            className={cn(
+              'shrink-0 h-7 w-7 rounded-full border flex items-center justify-center',
+              isWinnerIncorrect
+                ? 'bg-red-500/20 border-red-500/30'
+                : 'bg-emerald-500/20 border-emerald-500/30',
+            )}
           >
-            <Check className="h-4 w-4 text-emerald-400" aria-hidden="true" />
+            <Check className={cn('h-4 w-4', isWinnerIncorrect ? 'text-red-400' : 'text-emerald-400')} aria-hidden="true" />
           </motion.div>
         ) : isPickable ? (
           <div className="shrink-0 h-7 w-7 rounded-full border border-border/25 flex items-center justify-center opacity-40" aria-hidden="true">
@@ -96,7 +118,9 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
       className={cn(
         'rounded-2xl border overflow-hidden transition-all',
         winnerId
-          ? 'bg-card/50 border-emerald-500/20'
+          ? isIncorrectPick
+            ? 'bg-card/50 border-red-500/20'
+            : 'bg-card/50 border-emerald-500/20'
           : hasPlayers
             ? 'bg-card/80 border-border/50 shadow-sm'
             : 'bg-card/30 border-border/15 opacity-50',

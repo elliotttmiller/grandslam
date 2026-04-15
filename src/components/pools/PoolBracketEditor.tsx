@@ -23,6 +23,7 @@ interface PoolBracketEditorProps {
   onSubmit: (matches: Match[], tbGames?: number, tbSets?: number) => void;
   onBack: () => void;
   readOnly?: boolean;
+  officialMatches?: Match[];
 }
 
 export function PoolBracketEditor({
@@ -32,6 +33,7 @@ export function PoolBracketEditor({
   onSubmit,
   onBack,
   readOnly = false,
+  officialMatches,
 }: PoolBracketEditorProps) {
   const [matches, setMatches] = useState<Match[]>(entry.matches);
   const [zoom, setZoom] = useState(0.6);
@@ -85,6 +87,13 @@ export function PoolBracketEditor({
   }, [matches, totalRounds]);
 
   const isEffectivelyReadOnly = readOnly || entry.isSubmitted;
+  const officialWinnersByMatchId = useMemo<Record<string, string | null> | undefined>(() => {
+    if (!officialMatches || officialMatches.length === 0) return undefined;
+    return officialMatches.reduce<Record<string, string | null>>((acc, match) => {
+      acc[match.id] = match.winnerId ?? null;
+      return acc;
+    }, {});
+  }, [officialMatches]);
 
   const handleSelectWinner = useCallback((matchId: string, winnerId: string) => {
     if (isEffectivelyReadOnly) return;
@@ -328,6 +337,7 @@ export function PoolBracketEditor({
                       matches={matches}
                       onSelectWinner={handleSelectWinner}
                       readOnly={isEffectivelyReadOnly}
+                      officialWinnersByMatchId={officialWinnersByMatchId}
                     />
                   </div>
                 </div>
@@ -376,6 +386,7 @@ export function PoolBracketEditor({
                     matchIndex={idx}
                     onSelectWinner={handleSelectWinner}
                     readOnly={isEffectivelyReadOnly}
+                    officialWinnerId={officialWinnersByMatchId?.[match.id]}
                   />
                 ))}
               </div>
