@@ -9,11 +9,10 @@ interface AuthModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess: (user: User) => void;
-  onContinueAsGuest?: () => Promise<void>;
   defaultMode?: 'sign-in' | 'sign-up';
 }
 
-export function AuthModal({ open, onClose, onSuccess, onContinueAsGuest, defaultMode = 'sign-in' }: AuthModalProps) {
+export function AuthModal({ open, onClose, onSuccess, defaultMode = 'sign-in' }: AuthModalProps) {
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>(defaultMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,19 +49,6 @@ export function AuthModal({ open, onClose, onSuccess, onContinueAsGuest, default
       onSuccess(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleContinueAsGuest = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      await onContinueAsGuest?.();
-      handleClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to continue as guest.');
     } finally {
       setLoading(false);
     }
@@ -171,30 +157,6 @@ export function AuthModal({ open, onClose, onSuccess, onContinueAsGuest, default
                 {mode === 'sign-in' ? 'Sign up' : 'Sign in'}
               </button>
             </p>
-
-            {/* Divider */}
-            <div className="flex items-center gap-2.5">
-              <div className="flex-1 h-px bg-border/30" aria-hidden="true" />
-              <span className="text-[11px] text-muted-foreground/50">or</span>
-              <div className="flex-1 h-px bg-border/30" aria-hidden="true" />
-            </div>
-
-            {/* Guest button */}
-            {onContinueAsGuest && (
-              <Button
-                type="button"
-                onClick={handleContinueAsGuest}
-                disabled={loading}
-                variant="outline"
-                className="w-full rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-white/4"
-              >
-                {loading ? (
-                  <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" aria-hidden="true" /> Please wait…</>
-                ) : (
-                  'Continue as Guest'
-                )}
-              </Button>
-            )}
           </motion.div>
         </>
       )}

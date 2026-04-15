@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Plus, Users, ChevronRight, X, Loader2 } from 'lucide-react';
+import { Trophy, Plus, Users, ChevronRight, X, Loader2, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getPools, getPool, savePool, addEntry, generateId, importPool, POOL_CODE_LENGTH } from '@/lib/pool-storage';
@@ -11,6 +11,7 @@ import { tournamentColor } from '@/lib/tournament-colors';
 import type { Pool } from '@/lib/pool-types';
 import type { TournamentData } from '@/services/geminiService';
 import type { AppView } from '@/App';
+import type { User } from 'firebase/auth';
 
 interface PoolHubProps {
   onNavigate: (view: AppView) => void;
@@ -26,11 +27,13 @@ interface PoolHubProps {
   initialJoinCode?: string;
   /** Called once the join modal has been shown for the initial code, so the parent can clear its state. */
   onJoinHandled?: () => void;
-  /** True when anonymous sign-in failed — warns users that pool sync is unavailable. */
-  authError?: boolean;
+  /** The currently signed-in Firebase user (null if not signed in). */
+  authUser: User | null;
+  /** Called when a pool action requires authentication; opens the sign-in modal. */
+  onRequireAuth: () => void;
 }
 
-export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode, onJoinHandled, authError }: PoolHubProps) {
+export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode, onJoinHandled, authUser, onRequireAuth }: PoolHubProps) {
   const [pools, setPools] = useState<Pool[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
@@ -50,9 +53,15 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
 
   const [isJoining, setIsJoining] = useState(false);
 
-  // Stable ref for onJoinHandled so the effect dependency is never stale.
+  // Stable refs so effects never capture stale callbacks.
   const onJoinHandledRef = useRef(onJoinHandled);
   onJoinHandledRef.current = onJoinHandled;
+  const onRequireAuthRef = useRef(onRequireAuth);
+  onRequireAuthRef.current = onRequireAuth;
+  // Guard: only trigger the auth prompt once per incoming join code.
+  const authPromptedForCodeRef = useRef<string | null>(null);
+
+  const isAuthed = authUser && !authUser.isAnonymous;
 
   useEffect(() => {
     setPools(getPools());
@@ -61,17 +70,31 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
     setJoinUserName(savedName);
   }, []);
 
-  // When a `?join=CODE` URL param was detected, auto-open the join modal
-  // pre-filled with the code so the user only has to enter their name.
+  // When a `?join=CODE` URL param was detected:
+  //   - If the user is already signed in, pre-fill the join modal immediately.
+  //   - If not, open the auth modal first; the effect re-runs after sign-in.
   useEffect(() => {
-    if (initialJoinCode) {
+    if (!initialJoinCode) return;
+    if (isAuthed) {
       setJoinCode(initialJoinCode.toUpperCase().slice(0, POOL_CODE_LENGTH));
       setShowJoin(true);
       onJoinHandledRef.current?.();
+    } else if (authPromptedForCodeRef.current !== initialJoinCode) {
+      authPromptedForCodeRef.current = initialJoinCode;
+      onRequireAuthRef.current();
     }
-  }, [initialJoinCode]);
+  }, [initialJoinCode, isAuthed]);
 
   const refreshPools = () => setPools(getPools());
+
+  /** Guard helper — shows auth modal and returns false when auth is required. */
+  const requireAuth = (): boolean => {
+    if (!isAuthed) {
+      onRequireAuth();
+      return false;
+    }
+    return true;
+  };
 
   const handleCreateSubmit = async () => {
     if (!createPoolName.trim() || !createUserName.trim() || !createTournamentId) return;
@@ -136,7 +159,10 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
 
       const entryId = generateId();
       const bracketName = joinBracketName.trim() || `${joinUserName.trim()}'s Bracket`;
-      const userId = getUserId();
+      // Use Firebase UID for cross-device entry ownership.
+      // The auth gate ensures authUser is always a real account here,
+      // but fall back to the device UUID as a safety net.
+      const userId = authUser!.uid;
 
       const newEntry = {
         id: entryId,
@@ -167,16 +193,20 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
             <p className="text-[12px] text-muted-foreground/70 mt-0.5">Compete with friends on Grand Slam & Masters 1000 picks</p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setShowJoin(true)}>
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => {
+              if (!requireAuth()) return;
+              setShowJoin(true);
+            }}>
               <Users className="h-3.5 w-3.5 mr-1.5" />
               Join
             </Button>
-            <Button 
-              size="sm" 
-              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" 
-              onClick={() => setShowCreate(true)}
-              disabled={authError}
-              title={authError ? 'Authentication failed — pools cannot be created right now' : undefined}
+            <Button
+              size="sm"
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0"
+              onClick={() => {
+                if (!requireAuth()) return;
+                setShowCreate(true);
+              }}
             >
               <Plus className="h-3.5 w-3.5 mr-1.5" />
               Create
@@ -187,6 +217,28 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
 
       <div className="flex-1 px-5 py-5">
         <div className="max-w-4xl mx-auto">
+          {/* Sign-in required banner */}
+          {!isAuthed && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-3 bg-blue-500/8 border border-blue-500/25 rounded-2xl px-4 py-3 mb-5"
+            >
+              <LogIn className="h-4 w-4 text-blue-400 shrink-0" aria-hidden="true" />
+              <p className="text-[12px] text-blue-300/90 flex-1">
+                <span className="font-semibold">Sign in to create or join pools.</span>{' '}
+                You can still browse existing pools on this device.
+              </p>
+              <Button
+                size="sm"
+                className="shrink-0 rounded-xl bg-blue-600 hover:bg-blue-500 text-white border-0 text-xs"
+                onClick={onRequireAuth}
+              >
+                Sign In
+              </Button>
+            </motion.div>
+          )}
+
           {pools.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, y: 16 }}
@@ -203,7 +255,10 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                   Create your first pool and invite friends to compete!
                 </p>
               </div>
-              <Button className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" onClick={() => setShowCreate(true)}>
+              <Button className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" onClick={() => {
+                if (!requireAuth()) return;
+                setShowCreate(true);
+              }}>
                 <Plus className="h-4 w-4 mr-1.5" />
                 Create Pool
               </Button>
@@ -382,12 +437,6 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                 <p className="text-[11px] text-muted-foreground/60 bg-muted/15 rounded-xl px-3 py-2.5 border border-border/20 leading-relaxed">
                   The tournament draw will be loaded and shared with all participants. You'll fill out your picks after creating the pool.
                 </p>
-
-                {authError && (
-                  <p className="text-xs text-yellow-400 bg-yellow-500/10 rounded-xl px-3 py-2.5 border border-yellow-500/20 leading-relaxed">
-                    ⚠️ Could not connect to the sync server. This pool will be saved locally but may not be joinable from other devices.
-                  </p>
-                )}
               </div>
 
               <div className="flex gap-2 justify-end">
@@ -469,12 +518,6 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                     className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   />
                 </label>
-
-                {authError && (
-                  <p className="text-xs text-yellow-400 bg-yellow-500/10 rounded-xl px-3 py-2.5 border border-yellow-500/20 leading-relaxed">
-                    ⚠️ Could not connect to the sync server. Joining by code may not work right now.
-                  </p>
-                )}
 
                 {joinError && (
                   <p className="text-xs text-red-400 bg-red-500/10 rounded-xl px-3 py-2.5 border border-red-500/20 leading-relaxed">

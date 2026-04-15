@@ -2,14 +2,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Pool documents — readable and writable by any signed-in user, including
-    // users who were automatically signed in anonymously on first load.
-    //
-    // The app always calls signInAnonymously() before touching Firestore, so
-    // every real user satisfies request.auth != null.  The rule blocks raw
-    // HTTP requests that don't carry a Firebase auth token (abuse prevention).
+    // Pool documents — readable and writable only by users who have created a
+    // named Firebase account (email/password or social provider).  Anonymous
+    // sign-ins are explicitly rejected so that pool data is always tied to a
+    // real, accountable identity.  Raw HTTP requests without a valid Firebase
+    // Auth token are also blocked.
     match /pools/{poolId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null
+                         && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
   }

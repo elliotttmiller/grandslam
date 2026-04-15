@@ -53,6 +53,14 @@ export function savePool(pool: Pool): void {
   authSetItem(STORAGE_KEY, JSON.stringify(pools));
 }
 
+export function updateOfficialMatches(poolId: string, officialMatches: Match[]): void {
+  const pool = getPool(poolId);
+  if (!pool) return;
+  pool.officialMatches = officialMatches;
+  savePool(pool);
+}
+
+
 export function createPool(
   name: string,
   tournamentId: string,

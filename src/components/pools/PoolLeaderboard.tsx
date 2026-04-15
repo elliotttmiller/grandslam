@@ -1,35 +1,42 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Share2, Copy, Users, Trophy, Lock,
-  ChevronRight, Check, X, Plus, Trash2, ClipboardCheck, Radio,
+  ChevronRight, Check, X, Plus, Trash2, ClipboardCheck, Radio, ClipboardList, Loader2, LogIn,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { calculateBracketScore } from '@/lib/scoring';
+import { calculatePoolEntryScore } from '@/lib/scoring';
 import {
   getPool, deletePool, exportPool, exportEntry, importEntry, savePool, generateId,
+  updateOfficialMatches,
 } from '@/lib/pool-storage';
-import { subscribeToPool, syncAddEntry } from '@/services/poolSyncService';
+import { subscribeToPool, syncAddEntry, syncUpdateOfficialMatches } from '@/services/poolSyncService';
+import { advancePlayer, getRoundName } from '@/lib/bracket-utils';
 import { getUserId } from '@/lib/user-identity';
 import { tournamentColor } from '@/lib/tournament-colors';
+import { MatchPickCard } from './MatchPickCard';
+import type { Match } from '@/lib/bracket-utils';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 import type { AppView } from '@/App';
-
-const TOTAL_BRACKET_MATCHES = 127;
+import type { User } from 'firebase/auth';
 
 interface RankedEntry extends PoolEntry {
   rank: number;
-  score: ReturnType<typeof calculateBracketScore>;
+  score: ReturnType<typeof calculatePoolEntryScore>;
 }
 
 interface PoolLeaderboardProps {
   pool: Pool;
   onNavigate: (view: AppView) => void;
   onPoolUpdate?: () => void;
+  /** The currently authenticated Firebase user (null when not signed in). */
+  authUser: User | null;
+  /** Open the sign-in modal — called when a pool action requires authentication. */
+  onRequireAuth: () => void;
 }
 
-export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderboardProps) {
+export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRequireAuth }: PoolLeaderboardProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState('');
@@ -37,19 +44,33 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
   const [copied, setCopied] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
 
+  // Local pool state — initialised from the prop, kept fresh via onSnapshot.
+  const [poolData, setPoolData] = useState<Pool>(pool);
+
+  // Official results editor state
+  const [showResultsPanel, setShowResultsPanel] = useState(false);
+  const [editingOfficialMatches, setEditingOfficialMatches] = useState<Match[] | null>(null);
+  const [resultsActiveRound, setResultsActiveRound] = useState(1);
+  const [savingResults, setSavingResults] = useState(false);
+
   // Keep a stable ref to onPoolUpdate so the SSE callback doesn't need it
   // as a dependency (avoids re-subscribing on every parent render).
   const onPoolUpdateRef = useRef(onPoolUpdate);
   onPoolUpdateRef.current = onPoolUpdate;
 
   // Subscribe to real-time pool updates via Firestore onSnapshot.
-  // Whenever Firestore pushes an update we persist it to localStorage and
-  // optionally notify the parent if onPoolUpdate was provided.
+  // Whenever Firestore pushes an update we persist it to localStorage,
+  // update local React state, and optionally notify the parent.
   useEffect(() => {
     setIsLive(false);
     const unsubscribe = subscribeToPool(pool.id, (updatedPool) => {
       setIsLive(true);
       savePool(updatedPool);
+      setPoolData(updatedPool);
+      // Preserve an in-progress results edit: leave editingOfficialMatches
+      // untouched so Firestore snapshots don't clobber unsaved local edits.
+      // The no-op functional update (prev => prev) intentionally does nothing.
+      setEditingOfficialMatches(prev => prev);
       onPoolUpdateRef.current?.();
     });
     return unsubscribe;
@@ -57,16 +78,58 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
 
   const savedUserName = localStorage.getItem('gs_user_name') ?? '';
   const currentUserId = getUserId();
-  // Show delete button only if the current user created the pool.
-  // For legacy pools without `createdBy`, fall back to showing the button.
-  const canDeletePool = !pool.createdBy || pool.createdBy === currentUserId;
+  const isAuthed = authUser && !authUser.isAnonymous;
+  // Effective user ID: prefer Firebase UID for cross-device ownership checks
+  const effectiveUserId = isAuthed ? authUser.uid : currentUserId;
+
+  // Show delete/edit buttons only if the current user created the pool.
+  // Checks Firebase UID (new pools) and device UUID (legacy pools).
+  const isPoolCreator = !poolData.createdBy
+    || poolData.createdBy === effectiveUserId
+    || poolData.createdBy === currentUserId;
+  const canDeletePool = isPoolCreator;
+
+  // Determine whether an entry belongs to the current user.
+  const isMyEntry = useCallback((e: PoolEntry): boolean => {
+    if (isAuthed && e.userId === authUser.uid) return true;
+    if (e.userId && e.userId === currentUserId) return true;
+    return false;
+  }, [isAuthed, authUser, currentUserId]);
+
+  // Total bracket matches in this pool (Grand Slam = 127, Masters = 63)
+  const totalBracketMatches = useMemo(
+    () => poolData.officialMatches.filter(m => m.player1 && m.player2).length,
+    [poolData.officialMatches],
+  );
+
+  // Official results entered so far (matches with a decided winner)
+  const enteredResultsCount = useMemo(
+    () => poolData.officialMatches.filter(m => m.winnerId).length,
+    [poolData.officialMatches],
+  );
+
+  // Total rounds in this pool's bracket
+  const totalRounds = useMemo(
+    () => poolData.officialMatches.length > 0
+      ? Math.max(...poolData.officialMatches.map(m => m.round))
+      : 7,
+    [poolData.officialMatches],
+  );
 
   const rankedEntries = useMemo((): RankedEntry[] => {
-    const scored = pool.entries.map(e => ({
+    const scored = poolData.entries.map(e => ({
       ...e,
-      score: calculateBracketScore(e.matches),
+      score: calculatePoolEntryScore(e.matches, poolData.officialMatches),
     }));
-    scored.sort((a, b) => b.score.total - a.score.total);
+    scored.sort((a, b) => {
+      if (b.score.total !== a.score.total) return b.score.total - a.score.total;
+      // First tiebreaker: tiebreaker games (closer to actual = higher)
+      const aGames = a.tiebreakerGames ?? -1;
+      const bGames = b.tiebreakerGames ?? -1;
+      if (bGames !== aGames) return bGames - aGames;
+      // Second tiebreaker: tiebreaker sets
+      return (b.tiebreakerSets ?? -1) - (a.tiebreakerSets ?? -1);
+    });
 
     let rank = 1;
     return scored.map((e, i) => {
@@ -75,19 +138,19 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
       }
       return { ...e, rank };
     });
-  }, [pool.entries]);
+  }, [poolData.entries, poolData.officialMatches]);
 
-  const myEntries = rankedEntries.filter(e => e.userName === savedUserName);
+  const myEntries = rankedEntries.filter(isMyEntry);
   const leaderScore = rankedEntries[0]?.score.total ?? 0;
 
   // Pool-level stats
-  const submittedCount = pool.entries.filter(e => e.isSubmitted).length;
-  const avgCompletion = pool.entries.length > 0
+  const submittedCount = poolData.entries.filter(e => e.isSubmitted).length;
+  const avgCorrect = enteredResultsCount > 0 && poolData.entries.length > 0
     ? Math.round(
-        pool.entries.reduce((sum, e) => {
-          const s = calculateBracketScore(e.matches);
-          return sum + (s.picksCompleted / TOTAL_BRACKET_MATCHES) * 100;
-        }, 0) / pool.entries.length,
+        poolData.entries.reduce((sum, e) => {
+          const s = calculatePoolEntryScore(e.matches, poolData.officialMatches);
+          return sum + (s.picksCompleted / enteredResultsCount) * 100;
+        }, 0) / poolData.entries.length,
       )
     : 0;
 
@@ -135,31 +198,40 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
       // treat as raw encoded entry
     }
 
-    const imported = importEntry(pool.id, encodedEntry);
+    const imported = importEntry(poolData.id, encodedEntry);
     if (!imported) {
       setImportError('Invalid entry data. Please paste a valid entry link.');
       return;
     }
     setShowImport(false);
     setImportText('');
-    onPoolUpdate();
+    // Refresh local pool state from storage
+    const refreshed = getPool(poolData.id);
+    if (refreshed) setPoolData(refreshed);
+    onPoolUpdate?.();
   };
 
   const handleDelete = () => {
-    deletePool(pool.id);
+    deletePool(poolData.id);
     onNavigate({ page: 'pools' });
   };
 
   const handleCreateEntry = () => {
+    if (!isAuthed) {
+      onRequireAuth();
+      return;
+    }
+
     const entryId = generateId();
-    const bracketName = `${savedUserName}'s Bracket`;
-    const freshPool = getPool(pool.id);
+    const displayName = savedUserName || authUser!.email?.split('@')[0] || 'Participant';
+    const bracketName = `${displayName}'s Bracket`;
+    const freshPool = getPool(poolData.id);
     if (!freshPool) return;
 
     const entry = {
       id: entryId,
-      userId: getUserId(),
-      userName: savedUserName || 'Anonymous',
+      userId: authUser!.uid,
+      userName: displayName,
       bracketName,
       matches: freshPool.officialMatches.map(m => ({ ...m, winnerId: null })),
       isSubmitted: false,
@@ -167,10 +239,41 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
 
     freshPool.entries.push(entry);
     savePool(freshPool);
+    setPoolData(freshPool);
     // Best-effort sync to server
-    syncAddEntry(pool.id, entry);
-    onPoolUpdate();
-    onNavigate({ page: 'pool-entry', poolId: pool.id, entryId });
+    syncAddEntry(poolData.id, entry);
+    onPoolUpdate?.();
+    onNavigate({ page: 'pool-entry', poolId: poolData.id, entryId });
+  };
+
+  // --- Official results editor ---
+  const handleOpenResultsEditor = () => {
+    setEditingOfficialMatches([...poolData.officialMatches]);
+    setResultsActiveRound(1);
+    setShowResultsPanel(true);
+  };
+
+  const handleResultWinner = (matchId: string, winnerId: string) => {
+    setEditingOfficialMatches(prev => prev ? advancePlayer(prev, matchId, winnerId) : prev);
+  };
+
+  const handleSaveResults = async () => {
+    if (!editingOfficialMatches) return;
+    setSavingResults(true);
+    try {
+      updateOfficialMatches(poolData.id, editingOfficialMatches);
+      setPoolData(prev => ({ ...prev, officialMatches: editingOfficialMatches }));
+      await syncUpdateOfficialMatches(poolData.id, editingOfficialMatches);
+      setShowResultsPanel(false);
+      setEditingOfficialMatches(null);
+    } finally {
+      setSavingResults(false);
+    }
+  };
+
+  const handleCancelResults = () => {
+    setShowResultsPanel(false);
+    setEditingOfficialMatches(null);
   };
 
   const rankBadge = (rank: number) => {
@@ -198,31 +301,45 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
           </div>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
-              <h2 className="text-lg font-bold tracking-tight truncate">{pool.name}</h2>
+              <h2 className="text-lg font-bold tracking-tight truncate">{poolData.name}</h2>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className={cn(
                   'text-[10px] font-bold px-1.5 py-0.5 rounded-md border',
-                  tournamentColor(pool.tournamentId)
+                  tournamentColor(poolData.tournamentId)
                 )}>
-                  {pool.tournamentName}
+                  {poolData.tournamentName}
                 </span>
                 <span className="text-[12px] text-muted-foreground/60">
-                  Code: <span className="font-mono font-bold text-foreground/80">{pool.id}</span>
+                  Code: <span className="font-mono font-bold text-foreground/80">{poolData.id}</span>
                 </span>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="rounded-xl shrink-0" onClick={handleCopyInviteLink}>
-              {copied === 'invite' ? <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> : <Share2 className="h-3.5 w-3.5 mr-1.5" />}
-              {copied === 'invite' ? 'Copied!' : 'Share / Invite'}
-            </Button>
+            <div className="flex gap-2 flex-wrap shrink-0">
+              {isPoolCreator && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl text-blue-400 border-blue-500/30 hover:bg-blue-500/10"
+                  onClick={handleOpenResultsEditor}
+                  title="Enter or update official match results"
+                >
+                  <ClipboardList className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+                  Results
+                </Button>
+              )}
+              <Button variant="outline" size="sm" className="rounded-xl shrink-0" onClick={handleCopyInviteLink}>
+                {copied === 'invite' ? <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> : <Share2 className="h-3.5 w-3.5 mr-1.5" />}
+                {copied === 'invite' ? 'Copied!' : 'Share / Invite'}
+              </Button>
+            </div>
           </div>
 
           {/* Stats bar */}
           <div className="flex items-center gap-5 mt-4 flex-wrap">
             <div className="flex items-center gap-1.5 text-[12px]">
               <Users className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="font-bold">{pool.entries.length}</span>
-              <span className="text-muted-foreground/60">{pool.entries.length === 1 ? 'entry' : 'entries'}</span>
+              <span className="font-bold">{poolData.entries.length}</span>
+              <span className="text-muted-foreground/60">{poolData.entries.length === 1 ? 'entry' : 'entries'}</span>
             </div>
             {leaderScore > 0 && (
               <div className="flex items-center gap-1.5 text-[12px]">
@@ -243,7 +360,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
             </div>
             <div className="flex items-center gap-1.5 text-[12px]">
               <Lock className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-muted-foreground/60 truncate max-w-35">{pool.tournamentName}</span>
+              <span className="text-muted-foreground/60 truncate max-w-35">{poolData.tournamentName}</span>
             </div>
           </div>
         </div>
@@ -255,10 +372,10 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
           {/* Stats strip */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
-              { label: 'Entries', value: pool.entries.length, color: '' },
+              { label: 'Entries', value: poolData.entries.length, color: '' },
               { label: 'Submitted', value: submittedCount, color: 'text-emerald-400' },
               { label: 'Leader', value: leaderScore > 0 ? `${leaderScore} pts` : '—', color: 'text-amber-400' },
-              { label: 'Avg picks', value: `${avgCompletion}%`, color: '' },
+              { label: 'Avg correct', value: enteredResultsCount > 0 ? `${avgCorrect}%` : '—', color: '' },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-card/50 border border-border/25 rounded-2xl px-4 py-3 flex flex-col items-center text-center">
                 <span className={cn('text-xl font-black tabular-nums', color)}>{value}</span>
@@ -285,13 +402,15 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                   </div>
                   <div className="flex items-baseline gap-2 mt-0.5">
                     <span className="text-xl font-black text-emerald-400 tabular-nums">{myEntries[0].score.total}</span>
-                    <span className="text-[11px] text-muted-foreground/55">pts · {myEntries[0].score.picksCompleted}/{TOTAL_BRACKET_MATCHES} picks</span>
+                    <span className="text-[11px] text-muted-foreground/55">
+                      pts · {myEntries[0].score.picksCompleted} correct{enteredResultsCount > 0 ? ` of ${enteredResultsCount}` : ''}
+                    </span>
                   </div>
                   <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden mt-1.5">
                     <motion.div
                       className="h-full bg-emerald-500 rounded-full"
                       initial={{ width: 0 }}
-                      animate={{ width: `${(myEntries[0].score.picksCompleted / TOTAL_BRACKET_MATCHES) * 100}%` }}
+                      animate={{ width: enteredResultsCount > 0 ? `${(myEntries[0].score.picksCompleted / enteredResultsCount) * 100}%` : '0%' }}
                       transition={{ duration: 0.5, ease: 'easeOut' }}
                     />
                   </div>
@@ -299,7 +418,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                 <Button
                   size="sm"
                   className="shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white border-0 rounded-xl"
-                  onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: myEntries[0].id })}
+                  onClick={() => onNavigate({ page: 'pool-entry', poolId: poolData.id, entryId: myEntries[0].id })}
                 >
                   {myEntries[0].isSubmitted ? 'View' : 'Edit Picks'}
                 </Button>
@@ -313,16 +432,18 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
             <div className="flex gap-2">
               {myEntries.length === 0 ? (
                 <Button size="sm" className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" onClick={handleCreateEntry}>
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  Create My Entry
+                  {!isAuthed
+                    ? <><LogIn className="h-3.5 w-3.5 mr-1.5" />Sign In to Enter</>
+                    : <><Plus className="h-3.5 w-3.5 mr-1.5" />Create My Entry</>
+                  }
                 </Button>
               ) : myEntries.some(e => !e.isSubmitted) ? (
-                <Button size="sm" className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: myEntries.find(e => !e.isSubmitted)!.id })}>
+                <Button size="sm" className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0" onClick={() => onNavigate({ page: 'pool-entry', poolId: poolData.id, entryId: myEntries.find(e => !e.isSubmitted)!.id })}>
                   Continue My Bracket
                   <ChevronRight className="h-3.5 w-3.5 ml-1" />
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: myEntries[0].id })}>
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => onNavigate({ page: 'pool-entry', poolId: poolData.id, entryId: myEntries[0].id })}>
                   View My Bracket
                 </Button>
               )}
@@ -344,7 +465,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                   transition={{ delay: i * 0.04, duration: 0.2 }}
                   className={cn(
                     "flex items-center gap-3 px-4 py-3.5 rounded-2xl border transition-colors",
-                    entry.userName === savedUserName
+                    isMyEntry(entry)
                       ? "bg-emerald-500/6 border-emerald-500/20"
                       : "bg-card/50 border-border/30 hover:border-border/50 hover:bg-card/70"
                   )}
@@ -366,7 +487,9 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                     <div className="text-[11px] text-muted-foreground/55 truncate">{entry.bracketName}</div>
                     {/* Mobile stats row */}
                     <div className="flex items-center gap-3 mt-1 sm:hidden">
-                      <span className="text-[11px] text-muted-foreground/50 tabular-nums">{entry.score.picksCompleted}/{TOTAL_BRACKET_MATCHES}</span>
+                      <span className="text-[11px] text-muted-foreground/50 tabular-nums">
+                        {entry.score.picksCompleted}{enteredResultsCount > 0 ? `/${enteredResultsCount}` : ''} correct
+                      </span>
                       {entry.score.upsetBonus > 0 && (
                         <span className="text-[11px] text-amber-400 font-bold tabular-nums">⚡+{entry.score.upsetBonus}</span>
                       )}
@@ -376,9 +499,9 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                       <div
                         className={cn(
                           'h-full rounded-full transition-all duration-500',
-                          entry.score.picksCompleted === TOTAL_BRACKET_MATCHES ? 'bg-emerald-500' : 'bg-emerald-500/50',
+                          enteredResultsCount > 0 && entry.score.picksCompleted === enteredResultsCount ? 'bg-emerald-500' : 'bg-emerald-500/50',
                         )}
-                        style={{ width: `${(entry.score.picksCompleted / TOTAL_BRACKET_MATCHES) * 100}%` }}
+                        style={{ width: enteredResultsCount > 0 ? `${(entry.score.picksCompleted / enteredResultsCount) * 100}%` : '0%' }}
                         aria-hidden="true"
                       />
                     </div>
@@ -389,7 +512,9 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                     <span className={cn("tabular-nums", entry.score.upsetBonus > 0 ? "text-amber-400 font-bold" : "text-muted-foreground/40")} title="Upset bonus">
                       {entry.score.upsetBonus > 0 ? `+${entry.score.upsetBonus}` : '—'}
                     </span>
-                    <span className="text-muted-foreground/50 tabular-nums" title="Picks completed">{entry.score.picksCompleted}/{TOTAL_BRACKET_MATCHES}</span>
+                    <span className="text-muted-foreground/50 tabular-nums" title="Correct picks">
+                      {entry.score.picksCompleted}{enteredResultsCount > 0 ? `/${enteredResultsCount}` : ''}
+                    </span>
                   </div>
                   {/* Gap from leader */}
                   {entry.rank > 1 && leaderScore > 0 && (
@@ -410,7 +535,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
                       variant="ghost"
                       size="sm"
                       className="h-7 px-2.5 text-[11px] rounded-lg text-muted-foreground/60 hover:text-foreground"
-                      onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: entry.id })}
+                      onClick={() => onNavigate({ page: 'pool-entry', poolId: poolData.id, entryId: entry.id })}
                       aria-label={`View ${entry.userName}'s bracket`}
                     >
                       View
@@ -434,8 +559,8 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
           <div className="border border-border/30 rounded-2xl p-5 bg-card/30">
             <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 text-muted-foreground/60">Invite Others</h3>
             <div className="flex items-center gap-4 mb-4 flex-wrap">
-              <div className="font-mono text-2xl font-black tracking-[0.3em] bg-muted/15 px-4 py-2.5 rounded-xl border border-border/25" aria-label={`Pool code: ${pool.id}`}>
-                {pool.id}
+              <div className="font-mono text-2xl font-black tracking-[0.3em] bg-muted/15 px-4 py-2.5 rounded-xl border border-border/25" aria-label={`Pool code: ${poolData.id}`}>
+                {poolData.id}
               </div>
               <div className="flex flex-col gap-2">
                 <Button variant="outline" size="sm" className="rounded-xl" onClick={handleCopyInviteLink}>
@@ -471,6 +596,85 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate }: PoolLeaderbo
               </Button>
             )}
           </div>
+          {/* Official Results Editor — pool creator only */}
+          <AnimatePresence>
+            {showResultsPanel && editingOfficialMatches && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                transition={{ duration: 0.2 }}
+                className="border border-blue-500/30 rounded-2xl bg-blue-500/5 p-5 flex flex-col gap-4"
+              >
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4 text-blue-400" aria-hidden="true" />
+                    <h3 className="text-[11px] font-black uppercase tracking-widest text-blue-400">Official Results</h3>
+                    <span className="text-[10px] text-muted-foreground/50">
+                      {editingOfficialMatches.filter(m => m.winnerId).length} / {editingOfficialMatches.filter(m => m.player1 && m.player2).length} decided
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" className="rounded-xl" onClick={handleCancelResults} disabled={savingResults}>
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="rounded-xl bg-blue-600 hover:bg-blue-500 text-white border-0"
+                      onClick={handleSaveResults}
+                      disabled={savingResults}
+                    >
+                      {savingResults
+                        ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden="true" />Saving…</>
+                        : 'Save Results'
+                      }
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Round tabs */}
+                <div className="flex gap-1 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }} role="tablist" aria-label="Rounds">
+                  {Array.from({ length: totalRounds }, (_, i) => i + 1).map(round => (
+                    <button
+                      key={round}
+                      role="tab"
+                      aria-selected={resultsActiveRound === round}
+                      onClick={() => setResultsActiveRound(round)}
+                      className={cn(
+                        'flex-none px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all',
+                        resultsActiveRound === round
+                          ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                          : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/4',
+                      )}
+                    >
+                      {getRoundName(round, totalRounds)}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Match cards */}
+                <div className="flex flex-col gap-2">
+                  {editingOfficialMatches
+                    .filter(m => m.round === resultsActiveRound)
+                    .sort((a, b) => a.matchNumber - b.matchNumber)
+                    .map((match, i) => (
+                      <MatchPickCard
+                        key={match.id}
+                        match={match}
+                        matchIndex={i}
+                        onSelectWinner={handleResultWinner}
+                        readOnly={false}
+                      />
+                    ))}
+                </div>
+
+                <p className="text-[10px] text-blue-400/60 leading-relaxed">
+                  Select the winner for each match. Results are broadcast to all participants in real-time when you save.
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
         </div>
       </div>
 

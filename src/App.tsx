@@ -19,14 +19,16 @@ import { cn } from './lib/utils';
 import { createPool, addEntry, getPool, getPools, savePool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH, POOLS_STORAGE_KEY } from './lib/pool-storage';
 import { setAuthStorageUserId, getCurrentAuthUserId, collectAndClearScopedData, authGetItem, authSetItem, authRemoveItem } from './lib/auth-storage';
 import { syncCreatePool, syncAddEntry, syncUpdateEntry } from './services/poolSyncService';
-import { onAuthStateChanged, signOut, signInAnonymously } from './services/authService';
+import { onAuthStateChanged, signOut } from './services/authService';
 import { getUserId, setUserName } from './lib/user-identity';
 import { AnimatedNumber } from './components/AnimatedNumber';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { BracketLoadingSkeleton, RoundListSkeleton } from './components/BracketLoadingSkeleton';
+import { AuthGate } from './components/AuthGate';
 import { MastersTournamentModal } from './components/MastersTournamentModal';
 import { MASTERS_TOURNAMENTS, GRAND_SLAM_STATIC_INFO, surfaceColor, type MastersTournament } from './lib/masters-tournaments';
 import type { Pool } from './lib/pool-types';
+
 import type { User } from 'firebase/auth';
 
 export type AppView =
@@ -74,7 +76,6 @@ export default function App() {
   const isFirstAuthCallbackRef = useRef(true);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [authError, setAuthError] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalDefaultMode, setAuthModalDefaultMode] = useState<'sign-in' | 'sign-up'>('sign-in');
 
@@ -141,7 +142,6 @@ export default function App() {
       }
 
       setAuthUser(user);
-      setAuthError(false);
       setAuthChecked(true);
     });
     return unsubscribe;
@@ -160,6 +160,13 @@ export default function App() {
     setAuthModalDefaultMode('sign-up');
     setShowAuthModal(true);
   };
+
+  // Called by PoolHub / PoolLeaderboard when a pool action requires auth
+  // (defensive fallback — the auth gate should prevent reaching pool pages unauthenticated)
+  const handleRequireAuth = useCallback(() => {
+    setAuthModalDefaultMode('sign-up');
+    setShowAuthModal(true);
+  }, []);
 
   // App view ref — lets the celebration effect read current page without adding
   // appView as a dependency (which would re-run the effect on navigation)
@@ -440,7 +447,9 @@ export default function App() {
     // Persist user name so subsequent joins pre-fill the field
     setUserName(userName);
     const entryId = generateId();
-    const userId = getUserId();
+    // Use Firebase UID for cross-device ownership — authUser is always present
+    // here because pool creation is gated behind authentication.
+    const userId = authUser?.uid ?? getUserId();
     const pool = createPool(poolName, tournamentId, tournamentName, officialMatches, userId);
     const newEntry = {
       id: entryId,
@@ -453,29 +462,17 @@ export default function App() {
     addEntry(pool.id, newEntry);
 
     // Push pool and initial entry to the sync server (best-effort).
-    // Only attempt sync if authentication is ready. If auth failed or is still
-    // initializing, skip sync — the pool remains in localStorage but won't be
-    // joinable from other devices. Awaiting ensures the pool exists in Firestore
-    // before the creator navigates away, so other devices can immediately find
-    // it by code.
-    if (authChecked && !authError && authUser) {
+    if (authChecked && authUser && !authUser.isAnonymous) {
       const synced = await syncCreatePool(pool);
       if (synced) {
         await syncAddEntry(pool.id, newEntry);
         setPoolSyncFailed(false);
       } else {
-        // Pool was saved locally but not to Firestore — warn the creator.
         setPoolSyncFailed(true);
         console.warn('Pool sync failed — pool is accessible locally but may not be joinable from other devices.');
       }
     } else {
-      // Auth is not ready — pool will remain local-only.
       setPoolSyncFailed(true);
-      if (authError) {
-        console.warn('Cannot sync pool — authentication failed. Pool is accessible locally only.');
-      } else if (!authChecked) {
-        console.warn('Cannot sync pool — authentication is still initializing. Pool is accessible locally only.');
-      }
     }
 
     setAppView({ page: 'pool', poolId: pool.id });
@@ -673,12 +670,39 @@ export default function App() {
     [allTournamentScores, calendarBonus]
   );
 
+  // ── Auth gate ────────────────────────────────────────────────────────────
+  // Show a loading screen while Firebase restores the session, then force
+  // users to sign in before accessing any part of the app.
+  const isSignedIn = authUser && !authUser.isAnonymous;
+
+  if (!authChecked) {
+    return (
+      <div className="fixed inset-0 bg-background flex items-center justify-center">
+        <img
+          src="/grandslam/perfect-set-logo.png"
+          alt="Loading Perfect Set…"
+          className="h-20 w-20 object-contain animate-pulse drop-shadow-2xl"
+          draggable={false}
+        />
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <AuthGate
+        onSuccess={(user) => setAuthUser(user)}
+      />
+    );
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   return (
     <div className="bg-background text-foreground">
       {/* Champion celebration overlay */}
       <CelebrationOverlay visible={showCelebration} championName={celebrationName} />
 
-      {/* Authentication modal */}
+      {/* Authentication modal (fallback for mid-session re-auth) */}
       <AuthModal
         open={showAuthModal}
         defaultMode={authModalDefaultMode}
@@ -686,17 +710,6 @@ export default function App() {
         onSuccess={(user) => {
           setAuthUser(user);
           setShowAuthModal(false);
-        }}
-        onContinueAsGuest={async () => {
-          try {
-            await signInAnonymously();
-            setAuthError(false);
-            setShowAuthModal(false);
-          } catch (err) {
-            console.warn('Anonymous sign-in failed:', err);
-            setAuthError(true);
-            throw err;
-          }
         }}
       />
 
@@ -1162,7 +1175,8 @@ export default function App() {
                 onCreatePool={handleCreatePool}
                 initialJoinCode={pendingJoinCode ?? undefined}
                 onJoinHandled={() => setPendingJoinCode(null)}
-                authError={authError}
+                authUser={authUser}
+                onRequireAuth={handleRequireAuth}
               />
             </motion.div>
           )}
@@ -1186,6 +1200,8 @@ export default function App() {
                 <PoolLeaderboard
                   pool={pool}
                   onNavigate={setAppView}
+                  authUser={authUser}
+                  onRequireAuth={handleRequireAuth}
                 />
               </motion.div>
             );
@@ -1225,7 +1241,7 @@ export default function App() {
                     setAppView({ page: 'pool', poolId: pool.id });
                   }}
                   onBack={() => setAppView({ page: 'pool', poolId: pool.id })}
-                  readOnly={entry.isSubmitted || (entry.userId !== undefined && entry.userId !== getUserId())}
+                  readOnly={entry.isSubmitted || (entry.userId !== undefined && entry.userId !== (authUser?.uid ?? getUserId()))}
                 />
               </motion.div>
             );

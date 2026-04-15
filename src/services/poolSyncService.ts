@@ -22,6 +22,7 @@ import {
 } from 'firebase/firestore';
 import { getDb } from '@/lib/firebase';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
+import type { Match } from '@/lib/bracket-utils';
 
 // Helper: Recursively remove undefined values from objects/arrays
 function removeUndefined<T>(obj: T): T {
@@ -179,7 +180,40 @@ export async function syncUpdateEntry(
       tx.update(ref, { entries, updatedAt: serverTimestamp() });
     });
     return true;
-  } catch {
+  } catch (error) {
+    console.error('Failed to update pool entry:', error);
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Official results
+// ---------------------------------------------------------------------------
+
+/**
+ * Replace the pool's `officialMatches` array with the provided matches.
+ *
+ * Used by the pool creator to record actual tournament results as matches are
+ * played.  All connected clients receive the update via `subscribeToPool`.
+ *
+ * Uses a Firestore Transaction so the update is atomic.  Returns true on
+ * success, false on failure.
+ */
+export async function syncUpdateOfficialMatches(
+  poolId: string,
+  officialMatches: Match[],
+): Promise<boolean> {
+  try {
+    const ref = doc(getDb(), 'pools', poolId);
+    await runTransaction(getDb(), async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return;
+      const cleanMatches = removeUndefined(officialMatches);
+      tx.update(ref, { officialMatches: cleanMatches, updatedAt: serverTimestamp() });
+    });
+    return true;
+  } catch (error) {
+    console.error('Failed to update official matches:', error);
     return false;
   }
 }
