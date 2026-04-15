@@ -65,12 +65,14 @@ export function LeagueDetail({
 
   // Real-time subscription
   useEffect(() => {
-    setPreviousRanks({});
     const unsubscribe = subscribeToLeague(leagueId, (updated) => {
       saveLeague(updated);
       setLeague(prevLeague => {
-        const prior = prevLeague ?? updated;
-        setPreviousRanks(buildRankMap(computeStandings(prior)));
+        if (prevLeague?.id === updated.id) {
+          setPreviousRanks(buildRankMap(computeStandings(prevLeague)));
+        } else {
+          setPreviousRanks({});
+        }
         return updated;
       });
     });
@@ -421,7 +423,11 @@ function HubTab({ league, standings, leagueTournaments, onOpenInsights }: HubTab
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <HubStatCard label="Leader" value={standings[0]?.userName ?? '—'} detail={`${standings[0]?.totalPoints ?? 0} pts`} />
+        <HubStatCard
+          label="Leader"
+          value={standings[0]?.userName ?? '—'}
+          detail={standings[0] ? `${standings[0].totalPoints} pts` : '—'}
+        />
         <HubStatCard label="Members" value={String(league.members.length)} detail="Competing this season" />
         <HubStatCard label="Tournament pools" value={String(poolIds.length)} detail={`${activeTournamentCount} active now`} />
         <HubStatCard label="Scheduled events" value={String(leagueTournaments.length)} detail={`Calendar year ${league.year}`} />
@@ -614,15 +620,15 @@ function StandingsTab({
 }
 
 function RankChangeBadge({ currentRank, previousRank }: { currentRank: number; previousRank?: number }) {
-  if (typeof previousRank !== 'number') return null;
-  const delta = previousRank - currentRank;
-  if (delta === 0) return null;
+  if (previousRank === undefined) return null;
+  const positionsGained = previousRank - currentRank;
+  if (positionsGained === 0) return null;
 
-  if (delta > 0) {
+  if (positionsGained > 0) {
     return (
       <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-300/85 bg-emerald-500/10 border border-emerald-500/25 rounded-full px-1.5 py-0.5">
         <TrendingUp className="h-2.5 w-2.5" />
-        +{delta}
+        +{positionsGained}
       </span>
     );
   }
@@ -630,7 +636,7 @@ function RankChangeBadge({ currentRank, previousRank }: { currentRank: number; p
   return (
     <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-300/85 bg-amber-500/10 border border-amber-500/25 rounded-full px-1.5 py-0.5">
       <TrendingDown className="h-2.5 w-2.5" />
-      {delta}
+      {positionsGained}
     </span>
   );
 }
@@ -872,10 +878,10 @@ function buildLeagueResults(league: League, leagueTournaments: TournamentData[])
       if (pool.entries.length === 0) return null;
 
       let winnerName = '—';
-      let winnerPoints = 0;
+      let winnerPoints = -1;
       for (const entry of pool.entries) {
         const score = calculatePoolEntryScore(entry.matches, pool.officialMatches);
-        if (score.total > winnerPoints || winnerName === '—') {
+        if (score.total > winnerPoints) {
           winnerName = entry.userName;
           winnerPoints = score.total;
         }
