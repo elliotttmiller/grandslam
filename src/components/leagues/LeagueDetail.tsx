@@ -470,7 +470,7 @@ function HubStatCard({ label, value, detail }: { label: string; value: string; d
           <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/45">{label}</p>
           <p className="text-[11px] text-muted-foreground/65 mt-0.5 truncate">{detail}</p>
         </div>
-        <p className="text-sm sm:text-base font-black text-foreground truncate">{value}</p>
+        <p className="text-sm sm:text-base font-black text-foreground text-right">{value}</p>
       </div>
     </div>
   );
