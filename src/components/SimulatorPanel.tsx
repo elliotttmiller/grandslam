@@ -23,6 +23,7 @@ import type { Match } from '@/lib/bracket-utils';
 import {
   MADRID_TEST_POOL_ID,
   setupTestMadridPool,
+  setupTestMadridLeagueRun,
   updateTestPoolResults,
   clearTestPool,
 } from '@/lib/test-tournament-data';
@@ -196,6 +197,20 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
       onNavigate({ page: 'pool', poolId: pool.id });
       onClose();
     }
+  };
+
+  // ── League test simulator ──
+  const handleLeagueSimulation = () => {
+    setStepRunning(true);
+    setTimeout(() => {
+      const userId = authUser?.uid ?? null;
+      const leagueId = setupTestMadridLeagueRun(userId);
+      refresh();
+      setStepRunning(false);
+      flash('League simulation complete — opening league view ✅');
+      onNavigate({ page: 'league-detail', leagueId });
+      onClose();
+    }, 280);
   };
 
   // ── Ranked leaderboard rows ──
@@ -536,6 +551,31 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
               </Button>
             </div>
           )}
+
+          {/* ══ STEP 4: League Simulation ══ */}
+          <StepSection
+            number={4}
+            label="League Test Simulator"
+            icon={<Trophy className="h-3 w-3" />}
+          >
+            <p className="text-xs text-white/50 leading-relaxed mb-3">
+              Creates a <strong className="text-white/70">test league</strong>, links the Madrid test pool,
+              auto-simulates through the final, and opens the league interface.
+            </p>
+            <Button
+              onClick={handleLeagueSimulation}
+              disabled={stepRunning || autoRunning}
+              className="w-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-xl h-9 border-0 transition-colors disabled:opacity-40"
+            >
+              {stepRunning ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Trophy className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+              )}
+              Run League Simulator
+              <ArrowRight className="h-3.5 w-3.5 ml-1.5" aria-hidden="true" />
+            </Button>
+          </StepSection>
         </div>
 
         {/* ── Footer ── */}
@@ -616,4 +656,3 @@ export function SimulatorButton({ onClick, hasPool }: SimulatorButtonProps) {
     </motion.button>
   );
 }
-
