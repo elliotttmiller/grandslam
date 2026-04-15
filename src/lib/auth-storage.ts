@@ -15,6 +15,42 @@ export function setAuthStorageUserId(userId: string | null): void {
   currentAuthUserId = userId;
 }
 
+/** Returns the UID that is currently scoping all storage operations. */
+export function getCurrentAuthUserId(): string | null {
+  return currentAuthUserId;
+}
+
+/**
+ * Collect every localStorage entry that lives in the given namespace
+ * (`userId = null` → `_guest`, otherwise `_auth_<userId>`) and remove
+ * those keys from localStorage.  Returns a map of base-key → raw value.
+ *
+ * Call this *before* switching to a new authenticated namespace so that
+ * any data the user created in the old namespace can be migrated without
+ * loss.
+ */
+export function collectAndClearScopedData(userId: string | null): Record<string, string> {
+  const suffix = userId ? `_auth_${userId}` : '_guest';
+  const collected: Record<string, string> = {};
+  const toRemove: string[] = [];
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.endsWith(suffix)) {
+      const baseKey = key.slice(0, -suffix.length);
+      const value = localStorage.getItem(key);
+      if (value !== null) collected[baseKey] = value;
+      toRemove.push(key);
+    }
+  }
+
+  for (const key of toRemove) {
+    localStorage.removeItem(key);
+  }
+
+  return collected;
+}
+
 function scopeKey(key: string): string {
   if (currentAuthUserId) {
     // Authenticated: scope to this user's UID
