@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Calendar, Trophy, RefreshCw, AlertCircle, Layers, DollarSign, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { fetchMastersTournamentDetails, type MastersTournamentDetails } from '@/services/geminiService';
+import { fetchMastersTournamentDetails, CACHE_KEY_MASTERS_PREFIX, type MastersTournamentDetails } from '@/services/geminiService';
 import { type MastersTournament, surfaceColor } from '@/lib/masters-tournaments';
 
 interface MastersTournamentModalProps {
@@ -38,7 +38,7 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
   const handleRefresh = () => {
     if (!tournament) return;
     // Clear cache for this tournament so fresh data is fetched
-    const cacheKey = `tennis_masters_details_v1_${tournament.id}`;
+    const cacheKey = `${CACHE_KEY_MASTERS_PREFIX}${tournament.id}`;
     localStorage.removeItem(cacheKey);
     setDetails(null);
     setError(null);

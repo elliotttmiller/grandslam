@@ -16,7 +16,7 @@ const FALLBACK_MODEL = "gemini-2.5-flash";
 
 const CACHE_KEY_TOURNAMENTS = 'tennis_tournaments_cache_v5';
 const CACHE_KEY_PLAYERS_PREFIX = 'tennis_players_cache_v5_';
-const CACHE_KEY_MASTERS_PREFIX = 'tennis_masters_details_v1_';
+export const CACHE_KEY_MASTERS_PREFIX = 'tennis_masters_details_v1_';
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
 export interface TournamentData {
@@ -449,7 +449,7 @@ Do not include any markdown formatting. Return only the JSON object.`;
     venue: 'Venue unavailable',
     surface: 'Hard',
     drawSize: 96,
-    seedings: FALLBACK_PLAYERS.slice(0, 16).map(p => ({ ...p, ranking: p.seed })),
+    seedings: FALLBACK_PLAYERS.slice(0, 16).map(p => ({ ...p, ranking: undefined })),
     seedingsStatus: 'predicted',
     notes: 'Live data unavailable. Showing approximate predicted seedings.',
   };

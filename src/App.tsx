@@ -837,13 +837,13 @@ export default function App() {
                 </>
               )}
 
-              {/* Masters 1000 Tournament Search */}
-              <div className={appView.page === 'bracket' ? 'border-t border-white/[0.07] mt-1 pt-4' : 'flex-1 flex flex-col overflow-hidden'}>
-                <div className="px-5 pb-2">
+              {/* Masters 1000 Tournament Search — always visible */}
+              <div className={cn('flex flex-col', appView.page === 'bracket' ? 'border-t border-white/[0.07] pt-4 mt-1 max-h-64 overflow-hidden' : 'flex-1 overflow-hidden')}>
+                <div className="px-5 pb-2 shrink-0">
                   <h3 className="text-[11px] font-black uppercase tracking-widest text-white/40">Masters 1000</h3>
                 </div>
                 {/* Search input */}
-                <div className="px-3 pb-2">
+                <div className="px-3 pb-2 shrink-0">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30 pointer-events-none" aria-hidden="true" />
                     <input
@@ -858,70 +858,68 @@ export default function App() {
                 </div>
                 {/* Tournament list */}
                 <div className="flex-1 flex flex-col gap-0.5 overflow-y-auto custom-scrollbar px-3 pb-3">
-                  {MASTERS_TOURNAMENTS.filter(t =>
-                    mastersSearchQuery.trim() === '' ||
-                    t.name.toLowerCase().includes(mastersSearchQuery.toLowerCase()) ||
-                    t.shortName.toLowerCase().includes(mastersSearchQuery.toLowerCase()) ||
-                    t.location.toLowerCase().includes(mastersSearchQuery.toLowerCase())
-                  ).map(t => {
-                    const now = new Date();
-                    const start = new Date(t.approxStart);
-                    const end = new Date(t.approxEnd);
-                    const isActive = now >= start && now <= end;
-                    const isPast = now > end;
-                    const surfaceTag = t.surface === 'Clay'
-                      ? 'text-orange-400 bg-orange-500/10 border-orange-500/20'
-                      : t.surface === 'Indoor Hard'
-                        ? 'text-violet-400 bg-violet-500/10 border-violet-500/20'
-                        : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => {
-                          setSelectedMastersTournament(t);
-                          setIsSidebarOpen(false);
-                        }}
-                        className="flex flex-col gap-1 p-3 rounded-xl transition-all text-left hover:bg-white/5 active:bg-white/8"
-                        aria-label={`View details for ${t.name}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-400/60" aria-hidden="true" />
-                          <span className="text-[13px] font-semibold truncate flex-1 min-w-0 text-white/80">
-                            {t.shortName}
-                          </span>
-                          {isActive && (
-                            <span className="shrink-0 text-[9px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded-full border border-emerald-500/25">
-                              Live
-                            </span>
-                          )}
-                          {isPast && !isActive && (
-                            <span className="shrink-0 text-[9px] font-bold text-white/25 bg-white/4 px-1.5 py-0.5 rounded-full border border-white/8">
-                              Past
-                            </span>
-                          )}
-                          <span className={cn('shrink-0 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full border', surfaceTag)}>
-                            {t.surface === 'Indoor Hard' ? 'Indoor' : t.surface}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 pl-[22px] text-white/30">
-                          <Calendar className="h-3 w-3 shrink-0" aria-hidden="true" />
-                          <span className="text-[11px] truncate">
-                            {new Date(t.approxStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                            {' – '}
-                            {new Date(t.approxEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                        </div>
-                      </button>
+                  {(() => {
+                    const filtered = MASTERS_TOURNAMENTS.filter(t =>
+                      mastersSearchQuery.trim() === '' ||
+                      t.name.toLowerCase().includes(mastersSearchQuery.toLowerCase()) ||
+                      t.shortName.toLowerCase().includes(mastersSearchQuery.toLowerCase()) ||
+                      t.location.toLowerCase().includes(mastersSearchQuery.toLowerCase())
                     );
-                  })}
-                  {MASTERS_TOURNAMENTS.filter(t =>
-                    mastersSearchQuery.trim() === '' ||
-                    t.name.toLowerCase().includes(mastersSearchQuery.toLowerCase()) ||
-                    t.shortName.toLowerCase().includes(mastersSearchQuery.toLowerCase()) ||
-                    t.location.toLowerCase().includes(mastersSearchQuery.toLowerCase())
-                  ).length === 0 && (
-                    <p className="text-[12px] text-white/30 text-center py-6">No tournaments match "{mastersSearchQuery}"</p>
-                  )}
+                    if (filtered.length === 0) {
+                      return <p className="text-[12px] text-white/30 text-center py-6">No tournaments match "{mastersSearchQuery}"</p>;
+                    }
+                    return filtered.map(t => {
+                      const now = new Date();
+                      const start = new Date(t.approxStart);
+                      const end = new Date(t.approxEnd);
+                      const isActive = now >= start && now <= end;
+                      const isPast = now > end;
+                      const surfaceTag = t.surface === 'Clay'
+                        ? 'text-orange-400 bg-orange-500/10 border-orange-500/20'
+                        : t.surface === 'Indoor Hard'
+                          ? 'text-violet-400 bg-violet-500/10 border-violet-500/20'
+                          : 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setSelectedMastersTournament(t);
+                            setIsSidebarOpen(false);
+                          }}
+                          className="flex flex-col gap-1 p-3 rounded-xl transition-all text-left hover:bg-white/5 active:bg-white/8"
+                          aria-label={`View details for ${t.name}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-400/60" aria-hidden="true" />
+                            <span className="text-[13px] font-semibold truncate flex-1 min-w-0 text-white/80">
+                              {t.shortName}
+                            </span>
+                            {isActive && (
+                              <span className="shrink-0 text-[9px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded-full border border-emerald-500/25">
+                                Live
+                              </span>
+                            )}
+                            {isPast && !isActive && (
+                              <span className="shrink-0 text-[9px] font-bold text-white/25 bg-white/4 px-1.5 py-0.5 rounded-full border border-white/8">
+                                Past
+                              </span>
+                            )}
+                            <span className={cn('shrink-0 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full border', surfaceTag)}>
+                              {t.surface === 'Indoor Hard' ? 'Indoor' : t.surface}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 pl-[22px] text-white/30">
+                            <Calendar className="h-3 w-3 shrink-0" aria-hidden="true" />
+                            <span className="text-[11px] truncate">
+                              {new Date(t.approxStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                              {' – '}
+                              {new Date(t.approxEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 

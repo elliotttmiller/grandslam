@@ -59,7 +59,7 @@ export const MASTERS_TOURNAMENTS: MastersTournament[] = [
   },
   {
     id: 'rome',
-    name: 'Internazionali BNL d\'Italia (Rome)',
+    name: "Internazionali BNL d'Italia (Rome)",
     shortName: 'Rome',
     location: 'Rome, Italy',
     country: 'ITA',
@@ -71,7 +71,8 @@ export const MASTERS_TOURNAMENTS: MastersTournament[] = [
     id: 'canada',
     name: 'National Bank Open (Canada)',
     shortName: 'Canada',
-    location: 'Montréal / Toronto, Canada',
+    // Alternates between Montréal (even years) and Toronto (odd years); 2026 is in Montréal
+    location: 'Montréal, Canada',
     country: 'CAN',
     surface: 'Hard',
     approxStart: '2026-08-09',
