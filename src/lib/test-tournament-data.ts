@@ -16,6 +16,8 @@ import { generateMastersBracket, advancePlayer } from './bracket-utils';
 import type { Player, Match } from './bracket-utils';
 import type { Pool, PoolEntry } from './pool-types';
 import { savePool, getPool, deletePool, generateId } from './pool-storage';
+import type { League, LeagueMember } from './league-types';
+import { saveLeague } from './league-storage';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -23,6 +25,7 @@ export const MADRID_TEST_TOURNAMENT_ID = 'madrid';
 export const MADRID_TEST_POOL_ID = 'TSTMDP';
 export const MADRID_TEST_POOL_NAME = '🧪 Test: Madrid 2025';
 export const MADRID_TEST_TOURNAMENT_NAME = 'Mutua Madrid Open';
+export const MADRID_TEST_LEAGUE_ID = 'TSTMDL';
 
 /** Total rounds in an ATP Masters 1000 bracket (64-player draw). */
 const MASTERS_TOTAL_ROUNDS = 6;
@@ -440,4 +443,52 @@ export function updateTestPoolResults(upToRound: number): Pool | null {
  */
 export function clearTestPool(): void {
   deletePool(MADRID_TEST_POOL_ID);
+}
+
+/**
+ * Creates a completed test league run:
+ *  - creates/resets the Madrid test pool
+ *  - applies official results through the final
+ *  - creates/updates a linked test league with members from the pool entries
+ *
+ * Returns the created league ID.
+ */
+export function setupTestMadridLeagueRun(createdByUserId: string | null): string {
+  setupTestMadridPool(createdByUserId);
+  const pool = updateTestPoolResults(MASTERS_TOTAL_ROUNDS);
+  if (!pool) return MADRID_TEST_LEAGUE_ID;
+
+  const members: LeagueMember[] = pool.entries.map(entry => ({
+    userId: entry.userId,
+    userName: entry.userName,
+    joinedAt: new Date().toISOString(),
+  }));
+
+  if (createdByUserId && !members.some(m => m.userId === createdByUserId)) {
+    members.unshift({
+      userId: createdByUserId,
+      userName: 'You',
+      joinedAt: new Date().toISOString(),
+    });
+  }
+
+  const league: League = {
+    id: MADRID_TEST_LEAGUE_ID,
+    name: '🧪 Test League: Madrid 2025',
+    description: 'Completed league simulation for Madrid 2025.',
+    year: 2025,
+    isPrivate: true,
+    createdBy: createdByUserId ?? members[0]?.userId ?? 'test-user-1',
+    createdByName: createdByUserId ? 'You' : members[0]?.userName ?? 'Test User',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    members,
+    memberIds: members.map(m => m.userId),
+    tournamentPoolIds: {
+      [MADRID_TEST_TOURNAMENT_ID]: pool.id,
+    },
+  };
+
+  saveLeague(league);
+  return league.id;
 }
