@@ -136,24 +136,34 @@ export async function fetchTournamentsWithDates() {
     }
   }
 
+  const fallback: TournamentData[] = [
+    { id: 'ao', name: 'Australian Open', startDate: '2026-01-12', endDate: '2026-01-25', logo: TOURNAMENT_LOGOS['ao'] },
+    { id: 'rg', name: 'French Open', startDate: '2026-05-24', endDate: '2026-06-07', logo: TOURNAMENT_LOGOS['rg'] },
+    { id: 'wim', name: 'Wimbledon', startDate: '2026-06-29', endDate: '2026-07-12', logo: TOURNAMENT_LOGOS['wim'] },
+    { id: 'uso', name: 'US Open', startDate: '2026-08-31', endDate: '2026-09-13', logo: TOURNAMENT_LOGOS['uso'] },
+  ];
+
   if (data && data.length > 0) {
     // Map reliable PNG logos
     data = data.map(t => ({
       ...t,
       logo: TOURNAMENT_LOGOS[t.id] || t.logo
     }));
+    // Ensure all four Grand Slams are present; backfill any missing from fallback
+    const REQUIRED_IDS = ['ao', 'rg', 'wim', 'uso'];
+    for (const fb of fallback) {
+      if (!data.find(t => t.id === fb.id)) {
+        data.push(fb);
+      }
+    }
+    // Filter out unrecognised entries (keep only the four Grand Slams)
+    data = data.filter(t => REQUIRED_IDS.includes(t.id));
     authSetItem(CACHE_KEY_TOURNAMENTS, JSON.stringify({ data }));
     return data as TournamentData[];
   }
 
   console.error("All AI models failed to fetch tournaments with dates.");
-  // Fallback to basic list if search fails
-  const fallback = [
-    { id: 'ao', name: 'Australian Open', startDate: '2026-01-12', endDate: '2026-01-25', logo: TOURNAMENT_LOGOS['ao'] },
-    { id: 'rg', name: 'French Open', startDate: '2026-05-24', endDate: '2026-06-07', logo: TOURNAMENT_LOGOS['rg'] },
-    { id: 'wim', name: 'Wimbledon', startDate: '2026-06-29', endDate: '2026-07-12', logo: TOURNAMENT_LOGOS['wim'] },
-    { id: 'uso', name: 'US Open', startDate: '2026-08-31', endDate: '2026-09-13', logo: TOURNAMENT_LOGOS['uso'] },
-  ];
+  // Fallback to basic list if all AI tiers fail
   return fallback;
 }
 

@@ -168,21 +168,10 @@ export default function App() {
       setLoadingTournaments(true);
       try {
         const data = await fetchTournamentsWithDates();
-        // Sort by closest date to today
-        const now = new Date();
-        const sorted = data.sort((a, b) => {
-          const dateA = new Date(a.startDate);
-          const dateB = new Date(b.startDate);
-          
-          // If date is in the past, move it further down
-          const diffA = dateA.getTime() - now.getTime();
-          const diffB = dateB.getTime() - now.getTime();
-          
-          if (diffA < 0 && diffB >= 0) return 1;
-          if (diffA >= 0 && diffB < 0) return -1;
-          
-          return Math.abs(diffA) - Math.abs(diffB);
-        });
+        // Sort soonest to latest by start date
+        const sorted = data.sort((a, b) =>
+          new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+        );
         
         setTournaments(sorted);
         
@@ -258,14 +247,10 @@ export default function App() {
     setLoadingTournaments(true);
     try {
       const data = await fetchTournamentsWithDates();
-      const now = new Date();
-      const sorted = data.sort((a, b) => {
-        const diffA = new Date(a.startDate).getTime() - now.getTime();
-        const diffB = new Date(b.startDate).getTime() - now.getTime();
-        if (diffA < 0 && diffB >= 0) return 1;
-        if (diffA >= 0 && diffB < 0) return -1;
-        return Math.abs(diffA) - Math.abs(diffB);
-      });
+      // Sort soonest to latest by start date
+      const sorted = data.sort((a, b) =>
+        new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+      );
       setTournaments(sorted);
     } catch (error) {
       console.error('Failed to refresh tournaments:', error);
