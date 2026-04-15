@@ -164,7 +164,7 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold tracking-tight">Bracket Pools</h2>
-            <p className="text-[12px] text-muted-foreground/70 mt-0.5">Compete with friends on Grand Slam picks</p>
+            <p className="text-[12px] text-muted-foreground/70 mt-0.5">Compete with friends on Grand Slam & Masters 1000 picks</p>
           </div>
           <div className="flex gap-2 shrink-0">
             <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setShowJoin(true)}>
