@@ -6,7 +6,7 @@ import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Button } from './components/ui/button';
-import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown, LogIn, LogOut, UserCircle, LayoutDashboard, Search, FlaskConical, Globe, Star } from 'lucide-react';
+import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown, LogIn, LogOut, UserCircle, LayoutDashboard, Search, FlaskConical, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PoolHub } from './components/pools/PoolHub';
 import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
@@ -890,21 +890,6 @@ export default function App() {
 
                 <button
                   onClick={() => {
-                    setAppView({ page: 'bracket' });
-                    setIsSidebarOpen(false);
-                  }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-semibold transition-all ${
-                    appView.page === 'bracket'
-                      ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/25'
-                      : 'text-white/70 hover:text-white/90 hover:bg-white/5'
-                  }`}
-                >
-                  <Trophy className="h-4 w-4" aria-hidden="true" />
-                  Bracket Viewer
-                </button>
-
-                <button
-                  onClick={() => {
                     setAppView({ page: 'pools' });
                     setIsSidebarOpen(false);
                   }}
@@ -924,28 +909,13 @@ export default function App() {
                     setIsSidebarOpen(false);
                   }}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-semibold transition-all ${
-                    (appView.page === 'leagues' || appView.page === 'league-detail')
+                    (appView.page === 'leagues' || appView.page === 'my-leagues' || appView.page === 'league-detail')
                       ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/25'
                       : 'text-white/70 hover:text-white/90 hover:bg-white/5'
                   }`}
                 >
                   <Globe className="h-4 w-4" aria-hidden="true" />
                   Leagues
-                </button>
-
-                <button
-                  onClick={() => {
-                    setAppView({ page: 'my-leagues' });
-                    setIsSidebarOpen(false);
-                  }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-semibold transition-all ${
-                    appView.page === 'my-leagues'
-                      ? 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/25'
-                      : 'text-white/70 hover:text-white/90 hover:bg-white/5'
-                  }`}
-                >
-                  <Star className="h-4 w-4" aria-hidden="true" />
-                  My Leagues
                 </button>
 
                 {/* Simulator nav item */}
