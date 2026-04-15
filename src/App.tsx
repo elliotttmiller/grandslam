@@ -6,7 +6,7 @@ import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Button } from './components/ui/button';
-import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown, LogIn, LogOut, UserCircle, LayoutDashboard, Search } from 'lucide-react';
+import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown, LogIn, LogOut, UserCircle, LayoutDashboard, Search, FlaskConical } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PoolHub } from './components/pools/PoolHub';
 import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
@@ -27,7 +27,9 @@ import { BracketLoadingSkeleton, RoundListSkeleton } from './components/BracketL
 import { AuthGate } from './components/AuthGate';
 import { MastersTournamentModal } from './components/MastersTournamentModal';
 import { DevPanel } from './components/DevPanel';
+import { SimulatorPanel, SimulatorButton } from './components/SimulatorPanel';
 import { MASTERS_TOURNAMENTS, GRAND_SLAM_STATIC_INFO, surfaceColor, type MastersTournament } from './lib/masters-tournaments';
+import { MADRID_TEST_POOL_ID } from './lib/test-tournament-data';
 import type { Pool } from './lib/pool-types';
 
 import type { User } from 'firebase/auth';
@@ -57,9 +59,16 @@ export default function App() {
     return sessionStorage.getItem('gs_dev_mode') === '1';
   }, []);
 
-  // Bumped whenever the dev panel mutates localStorage pools so dependent views re-read.
+  // Bumped whenever the dev panel or simulator mutates localStorage pools so dependent views re-read.
   const [devPoolVersion, setDevPoolVersion] = useState(0);
   const handleDevPoolChanged = useCallback(() => setDevPoolVersion(v => v + 1), []);
+
+  // Simulator panel visibility
+  const [showSimulator, setShowSimulator] = useState(false);
+  const simulatorPoolExists = useMemo(() => {
+    return !!getPool(MADRID_TEST_POOL_ID);
+  }, [devPoolVersion]);
+
   const [matches, setMatches] = useState<Match[]>([]);
   const [zoom, setZoom] = useState(0.7);
   const [loading, setLoading] = useState(false);
@@ -902,6 +911,26 @@ export default function App() {
                   <Users className="h-4 w-4" aria-hidden="true" />
                   My Pools
                 </button>
+
+                {/* Simulator nav item */}
+                <button
+                  onClick={() => {
+                    setIsSidebarOpen(false);
+                    setShowSimulator(true);
+                  }}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[13px] font-semibold transition-all ${
+                    showSimulator
+                      ? 'bg-amber-500/10 text-amber-300 ring-1 ring-amber-500/25'
+                      : 'text-white/70 hover:text-white/90 hover:bg-white/5'
+                  }`}
+                  aria-label="Open tournament simulator"
+                >
+                  <FlaskConical className="h-4 w-4 text-amber-400/70" aria-hidden="true" />
+                  <span className="flex-1 text-left">Simulator</span>
+                  {simulatorPoolExists && (
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" aria-label="Pool active" />
+                  )}
+                </button>
               </div>
 
               {/* Divider */}
@@ -1667,6 +1696,24 @@ export default function App() {
           authUser={authUser}
           onNavigate={setAppView}
           onPoolChanged={handleDevPoolChanged}
+        />
+      )}
+
+      {/* Simulator button — always visible */}
+      {!showSimulator && (
+        <SimulatorButton
+          onClick={() => setShowSimulator(true)}
+          hasPool={simulatorPoolExists}
+        />
+      )}
+
+      {/* Simulator panel */}
+      {showSimulator && (
+        <SimulatorPanel
+          authUser={authUser}
+          onNavigate={setAppView}
+          onPoolChanged={handleDevPoolChanged}
+          onClose={() => setShowSimulator(false)}
         />
       )}
     </div>

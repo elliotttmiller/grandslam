@@ -117,7 +117,7 @@ export function applyOfficialResultsUpToRound(
 
 // ─── Test Entry Builders ─────────────────────────────────────────────────────
 
-type PickProfile = 'sinner-wins' | 'alcaraz-wins' | 'djokovic-run' | 'partial';
+type PickProfile = 'sinner-wins' | 'alcaraz-wins' | 'djokovic-run' | 'zverev-wins' | 'partial';
 
 /**
  * Build a bracket prediction (pool entry picks) from a blank bracket.
@@ -149,7 +149,10 @@ function buildTestPicks(officialMatches: Match[], profile: PickProfile): Match[]
       if (round === MASTERS_TOTAL_ROUNDS) {
         // Final: pick the profile champion if they're present in the match
         const champSeed =
-          profile === 'alcaraz-wins' ? 2 : profile === 'djokovic-run' ? 6 : 1;
+          profile === 'alcaraz-wins' ? 2
+          : profile === 'djokovic-run' ? 6
+          : profile === 'zverev-wins' ? 3
+          : 1;
         const champPlayer =
           match.player1?.seed === champSeed
             ? match.player1
@@ -207,6 +210,12 @@ export function setupTestMadridPool(createdByUserId: string | null): string {
       userName: 'Novak Fan',
       bracketName: 'Nole on Clay',
       profile: 'djokovic-run',
+      isSubmitted: true,
+    },
+    {
+      userName: 'Zverev Supporter',
+      bracketName: 'Sascha Takes Madrid',
+      profile: 'zverev-wins',
       isSubmitted: true,
     },
     {
