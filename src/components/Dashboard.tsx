@@ -1,19 +1,23 @@
 import { motion } from 'framer-motion';
 import { Plus, Users, Trophy, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getPools, getPool } from '@/lib/pool-storage';
+import { getPools } from '@/lib/pool-storage';
 import { calculateBracketScore } from '@/lib/scoring';
 import { getUserId } from '@/lib/user-identity';
 import type { AppView } from '@/App';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
+import type { User } from 'firebase/auth';
 
 interface DashboardProps {
   onNavigate: (view: AppView) => void;
   onCreatePool?: () => void;
+  authUser?: User | null;
 }
 
-export function Dashboard({ onNavigate, onCreatePool }: DashboardProps) {
-  const userId = getUserId();
+export function Dashboard({ onNavigate, onCreatePool, authUser }: DashboardProps) {
+  // Prefer the Firebase UID (authoritative) over the device-local UUID so that
+  // pools and entries created by the signed-in user are always found.
+  const userId = authUser?.uid ?? getUserId();
   const allPools = getPools();
   
   const handleCreatePoolClick = () => {
@@ -111,17 +115,20 @@ export function Dashboard({ onNavigate, onCreatePool }: DashboardProps) {
             </motion.div>
           </motion.div>
 
-            {/* CTA Button */}
-            <motion.div variants={itemVariants} className="mb-12">
-              <Button
-                size="lg"
-                onClick={handleCreatePoolClick}
-                className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white border-0 font-semibold px-6 py-3"
-              >
-                <Plus className="h-5 w-5 mr-2" aria-hidden="true" />
-                Create New Pool
-              </Button>
-            </motion.div>
+            {/* CTA Button — only shown when the user already has pools so the
+                empty-state below doesn't duplicate the "create" affordance. */}
+            {userPools.length > 0 && (
+              <motion.div variants={itemVariants} className="mb-12">
+                <Button
+                  size="lg"
+                  onClick={handleCreatePoolClick}
+                  className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white border-0 font-semibold px-6 py-3"
+                >
+                  <Plus className="h-5 w-5 mr-2" aria-hidden="true" />
+                  Create New Pool
+                </Button>
+              </motion.div>
+            )}
 
           {/* Pools Section */}
           {userPools.length > 0 ? (
