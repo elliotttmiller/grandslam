@@ -952,7 +952,7 @@ export default function App() {
                                     setIsSidebarOpen(false);
                                   }}
                                   className="flex flex-col gap-1 p-3 rounded-xl transition-all text-left hover:bg-white/5 active:bg-white/8"
-                                  aria-label={`View details for ${t.name}`}
+                                  aria-label={`Open AI tournament details for ${t.name}`}
                                 >
                                   <div className="flex items-center gap-2">
                                     {t.logo ? (
