@@ -556,7 +556,6 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
           <StepSection
             number={4}
             label="League Test Simulator"
-            done={isFinalized}
             icon={<Trophy className="h-3 w-3" />}
           >
             <p className="text-xs text-white/50 leading-relaxed mb-3">

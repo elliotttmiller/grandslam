@@ -458,17 +458,19 @@ export function setupTestMadridLeagueRun(createdByUserId: string | null): string
   const pool = updateTestPoolResults(MASTERS_TOTAL_ROUNDS);
   if (!pool) return MADRID_TEST_LEAGUE_ID;
 
+  const nowIso = new Date().toISOString();
+
   const members: LeagueMember[] = pool.entries.map(entry => ({
     userId: entry.userId,
     userName: entry.userName,
-    joinedAt: new Date().toISOString(),
+    joinedAt: nowIso,
   }));
 
   if (createdByUserId && !members.some(m => m.userId === createdByUserId)) {
     members.unshift({
       userId: createdByUserId,
       userName: 'You',
-      joinedAt: new Date().toISOString(),
+      joinedAt: nowIso,
     });
   }
 
@@ -480,8 +482,8 @@ export function setupTestMadridLeagueRun(createdByUserId: string | null): string
     isPrivate: true,
     createdBy: createdByUserId ?? members[0]?.userId ?? 'test-user-1',
     createdByName: createdByUserId ? 'You' : members[0]?.userName ?? 'Test User',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: nowIso,
+    updatedAt: nowIso,
     members,
     memberIds: members.map(m => m.userId),
     tournamentPoolIds: {
