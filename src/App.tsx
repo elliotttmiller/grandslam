@@ -540,8 +540,8 @@ export default function App() {
 
   // Total rounds in the current bracket (7 for Grand Slams, 6 for Masters 1000)
   const totalRounds = useMemo(
-    () => matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 7,
-    [matches],
+    () => currentTournament?.type === 'masters' ? 6 : 7,
+    [currentTournament?.type],
   );
 
   // Scoring for the current bracket

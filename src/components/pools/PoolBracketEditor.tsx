@@ -42,11 +42,11 @@ export function PoolBracketEditor({
   const [pendingMatches, setPendingMatches] = useState<Match[] | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
-  // Derive the number of rounds from the bracket (7 for Grand Slams, 6 for Masters 1000)
+  // Derive the number of rounds from the bracket matches (7 for Grand Slams, 6 for Masters 1000).
+  // Uses the matches state so it stays in sync with any bracket updates.
   const totalRounds = useMemo(
-    () => entry.matches.length > 0 ? Math.max(...entry.matches.map((m: Match) => m.round)) : 7,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    () => matches.length > 0 ? Math.max(...matches.map((m: Match) => m.round)) : 7,
+    [matches],
   );
   const totalBracketMatches = totalRounds === 6 ? MASTERS_MATCHES : GRAND_SLAM_MATCHES;
 
@@ -54,12 +54,13 @@ export function PoolBracketEditor({
   // Initialise to the first round that still needs picks
   const [activeRound, setActiveRound] = useState<number>(() => {
     const initial = entry.matches;
-    for (let r = 1; r <= totalRounds; r++) {
+    const initRounds = initial.length > 0 ? Math.max(...initial.map((m: Match) => m.round)) : 7;
+    for (let r = 1; r <= initRounds; r++) {
       const roundMs = initial.filter((m: Match) => m.round === r && m.player1 && m.player2);
       if (roundMs.length > 0 && roundMs.some((m: Match) => !m.winnerId)) return r;
       if (roundMs.length > 0) continue; // round complete, check next
     }
-    return totalRounds; // all done, show final
+    return initRounds; // all done, show final
   });
 
   const bracketRef = useRef<HTMLDivElement>(null);

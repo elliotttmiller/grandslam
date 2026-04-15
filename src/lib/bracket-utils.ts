@@ -148,7 +148,7 @@ export function getSeededDrawMasters(players: Player[]): Player[] {
   const allUnseeded = [...unseeded];
   let qNum = 1;
   while (allUnseeded.length < 48) {
-    allUnseeded.push({ id: `q${qNum}`, name: `Qualifier ${qNum}`, seed: undefined });
+    allUnseeded.push({ id: `q${qNum}`, name: `Qualifier ${qNum}`, seed: undefined, country: '' });
     qNum++;
   }
 
