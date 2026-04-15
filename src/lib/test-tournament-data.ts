@@ -204,7 +204,7 @@ export function setupTestMadridPool(createdByUserId: string | null): string {
       isSubmitted: true,
     },
     {
-      userName: 'Novak Believer',
+      userName: 'Novak Fan',
       bracketName: 'Nole on Clay',
       profile: 'djokovic-run',
       isSubmitted: true,

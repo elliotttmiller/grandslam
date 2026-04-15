@@ -201,7 +201,7 @@ export function DevPanel({ authUser, onNavigate, onPoolChanged }: DevPanelProps)
                 ))}
               </div>
               <p className="text-[10px] text-white/25 mt-1.5 leading-relaxed">
-                Strategy: lower seed number wins each match. Final: Sinner (S1) beats Alcaraz (S2).
+                Strategy: lower seed number wins each match (entries vary the final winner).
               </p>
             </div>
 
