@@ -44,11 +44,18 @@ export default function App() {
   const [selectedTournament, setSelectedTournament] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Compute once — the URL search params don't change after initial load.
-  const isDevMode = useMemo(
-    () => import.meta.env.DEV || new URLSearchParams(window.location.search).get('dev') === '1',
-    [],
-  );
+  // Compute once. Persists in sessionStorage so the DevPanel stays visible
+  // for the whole session after loading with ?dev=1 (even if the URL is later
+  // cleaned up by the join/share URL-param handling below).
+  const isDevMode = useMemo(() => {
+    if (import.meta.env.DEV) return true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('dev') === '1') {
+      sessionStorage.setItem('gs_dev_mode', '1');
+      return true;
+    }
+    return sessionStorage.getItem('gs_dev_mode') === '1';
+  }, []);
 
   // Bumped whenever the dev panel mutates localStorage pools so dependent views re-read.
   const [devPoolVersion, setDevPoolVersion] = useState(0);
@@ -1167,6 +1174,7 @@ export default function App() {
               <Dashboard
                 onNavigate={setAppView}
                 onCreatePool={() => setAppView({ page: 'pools' })}
+                authUser={authUser}
               />
             </motion.div>
           )}
