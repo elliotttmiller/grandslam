@@ -422,7 +422,7 @@ function HubTab({ league, standings, leagueTournaments, onOpenInsights }: HubTab
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="space-y-2">
         <HubStatCard
           label="Leader"
           value={standings[0]?.userName ?? '—'}
@@ -464,10 +464,14 @@ function HubTab({ league, standings, leagueTournaments, onOpenInsights }: HubTab
 
 function HubStatCard({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
-    <div className="bg-card/40 border border-white/6 rounded-xl p-3">
-      <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/45 mb-1">{label}</p>
-      <p className="text-base font-black text-foreground truncate">{value}</p>
-      <p className="text-[11px] text-muted-foreground/60 mt-0.5">{detail}</p>
+    <div className="bg-card/35 border border-white/8 rounded-xl px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/45">{label}</p>
+          <p className="text-[11px] text-muted-foreground/65 mt-0.5 truncate">{detail}</p>
+        </div>
+        <p className="text-sm sm:text-base font-black text-foreground truncate shrink-0">{value}</p>
+      </div>
     </div>
   );
 }
