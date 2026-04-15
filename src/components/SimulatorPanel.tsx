@@ -237,7 +237,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07] shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-xl bg-amber-500/12 border border-amber-500/20 flex items-center justify-center shrink-0">
-              <FlaskConical className="h-4.5 w-4.5 text-amber-400" aria-hidden="true" />
+              <FlaskConical className="h-4 w-4 text-amber-400" aria-hidden="true" />
             </div>
             <div>
               <h2 className="text-sm font-black tracking-tight text-white">Tournament Simulator</h2>
