@@ -5,7 +5,7 @@ export interface BracketScore {
   upsetBonus: number;
   total: number;
   picksCompleted: number;
-  maxPossible: number; // 448 per slam
+  maxPossible: number;
 }
 
 // Round multipliers for upset bonus
@@ -36,10 +36,29 @@ export function getUpsetBonus(
   return (wSeed - lSeed) * multiplier;
 }
 
+/**
+ * Compute the maximum achievable base score for a bracket with the given
+ * number of rounds.  Grand Slams (7 rounds) = 448; Masters 1000 (6 rounds) = 192.
+ */
+export function calculateMaxPossible(totalRounds: number): number {
+  let max = 0;
+  for (let r = 1; r <= totalRounds; r++) {
+    const matchesInRound = Math.pow(2, totalRounds - r);
+    max += (BASE_PTS[r] ?? 0) * matchesInRound;
+  }
+  return max;
+}
+
+/**
+ * Solo bracket score — used for the personal bracket tracker.
+ * Awards points for every match where the user picked a winner, regardless
+ * of whether it matches official results.
+ */
 export function calculateBracketScore(matches: Match[]): BracketScore {
   let basePoints = 0;
   let upsetBonus = 0;
   let picksCompleted = 0;
+  const totalRounds = matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 7;
 
   for (const match of matches) {
     if (!match.winnerId) continue;
@@ -50,7 +69,40 @@ export function calculateBracketScore(matches: Match[]): BracketScore {
     upsetBonus += getUpsetBonus(winner?.seed, loser?.seed, match.round);
   }
 
-  return { basePoints, upsetBonus, total: basePoints + upsetBonus, picksCompleted, maxPossible: 448 };
+  return { basePoints, upsetBonus, total: basePoints + upsetBonus, picksCompleted, maxPossible: calculateMaxPossible(totalRounds) };
+}
+
+/**
+ * Pool entry score — compares the user's picks against the pool's official
+ * results.  Only picks that match the official winner earn points.
+ * `picksCompleted` = number of correct predictions (not total picks made).
+ */
+export function calculatePoolEntryScore(
+  entryMatches: Match[],
+  officialMatches: Match[],
+): BracketScore {
+  const officialWinners = new Map<string, string | null>();
+  for (const m of officialMatches) officialWinners.set(m.id, m.winnerId ?? null);
+
+  let basePoints = 0;
+  let upsetBonus = 0;
+  let picksCompleted = 0;
+  const totalRounds = entryMatches.length > 0 ? Math.max(...entryMatches.map(m => m.round)) : 7;
+
+  for (const match of entryMatches) {
+    if (!match.winnerId) continue;
+    const officialWinnerId = officialWinners.get(match.id);
+    if (!officialWinnerId) continue; // official result not yet entered
+    if (match.winnerId !== officialWinnerId) continue; // incorrect pick
+
+    picksCompleted++;
+    const winner = match.player1?.id === match.winnerId ? match.player1 : match.player2;
+    const loser = match.player1?.id === match.winnerId ? match.player2 : match.player1;
+    basePoints += getBasePoints(match.round);
+    upsetBonus += getUpsetBonus(winner?.seed, loser?.seed, match.round);
+  }
+
+  return { basePoints, upsetBonus, total: basePoints + upsetBonus, picksCompleted, maxPossible: calculateMaxPossible(totalRounds) };
 }
 
 // Calculate Calendar Slam Bonus given champion (final winner) per slam.
