@@ -158,6 +158,14 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
           </div>
           <div className="flex gap-2 shrink-0">
             <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-xl"
+              onClick={() => onNavigate({ page: 'my-leagues' })}
+            >
+              My Leagues
+            </Button>
+            <Button
               variant="outline"
               size="sm"
               className="rounded-xl"
