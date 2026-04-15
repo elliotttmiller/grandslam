@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
+import { authGetItem, authSetItem } from '@/lib/auth-storage';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -14,7 +15,7 @@ const GROUNDING_MODEL = "gemini-2.5-flash";
 const PRIMARY_MODEL = "gemini-3.1-flash-lite-preview";
 const FALLBACK_MODEL = "gemini-2.5-flash";
 
-const CACHE_KEY_TOURNAMENTS = 'tennis_tournaments_cache_v5';
+export const CACHE_KEY_TOURNAMENTS = 'tennis_tournaments_cache_v5';
 const CACHE_KEY_PLAYERS_PREFIX = 'tennis_players_cache_v5_';
 export const CACHE_KEY_MASTERS_PREFIX = 'tennis_masters_details_v1_';
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
@@ -50,12 +51,14 @@ const TOURNAMENT_LOGOS: Record<string, string> = {
 };
 
 export async function fetchTournamentsWithDates() {
-  // Check cache first
-  const cached = localStorage.getItem(CACHE_KEY_TOURNAMENTS);
+  // Check user-scoped cache first — no time-based expiry; persists until user refreshes
+  const cached = authGetItem(CACHE_KEY_TOURNAMENTS);
   if (cached) {
-    const { data, timestamp } = JSON.parse(cached);
-    if (Date.now() - timestamp < CACHE_EXPIRY) {
-      return data as TournamentData[];
+    try {
+      const { data } = JSON.parse(cached);
+      if (data && data.length > 0) return data as TournamentData[];
+    } catch {
+      // Ignore corrupt cache
     }
   }
 
@@ -139,7 +142,7 @@ export async function fetchTournamentsWithDates() {
       ...t,
       logo: TOURNAMENT_LOGOS[t.id] || t.logo
     }));
-    localStorage.setItem(CACHE_KEY_TOURNAMENTS, JSON.stringify({ data, timestamp: Date.now() }));
+    authSetItem(CACHE_KEY_TOURNAMENTS, JSON.stringify({ data }));
     return data as TournamentData[];
   }
 
@@ -319,14 +322,12 @@ export async function fetchMastersTournamentDetails(
 ): Promise<MastersTournamentDetails> {
   const cacheKey = `${CACHE_KEY_MASTERS_PREFIX}${tournamentId}`;
 
-  // Check cache first
-  const cached = localStorage.getItem(cacheKey);
+  // Check user-scoped cache first — no time-based expiry; persists until user refreshes
+  const cached = authGetItem(cacheKey);
   if (cached) {
     try {
-      const { data, timestamp } = JSON.parse(cached);
-      if (Date.now() - timestamp < CACHE_EXPIRY) {
-        return data as MastersTournamentDetails;
-      }
+      const { data } = JSON.parse(cached);
+      if (data) return data as MastersTournamentDetails;
     } catch {
       // Ignore corrupt cache
     }
@@ -435,7 +436,7 @@ Do not include any markdown formatting. Return only the JSON object.`;
   }
 
   if (data && data.seedings) {
-    localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+    authSetItem(cacheKey, JSON.stringify({ data }));
     return data;
   }
 

@@ -114,6 +114,21 @@ export function getMastersTournamentById(id: string): MastersTournament | undefi
   return MASTERS_TOURNAMENTS.find(t => t.id === id);
 }
 
+export interface GrandSlamStaticInfo {
+  id: string;
+  shortName: string;
+  location: string;
+  surface: 'Hard' | 'Clay' | 'Grass';
+}
+
+/** Static metadata for the four Grand Slam tournaments. */
+export const GRAND_SLAM_STATIC_INFO: GrandSlamStaticInfo[] = [
+  { id: 'ao',  shortName: 'Australian Open', location: 'Melbourne, Australia',      surface: 'Hard'  },
+  { id: 'rg',  shortName: 'Roland Garros',   location: 'Paris, France',             surface: 'Clay'  },
+  { id: 'wim', shortName: 'Wimbledon',        location: 'London, United Kingdom',    surface: 'Grass' },
+  { id: 'uso', shortName: 'US Open',          location: 'New York, USA',             surface: 'Hard'  },
+];
+
 /** Surface colour token (Tailwind class string) */
 export function surfaceColor(surface: MastersTournament['surface']): string {
   switch (surface) {
