@@ -224,7 +224,8 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
     try {
       const userId = authUser?.uid ?? null;
 
-      setupTestMadridPool(userId);
+      const poolId = setupTestMadridPool(userId);
+      if (!poolId) throw new Error('Failed to create test pool');
       refresh();
       onNavigate({ page: 'pool', poolId: MADRID_TEST_POOL_ID });
       flash('Step 1/4: Test pool created — opening Pool interface ✅');
@@ -232,7 +233,8 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
 
       flash('Step 2/4: Simulating tournament rounds in Pool leaderboard…');
       for (const round of ROUNDS) {
-        updateTestPoolResults(round.round);
+        const updated = updateTestPoolResults(round.round);
+        if (!updated) throw new Error(`Failed to simulate ${round.fullLabel}`);
         refresh();
         await new Promise(res => setTimeout(res, 260));
       }
@@ -241,11 +243,15 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
       await new Promise(res => setTimeout(res, 400));
 
       const leagueId = setupTestMadridLeagueRun(userId);
+      if (!leagueId) throw new Error('Failed to create test league');
       refresh();
       onNavigate({ page: 'league-detail', leagueId });
       flash('Step 4/4: League ready — opening League interface ✅');
       await new Promise(res => setTimeout(res, 450));
       onClose();
+    } catch (error) {
+      console.error('Failed to run simulator pipeline:', error);
+      flash('⚠️ Full workflow failed. Please try again.', false);
     } finally {
       setPipelineRunning(false);
       setStepRunning(false);
