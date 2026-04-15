@@ -6,14 +6,15 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BracketTree } from '@/components/Bracket';
-import { advancePlayer, ROUND_NAMES, ROUND_FULL_NAMES } from '@/lib/bracket-utils';
+import { advancePlayer, getRoundName, getRoundFullName } from '@/lib/bracket-utils';
 import { calculateBracketScore } from '@/lib/scoring';
 import { useBracketCanvas } from '@/hooks/useBracketCanvas';
 import { MatchPickCard } from './MatchPickCard';
 import type { Match } from '@/lib/bracket-utils';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 
-const TOTAL_BRACKET_MATCHES = 127;
+const GRAND_SLAM_MATCHES = 127;
+const MASTERS_MATCHES = 63;
 
 interface PoolBracketEditorProps {
   pool: Pool;
@@ -40,16 +41,26 @@ export function PoolBracketEditor({
   const [tbSetsInput, setTbSetsInput] = useState(String(entry.tiebreakerSets ?? ''));
   const [pendingMatches, setPendingMatches] = useState<Match[] | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
-  // 0 = full bracket canvas, 1-7 = round-by-round card view
+
+  // Derive the number of rounds from the bracket matches (7 for Grand Slams, 6 for Masters 1000).
+  // Uses the matches state so it stays in sync with any bracket updates.
+  const totalRounds = useMemo(
+    () => matches.length > 0 ? Math.max(...matches.map((m: Match) => m.round)) : 7,
+    [matches],
+  );
+  const totalBracketMatches = totalRounds === 6 ? MASTERS_MATCHES : GRAND_SLAM_MATCHES;
+
+  // 0 = full bracket canvas, 1-N = round-by-round card view
   // Initialise to the first round that still needs picks
   const [activeRound, setActiveRound] = useState<number>(() => {
     const initial = entry.matches;
-    for (let r = 1; r <= 7; r++) {
-      const roundMs = initial.filter(m => m.round === r && m.player1 && m.player2);
-      if (roundMs.length > 0 && roundMs.some(m => !m.winnerId)) return r;
+    const initRounds = initial.length > 0 ? Math.max(...initial.map((m: Match) => m.round)) : 7;
+    for (let r = 1; r <= initRounds; r++) {
+      const roundMs = initial.filter((m: Match) => m.round === r && m.player1 && m.player2);
+      if (roundMs.length > 0 && roundMs.some((m: Match) => !m.winnerId)) return r;
       if (roundMs.length > 0) continue; // round complete, check next
     }
-    return 7; // all done, show final
+    return initRounds; // all done, show final
   });
 
   const bracketRef = useRef<HTMLDivElement>(null);
@@ -63,15 +74,15 @@ export function PoolBracketEditor({
   const finalMatch = useMemo(() => matches.find((m: Match) => m.nextMatchId === null), [matches]);
   const totalMatches = matches.filter((m: Match) => m.player1 && m.player2).length;
 
-  // Per-round completion tracking (rounds 1-7)
+  // Per-round completion tracking
   const roundCompletion = useMemo(() => {
     const c: Record<number, { total: number; done: number }> = {};
-    for (let r = 1; r <= 7; r++) {
+    for (let r = 1; r <= totalRounds; r++) {
       const rm = matches.filter((m: Match) => m.round === r && m.player1 && m.player2);
       c[r] = { total: rm.length, done: rm.filter((m: Match) => m.winnerId).length };
     }
     return c;
-  }, [matches]);
+  }, [matches, totalRounds]);
 
   const isEffectivelyReadOnly = readOnly || entry.isSubmitted;
 
@@ -178,8 +189,8 @@ export function PoolBracketEditor({
             <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
 
-          {/* Round 1-7 tabs — march madness style naming */}
-          {([1, 2, 3, 4, 5, 6, 7] as const).map(round => {
+          {/* Round tabs — number of rounds depends on bracket size (7 for Grand Slams, 6 for Masters) */}
+          {Array.from({ length: totalRounds }, (_, i) => i + 1).map(round => {
             const rc = roundCompletion[round];
             const isComplete = rc && rc.total > 0 && rc.done === rc.total;
             const isPartial = rc && rc.done > 0 && !isComplete;
@@ -197,7 +208,7 @@ export function PoolBracketEditor({
                     : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/4',
                 )}
               >
-                {ROUND_NAMES[round]}
+                {getRoundName(round, totalRounds)}
                 {isComplete && <Check className="h-3 w-3 text-emerald-400" aria-label="Complete" />}
                 {isPartial && <span className="text-[9px] font-black text-amber-400 tabular-nums">{rc.done}/{rc.total}</span>}
               </button>
@@ -332,7 +343,7 @@ export function PoolBracketEditor({
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">
-                    {ROUND_FULL_NAMES[activeRound]}
+                    {getRoundFullName(activeRound, totalRounds)}
                   </h3>
                   <p className="text-[12px] text-muted-foreground/60 mt-0.5 tabular-nums">
                     {activeRoundCompletion.done} / {activeRoundCompletion.total} picked
@@ -371,7 +382,7 @@ export function PoolBracketEditor({
 
               {/* CTA when round is complete */}
               <AnimatePresence>
-                {isRoundComplete && activeRound < 7 && (
+                {isRoundComplete && activeRound < totalRounds && (
                   <motion.div
                     key="next-round"
                     initial={{ opacity: 0, y: 10 }}
@@ -384,11 +395,11 @@ export function PoolBracketEditor({
                       className="w-full h-12 bg-emerald-600 hover:bg-emerald-500 text-white border-0 rounded-2xl font-semibold text-[14px]"
                       onClick={() => setActiveRound((r: number) => r + 1)}
                     >
-                      Continue to {ROUND_FULL_NAMES[activeRound + 1]} →
+                      Continue to {getRoundFullName(activeRound + 1, totalRounds)} →
                     </Button>
                   </motion.div>
                 )}
-                {isRoundComplete && activeRound === 7 && !entry.isSubmitted && !readOnly && (
+                {isRoundComplete && activeRound === totalRounds && !entry.isSubmitted && !readOnly && (
                   <motion.div
                     key="submit-cta"
                     initial={{ opacity: 0, y: 10 }}
@@ -417,7 +428,7 @@ export function PoolBracketEditor({
       <div className="safe-bottom flex-none border-t border-border/20 bg-card/70 backdrop-blur-xl px-4 py-3 flex items-center gap-3">
         <div className="flex-1 flex flex-col gap-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground/70 tabular-nums">{score.picksCompleted} / {TOTAL_BRACKET_MATCHES} picks</span>
+            <span className="text-muted-foreground/70 tabular-nums">{score.picksCompleted} / {totalBracketMatches} picks</span>
             <span className="font-bold text-emerald-400 tabular-nums">{score.total} pts</span>
           </div>
           <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden">
@@ -466,7 +477,7 @@ export function PoolBracketEditor({
                 </Button>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                You have <span className="font-semibold text-foreground">{TOTAL_BRACKET_MATCHES - score.picksCompleted} picks remaining</span>. You can still submit, but incomplete picks won't earn points.
+                You have <span className="font-semibold text-foreground">{totalBracketMatches - score.picksCompleted} picks remaining</span>. You can still submit, but incomplete picks won't earn points.
               </p>
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" size="sm" onClick={() => setShowSubmitModal(false)}>Keep Editing</Button>

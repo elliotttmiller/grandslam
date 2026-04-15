@@ -8,6 +8,16 @@ const TOURNAMENT_COLORS: Record<string, string> = {
   rg:  'text-orange-400 bg-orange-500/10 border-orange-500/20',
   wim: 'text-green-400 bg-green-500/10 border-green-500/20',
   uso: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+  // ATP Masters 1000 — amber gold theme
+  'indian-wells': 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  'miami':        'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  'monte-carlo':  'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  'madrid':       'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  'rome':         'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  'canada':       'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  'cincinnati':   'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  'shanghai':     'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  'paris':        'text-amber-400 bg-amber-500/10 border-amber-500/20',
 };
 
 export function tournamentColor(id: string): string {
