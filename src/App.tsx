@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useBracketCanvas } from './hooks/useBracketCanvas';
-import { fetchTournamentPlayers, fetchTournamentsWithDates, TournamentData, CACHE_KEY_TOURNAMENTS } from './services/geminiService';
-import { generateBracket, advancePlayer, Match, Player, ROUND_NAMES, ROUND_FULL_NAMES } from './lib/bracket-utils';
+import { fetchTournamentPlayers, fetchTournamentsWithDates, fetchMastersDrawPlayers, TournamentData, CACHE_KEY_TOURNAMENTS } from './services/geminiService';
+import { generateBracket, generateMastersBracket, advancePlayer, Match, Player, getRoundName, getRoundFullName } from './lib/bracket-utils';
 import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
@@ -168,8 +168,17 @@ export default function App() {
       setLoadingTournaments(true);
       try {
         const data = await fetchTournamentsWithDates();
-        // Sort soonest to latest by start date
-        const sorted = data.sort((a, b) =>
+        // Tag Grand Slams and merge with static Masters 1000 entries
+        const grandSlams: TournamentData[] = data.map(t => ({ ...t, type: 'grand-slam' as const }));
+        const mastersTournaments: TournamentData[] = MASTERS_TOURNAMENTS.map(t => ({
+          id: t.id,
+          name: t.name,
+          startDate: t.approxStart,
+          endDate: t.approxEnd,
+          type: 'masters' as const,
+        }));
+        // Sort all tournaments soonest to latest by start date
+        const sorted = [...grandSlams, ...mastersTournaments].sort((a, b) =>
           new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
         );
         
@@ -178,7 +187,8 @@ export default function App() {
         // Handle shared bracket from URL
         const params = new URLSearchParams(window.location.search);
         const shared = params.get('shared');
-        let initialTournamentId = sorted.length > 0 ? sorted[0].id : null;
+        // Default to first Grand Slam (not a Masters) for the bracket viewer
+        let initialTournamentId = grandSlams.length > 0 ? grandSlams[0].id : null;
         
         if (shared) {
           try {
@@ -247,8 +257,15 @@ export default function App() {
     setLoadingTournaments(true);
     try {
       const data = await fetchTournamentsWithDates();
-      // Sort soonest to latest by start date
-      const sorted = data.sort((a, b) =>
+      const grandSlams: TournamentData[] = data.map(t => ({ ...t, type: 'grand-slam' as const }));
+      const mastersTournaments: TournamentData[] = MASTERS_TOURNAMENTS.map(t => ({
+        id: t.id,
+        name: t.name,
+        startDate: t.approxStart,
+        endDate: t.approxEnd,
+        type: 'masters' as const,
+      }));
+      const sorted = [...grandSlams, ...mastersTournaments].sort((a, b) =>
         new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
       );
       setTournaments(sorted);
@@ -274,26 +291,41 @@ export default function App() {
       setLoading(true);
       try {
         const tournament = tournaments.find(t => t.id === selectedTournament);
-        const aiPlayers = await fetchTournamentPlayers(tournament?.name || 'Tennis Tournament');
-        
-        // Add unseeded players to reach 128
-        const players: Player[] = aiPlayers.map((p: any, i: number) => ({
-          id: `p${i + 1}`,
-          name: p.name,
-          seed: p.seed,
-          country: p.country,
-        }));
+        const isMasters = tournament?.type === 'masters';
 
-        // Add 96 unseeded qualifiers to reach 128 total
-        const seededCount = players.length;
-        for (let i = seededCount + 1; i <= 128; i++) {
-          const qNum = i - seededCount;
-          players.push({ id: `q${qNum}`, name: `Qualifier ${qNum}`, seed: undefined, country: '' });
+        if (isMasters) {
+          // Masters 1000: 64-player bracket with 16 AI-predicted/official seeds
+          const aiPlayers = await fetchMastersDrawPlayers(tournament!.id, tournament!.name);
+          const players: Player[] = aiPlayers.map((p, i) => ({
+            id: `p${i + 1}`,
+            name: p.name,
+            seed: p.seed,
+            country: p.country,
+          }));
+          const initialMatches = generateMastersBracket(players);
+          setMatches(initialMatches);
+          setZoom(0.7);
+        } else {
+          // Grand Slam: 128-player bracket with 32 AI-predicted/official seeds
+          const aiPlayers = await fetchTournamentPlayers(tournament?.name || 'Tennis Tournament');
+          const players: Player[] = aiPlayers.map((p: any, i: number) => ({
+            id: `p${i + 1}`,
+            name: p.name,
+            seed: p.seed,
+            country: p.country,
+          }));
+
+          // Add 96 unseeded qualifiers to reach 128 total
+          const seededCount = players.length;
+          for (let i = seededCount + 1; i <= 128; i++) {
+            const qNum = i - seededCount;
+            players.push({ id: `q${qNum}`, name: `Qualifier ${qNum}`, seed: undefined, country: '' });
+          }
+
+          const initialMatches = generateBracket(players);
+          setMatches(initialMatches);
+          setZoom(0.7);
         }
-
-        const initialMatches = generateBracket(players);
-        setMatches(initialMatches);
-        setZoom(0.7);
       } catch (error) {
         console.error("Failed to fetch players:", error);
       } finally {
@@ -308,6 +340,19 @@ export default function App() {
   };
 
   const generateOfficialDraw = async (tournamentId: string, tournamentName: string): Promise<Match[]> => {
+    const isMasters = MASTERS_TOURNAMENTS.some(t => t.id === tournamentId);
+    if (isMasters) {
+      // Masters 1000: 64-player bracket with AI-predicted/official seedings
+      const aiPlayers = await fetchMastersDrawPlayers(tournamentId, tournamentName);
+      const players: Player[] = aiPlayers.map((p, i) => ({
+        id: `p${i + 1}`,
+        name: p.name,
+        seed: p.seed,
+        country: p.country,
+      }));
+      return generateMastersBracket(players);
+    }
+    // Grand Slam: 128-player bracket
     const aiPlayers = await fetchTournamentPlayers(tournamentName);
     const players: Player[] = aiPlayers.map((p: { name: string; seed?: number; country?: string }, i: number) => ({
       id: `p${i + 1}`,
@@ -493,21 +538,27 @@ export default function App() {
 
   const currentTournament = tournaments.find(t => t.id === selectedTournament);
 
+  // Total rounds in the current bracket (7 for Grand Slams, 6 for Masters 1000)
+  const totalRounds = useMemo(
+    () => matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 7,
+    [matches],
+  );
+
   // Scoring for the current bracket
   const score = useMemo(() => calculateBracketScore(matches), [matches]);
 
-  // Per-round completion tracking for home bracket view (rounds 1-7)
+  // Per-round completion tracking for home bracket view
   const roundCompletion = useMemo(() => {
     const c: Record<number, { total: number; done: number }> = {};
-    for (let r = 1; r <= 7; r++) c[r] = { total: 0, done: 0 };
+    for (let r = 1; r <= totalRounds; r++) c[r] = { total: 0, done: 0 };
     for (const m of matches) {
-      if (m.round >= 1 && m.round <= 7 && m.player1 && m.player2) {
+      if (m.round >= 1 && m.round <= totalRounds && m.player1 && m.player2) {
         c[m.round].total++;
         if (m.winnerId) c[m.round].done++;
       }
     }
     return c;
-  }, [matches]);
+  }, [matches, totalRounds]);
 
   const activeRoundMatches = useMemo(
     () => matches.filter(m => m.round === activeRound).sort((a, b) => a.matchNumber - b.matchNumber),
@@ -536,10 +587,11 @@ export default function App() {
     return scores;
   }, [tournaments, selectedTournament, score]);
 
-  // Calendar slam champion per tournament (the final match winner id)
+  // Calendar slam champion per Grand Slam tournament (used for calendar slam bonus)
   const champions = useMemo((): Record<string, string | null> => {
     const champs: Record<string, string | null> = {};
-    for (const t of tournaments) {
+    const grandSlamIds = ['ao', 'rg', 'wim', 'uso'];
+    for (const t of tournaments.filter(t => grandSlamIds.includes(t.id))) {
       let tMatches: Match[];
       if (t.id === selectedTournament) {
         tMatches = matches;
@@ -1187,8 +1239,8 @@ export default function App() {
                 <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
 
-              {/* Round 1-7 tabs — march madness style naming */}
-              {([1, 2, 3, 4, 5, 6, 7] as const).map(round => {
+              {/* Round tabs — number of rounds depends on bracket size (7 for Grand Slams, 6 for Masters) */}
+              {Array.from({ length: totalRounds }, (_, i) => i + 1).map(round => {
                 const rc = roundCompletion[round];
                 const isComplete = rc && rc.total > 0 && rc.done === rc.total;
                 const isPartial = rc && rc.done > 0 && !isComplete;
@@ -1206,7 +1258,7 @@ export default function App() {
                         : 'text-muted-foreground/55 hover:text-foreground/80 hover:bg-white/4',
                     )}
                   >
-                    {ROUND_NAMES[round]}
+                    {getRoundName(round, totalRounds)}
                     {isComplete && <span className="text-emerald-400 text-[10px]">✓</span>}
                     {isPartial && <span className="text-[9px] font-black text-amber-400 tabular-nums">{rc.done}/{rc.total}</span>}
                   </button>
@@ -1237,7 +1289,7 @@ export default function App() {
                   </>
                 )}
                 <span className="text-white/25 shrink-0">·</span>
-                <span className="text-white/50 tabular-nums shrink-0">{score.picksCompleted}/127</span>
+                <span className="text-white/50 tabular-nums shrink-0">{score.picksCompleted}/{matches.filter(m => m.player1 && m.player2).length}</span>
                 {finalMatch?.winnerId && selectedTournament && (
                   <button
                     onClick={() => {
@@ -1398,7 +1450,7 @@ export default function App() {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <h3 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">
-                          {ROUND_FULL_NAMES[activeRound]}
+                          {getRoundFullName(activeRound, totalRounds)}
                         </h3>
                         <p className="text-[12px] text-muted-foreground/60 mt-0.5 tabular-nums">
                           {rc.done} / {rc.total} picked

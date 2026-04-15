@@ -354,9 +354,28 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                     className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
                   >
                     <option value="">Select tournament…</option>
-                    {tournaments.map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
+                    {(() => {
+                      const grandSlams = tournaments.filter(t => t.type === 'grand-slam' || ['ao','rg','wim','uso'].includes(t.id));
+                      const masters = tournaments.filter(t => t.type === 'masters' && !['ao','rg','wim','uso'].includes(t.id));
+                      return (
+                        <>
+                          {grandSlams.length > 0 && (
+                            <optgroup label="Grand Slams">
+                              {grandSlams.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {masters.length > 0 && (
+                            <optgroup label="ATP Masters 1000">
+                              {masters.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </>
+                      );
+                    })()}
                   </select>
                 </label>
 

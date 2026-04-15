@@ -26,6 +26,8 @@ export interface TournamentData {
   startDate: string; // ISO format
   endDate: string;
   logo?: string;
+  /** Distinguishes Grand Slam from ATP Masters 1000 entries. */
+  type?: 'grand-slam' | 'masters';
 }
 
 function extractJsonArray(text: string): any[] {
@@ -465,4 +467,29 @@ Do not include any markdown formatting. Return only the JSON object.`;
     notes: 'Live data unavailable. Showing approximate predicted seedings.',
   };
   return fallback;
+}
+
+/**
+ * Fetch the 64-player draw for an ATP Masters 1000 bracket.
+ * Returns 16 seeded players (from AI/official seedings) plus 48 qualifier slots.
+ * Used by generateMastersBracket() to build the pool/bracket draw.
+ */
+export async function fetchMastersDrawPlayers(
+  tournamentId: string,
+  tournamentName: string,
+): Promise<Array<{ name: string; seed?: number; country?: string }>> {
+  const details = await fetchMastersTournamentDetails(tournamentId, tournamentName);
+  const seeded = details.seedings.map(p => ({
+    name: p.name,
+    seed: p.seed,
+    country: p.country,
+  }));
+
+  // Fill remaining spots to reach 64 with qualifier placeholders
+  const players: Array<{ name: string; seed?: number; country?: string }> = [...seeded];
+  const unseededCount = 64 - seeded.length;
+  for (let i = 1; i <= unseededCount; i++) {
+    players.push({ name: `Qualifier ${i}`, seed: undefined, country: '' });
+  }
+  return players;
 }
