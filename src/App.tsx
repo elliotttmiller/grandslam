@@ -27,7 +27,9 @@ import { BracketLoadingSkeleton, RoundListSkeleton } from './components/BracketL
 import { AuthGate } from './components/AuthGate';
 import { MastersTournamentModal } from './components/MastersTournamentModal';
 import { DevPanel } from './components/DevPanel';
+import { SimulatorPanel, SimulatorButton } from './components/SimulatorPanel';
 import { MASTERS_TOURNAMENTS, GRAND_SLAM_STATIC_INFO, surfaceColor, type MastersTournament } from './lib/masters-tournaments';
+import { MADRID_TEST_POOL_ID } from './lib/test-tournament-data';
 import type { Pool } from './lib/pool-types';
 
 import type { User } from 'firebase/auth';
@@ -57,9 +59,17 @@ export default function App() {
     return sessionStorage.getItem('gs_dev_mode') === '1';
   }, []);
 
-  // Bumped whenever the dev panel mutates localStorage pools so dependent views re-read.
+  // Bumped whenever the dev panel or simulator mutates localStorage pools so dependent views re-read.
   const [devPoolVersion, setDevPoolVersion] = useState(0);
   const handleDevPoolChanged = useCallback(() => setDevPoolVersion(v => v + 1), []);
+
+  // Simulator panel visibility
+  const [showSimulator, setShowSimulator] = useState(false);
+  const simulatorPoolExists = useMemo(() => {
+    return !!getPool(MADRID_TEST_POOL_ID);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devPoolVersion]);
+
   const [matches, setMatches] = useState<Match[]>([]);
   const [zoom, setZoom] = useState(0.7);
   const [loading, setLoading] = useState(false);
@@ -1667,6 +1677,24 @@ export default function App() {
           authUser={authUser}
           onNavigate={setAppView}
           onPoolChanged={handleDevPoolChanged}
+        />
+      )}
+
+      {/* Simulator button — always visible */}
+      {!showSimulator && (
+        <SimulatorButton
+          onClick={() => setShowSimulator(true)}
+          hasPool={simulatorPoolExists}
+        />
+      )}
+
+      {/* Simulator panel */}
+      {showSimulator && (
+        <SimulatorPanel
+          authUser={authUser}
+          onNavigate={setAppView}
+          onPoolChanged={handleDevPoolChanged}
+          onClose={() => setShowSimulator(false)}
         />
       )}
     </div>
