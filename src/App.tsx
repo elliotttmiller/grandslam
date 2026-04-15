@@ -26,6 +26,7 @@ import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { BracketLoadingSkeleton, RoundListSkeleton } from './components/BracketLoadingSkeleton';
 import { AuthGate } from './components/AuthGate';
 import { MastersTournamentModal } from './components/MastersTournamentModal';
+import { DevPanel } from './components/DevPanel';
 import { MASTERS_TOURNAMENTS, GRAND_SLAM_STATIC_INFO, surfaceColor, type MastersTournament } from './lib/masters-tournaments';
 import type { Pool } from './lib/pool-types';
 
@@ -1641,6 +1642,14 @@ export default function App() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Developer panel — only visible in Vite dev mode or when ?dev=1 is in the URL */}
+      {(import.meta.env.DEV || new URLSearchParams(window.location.search).get('dev') === '1') && (
+        <DevPanel
+          authUser={authUser}
+          onNavigate={setAppView}
+        />
+      )}
     </div>
   );
 }
