@@ -98,7 +98,7 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
                 <div className="flex items-center gap-2 flex-wrap">
                   <Trophy className="h-4 w-4 text-amber-400 shrink-0" aria-hidden="true" />
                   <span className="text-[10px] font-black uppercase tracking-widest text-white/40">
-                    ATP Masters 1000
+                    {tournament && ['ao', 'rg', 'wim', 'uso'].includes(tournament.id) ? 'Grand Slam' : 'ATP Masters 1000'}
                   </span>
                   {tournament && (
                     <span className={cn(
