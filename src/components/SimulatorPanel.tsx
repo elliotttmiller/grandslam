@@ -67,6 +67,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
   const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [autoRunning, setAutoRunning] = useState(false);
   const [stepRunning, setStepRunning] = useState(false);
+  const [pipelineRunning, setPipelineRunning] = useState(false);
   const autoRunRef = useRef(false);
 
   const refresh = useCallback(() => {
@@ -211,6 +212,44 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
       onNavigate({ page: 'league-detail', leagueId });
       onClose();
     }, 280);
+  };
+
+  // ── Full end-to-end workflow (Pool UI -> Sim -> League UI) ──
+  const handleRunFullPipeline = async () => {
+    if (autoRunning || stepRunning || pipelineRunning) return;
+    setPipelineRunning(true);
+    setStepRunning(true);
+    autoRunRef.current = false;
+    setAutoRunning(false);
+    try {
+      const userId = authUser?.uid ?? null;
+
+      setupTestMadridPool(userId);
+      refresh();
+      onNavigate({ page: 'pool', poolId: MADRID_TEST_POOL_ID });
+      flash('Step 1/4: Test pool created — opening Pool interface ✅');
+      await new Promise(res => setTimeout(res, 450));
+
+      flash('Step 2/4: Simulating tournament rounds in Pool leaderboard…');
+      for (const round of ROUNDS) {
+        updateTestPoolResults(round.round);
+        refresh();
+        await new Promise(res => setTimeout(res, 260));
+      }
+
+      flash('Step 3/4: Pool simulation complete — generating league…');
+      await new Promise(res => setTimeout(res, 400));
+
+      const leagueId = setupTestMadridLeagueRun(userId);
+      refresh();
+      onNavigate({ page: 'league-detail', leagueId });
+      flash('Step 4/4: League ready — opening League interface ✅');
+      await new Promise(res => setTimeout(res, 450));
+      onClose();
+    } finally {
+      setPipelineRunning(false);
+      setStepRunning(false);
+    }
   };
 
   // ── Ranked leaderboard rows ──
@@ -562,21 +601,34 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
               Creates a <strong className="text-white/70">test league</strong>, links the Madrid test pool,
               auto-simulates through the final, and opens the league interface.
             </p>
-            <Button
-              onClick={handleLeagueSimulation}
-              disabled={stepRunning || autoRunning}
-              className="w-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-xl h-9 border-0 transition-colors disabled:opacity-40"
-            >
+              <Button
+                onClick={handleLeagueSimulation}
+                disabled={stepRunning || autoRunning || pipelineRunning}
+                className="w-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-xl h-9 border-0 transition-colors disabled:opacity-40"
+              >
               {stepRunning ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden="true" />
               ) : (
                 <Trophy className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
               )}
-              Run League Simulator
-              <ArrowRight className="h-3.5 w-3.5 ml-1.5" aria-hidden="true" />
-            </Button>
-          </StepSection>
-        </div>
+                Run League Simulator
+                <ArrowRight className="h-3.5 w-3.5 ml-1.5" aria-hidden="true" />
+              </Button>
+              <Button
+                onClick={handleRunFullPipeline}
+                disabled={stepRunning || autoRunning || pipelineRunning}
+                className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl h-9 border-0 transition-colors disabled:opacity-40"
+              >
+                {pipelineRunning ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Play className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+                )}
+                Run Full E2E Workflow
+                <ArrowRight className="h-3.5 w-3.5 ml-1.5" aria-hidden="true" />
+              </Button>
+            </StepSection>
+          </div>
 
         {/* ── Footer ── */}
         <div className="px-5 py-3 border-t border-white/[0.05] shrink-0">
