@@ -217,7 +217,11 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
   };
 
   const handleDelete = async () => {
-    await syncDeletePool(poolData.id);
+    const deletedRemotely = await syncDeletePool(poolData.id);
+    if (!deletedRemotely && poolData.createdBy) {
+      console.error('Pool delete aborted: Firestore delete failed.');
+      return;
+    }
     deletePool(poolData.id);
     onNavigate({ page: 'pools' });
   };

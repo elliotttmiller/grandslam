@@ -157,7 +157,11 @@ export function LeagueDetail({
 
   const handleDelete = async () => {
     if (!league) return;
-    await syncDeleteLeague(league.id);
+    const deletedRemotely = await syncDeleteLeague(league.id);
+    if (!deletedRemotely) {
+      console.error('League delete aborted: Firestore delete failed.');
+      return;
+    }
     deleteLeague(league.id);
     onNavigate({ page: 'my-leagues' });
   };
