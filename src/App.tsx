@@ -71,15 +71,16 @@ function getAppViewKey(view: AppView): string {
 
 function isAppView(value: unknown): value is AppView {
   if (!value || typeof value !== 'object') return false;
-  const page = (value as { page?: unknown }).page;
+  const candidate = value as { page?: unknown; poolId?: unknown; entryId?: unknown; leagueId?: unknown };
+  const page = candidate.page;
   if (typeof page !== 'string') return false;
 
-  if (page === 'pool') return typeof (value as { poolId?: unknown }).poolId === 'string';
+  if (page === 'pool') return typeof candidate.poolId === 'string';
   if (page === 'pool-entry') {
-    return typeof (value as { poolId?: unknown }).poolId === 'string'
-      && typeof (value as { entryId?: unknown }).entryId === 'string';
+    return typeof candidate.poolId === 'string'
+      && typeof candidate.entryId === 'string';
   }
-  if (page === 'league-detail') return typeof (value as { leagueId?: unknown }).leagueId === 'string';
+  if (page === 'league-detail') return typeof candidate.leagueId === 'string';
 
   return page === 'dashboard'
     || page === 'bracket'
