@@ -439,6 +439,46 @@ export function updateTestPoolResults(upToRound: number): Pool | null {
 }
 
 /**
+ * Fake-simulate official results for any existing pool up to the requested
+ * round. This does not create leagues, pools, users, or entries.
+ *
+ * Winner logic: lower seed wins (unseeded treated as seed 999).
+ *
+ * @param poolId Existing pool ID to update.
+ * @param upToRound 0 = clear all results; otherwise applies through this round.
+ */
+export function updatePoolResultsFake(poolId: string, upToRound: number): Pool | null {
+  const pool = getPool(poolId);
+  if (!pool) return null;
+
+  const totalRounds = pool.officialMatches.reduce((max, m) => Math.max(max, m.round), 0);
+  const clampedRound = Math.max(0, Math.min(upToRound, totalRounds));
+
+  // Reset all official results to blank first, then reapply up to the target round.
+  const blank = pool.officialMatches.map(m => ({ ...m, winnerId: null as string | null }));
+  let simulated = blank;
+
+  for (let round = 1; round <= clampedRound; round++) {
+    const pending = simulated.filter(
+      m => m.round === round && !m.winnerId && m.player1 !== null && m.player2 !== null,
+    );
+    for (const match of pending) {
+      const p1 = match.player1;
+      const p2 = match.player2;
+      if (!p1 || !p2) continue;
+      const s1 = p1.seed ?? 999;
+      const s2 = p2.seed ?? 999;
+      const winner = s1 <= s2 ? p1 : p2;
+      simulated = advancePlayer(simulated, match.id, winner.id);
+    }
+  }
+
+  pool.officialMatches = simulated;
+  savePool(pool);
+  return pool;
+}
+
+/**
  * Remove the test pool from localStorage.
  */
 export function clearTestPool(): void {

@@ -19,17 +19,21 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { getRoundFullName } from '@/lib/bracket-utils';
 import type { Match } from '@/lib/bracket-utils';
 import {
   MADRID_TEST_POOL_ID,
   setupTestMadridPool,
   setupTestMadridLeagueRun,
   updateTestPoolResults,
+  updatePoolResultsFake,
   clearTestPool,
 } from '@/lib/test-tournament-data';
 import { getPool } from '@/lib/pool-storage';
+import { getLeagues } from '@/lib/league-storage';
 import { calculatePoolEntryScore } from '@/lib/scoring';
 import type { Pool } from '@/lib/pool-types';
+import type { League } from '@/lib/league-types';
 import type { AppView } from '@/App';
 import type { User } from 'firebase/auth';
 
@@ -68,6 +72,9 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
   const [autoRunning, setAutoRunning] = useState(false);
   const [stepRunning, setStepRunning] = useState(false);
   const [pipelineRunning, setPipelineRunning] = useState(false);
+  const [existingLeagueId, setExistingLeagueId] = useState('');
+  const [existingPoolId, setExistingPoolId] = useState('');
+  const [existingSimulationRunning, setExistingSimulationRunning] = useState(false);
   const autoRunRef = useRef(false);
 
   const refresh = useCallback(() => {
@@ -90,6 +97,23 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
   const isFinalized = resultsThrough === 6;
   const nextRound = Math.min(resultsThrough + 1, 6);
   const hasPool = pool !== null;
+  const leagues = getLeagues();
+  const selectedLeague: League | null = existingLeagueId
+    ? leagues.find(league => league.id === existingLeagueId) ?? null
+    : null;
+  const selectedPool = existingPoolId ? getPool(existingPoolId) : null;
+  const existingTotalRounds = selectedPool
+    ? selectedPool.officialMatches.reduce((max: number, m: Match) => Math.max(max, m.round), 0)
+    : 0;
+  const existingResultsThrough = selectedPool
+    ? selectedPool.officialMatches.reduce((max: number, m: Match) => (m.winnerId ? Math.max(max, m.round) : max), 0)
+    : 0;
+  const existingNextRound = existingTotalRounds > 0
+    ? Math.min(existingResultsThrough + 1, existingTotalRounds)
+    : 0;
+
+  const getExistingRoundLabel = (round: number) =>
+    existingTotalRounds > 0 ? getRoundFullName(round, existingTotalRounds) : `Round ${round}`;
 
   // ── Setup ──
   const handleSetup = () => {
@@ -257,6 +281,68 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
       setPipelineRunning(false);
       setStepRunning(false);
     }
+  };
+
+  // ── Existing league + real-user pool simulation ──
+  const handleSimulateExistingLeague = async () => {
+    if (!existingLeagueId || !existingPoolId) {
+      flash('⚠️ Select an existing league and linked pool first', false);
+      return;
+    }
+    if (existingSimulationRunning || stepRunning || autoRunning || pipelineRunning) return;
+
+    const currentPool = getPool(existingPoolId);
+    if (!currentPool) {
+      flash('⚠️ Selected pool was not found', false);
+      return;
+    }
+
+    const totalRounds = currentPool.officialMatches.reduce((max: number, m: Match) => Math.max(max, m.round), 0);
+    const throughRound = currentPool.officialMatches.reduce(
+      (max: number, m: Match) => (m.winnerId ? Math.max(max, m.round) : max),
+      0,
+    );
+
+    if (throughRound >= totalRounds) {
+      flash('Tournament is already complete — clear results to replay', false);
+      return;
+    }
+
+    setExistingSimulationRunning(true);
+    try {
+      for (let round = throughRound + 1; round <= totalRounds; round++) {
+        await new Promise(res => setTimeout(res, AUTO_RUN_DELAY));
+        const updated = updatePoolResultsFake(existingPoolId, round);
+        onPoolChanged?.();
+        if (!updated) {
+          throw new Error(`Failed to simulate ${getRoundFullName(round, totalRounds)} for pool ${existingPoolId}`);
+        }
+        flash(`Live replay: ${getRoundFullName(round, totalRounds)} complete ✅`);
+      }
+      flash('Live league simulation complete — opening league view ✅');
+      onNavigate({ page: 'league-detail', leagueId: existingLeagueId });
+      onClose();
+    } catch (error) {
+      console.error('Failed to simulate existing league pool:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      flash(`⚠️ Existing league simulation failed: ${message}`, false);
+    } finally {
+      setExistingSimulationRunning(false);
+    }
+  };
+
+  const handleResetExistingLeagueSimulation = () => {
+    if (!existingPoolId) {
+      flash('⚠️ Select an existing linked pool first', false);
+      return;
+    }
+    const updated = updatePoolResultsFake(existingPoolId, 0);
+    onPoolChanged?.();
+    if (!updated) {
+      flash('⚠️ Could not reset selected pool results', false);
+      return;
+    }
+    flash('Existing pool results cleared — ready to replay');
   };
 
   // ── Ranked leaderboard rows ──
@@ -635,6 +721,93 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
                 <ArrowRight className="h-3.5 w-3.5 ml-1.5" aria-hidden="true" />
               </Button>
             </StepSection>
+
+          {/* ══ STEP 5: Existing League Replay ══ */}
+          <StepSection
+            number={5}
+            label="Live Replay Existing League"
+            icon={<Users className="h-3 w-3" />}
+          >
+            <p className="text-xs text-white/50 leading-relaxed mb-3">
+              Uses an <strong className="text-white/70">already created league</strong> with real users/pools and
+              fake-simulates official results round-by-round for workflow/performance testing.
+            </p>
+
+            <div className="space-y-2.5">
+              <label className="block">
+                <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wide">League</span>
+                <select
+                  value={existingLeagueId}
+                  onChange={(e) => {
+                    setExistingLeagueId(e.target.value);
+                    setExistingPoolId('');
+                  }}
+                  className="mt-1 w-full bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white/80 focus:outline-none focus:border-emerald-500/40"
+                >
+                  <option value="">Select league…</option>
+                  {leagues.map(league => (
+                    <option key={league.id} value={league.id}>
+                      {league.name} ({league.id})
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wide">Linked pool</span>
+                <select
+                  value={existingPoolId}
+                  onChange={(e) => setExistingPoolId(e.target.value)}
+                  disabled={!selectedLeague}
+                  className="mt-1 w-full bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white/80 focus:outline-none focus:border-emerald-500/40 disabled:opacity-40"
+                >
+                  <option value="">Select pool…</option>
+                  {selectedLeague && Object.entries(selectedLeague.tournamentPoolIds).map(([tournamentId, poolId]) => {
+                    const linkedPool = getPool(poolId);
+                    if (!linkedPool) return null;
+                    return (
+                      <option key={poolId} value={poolId}>
+                        {linkedPool.tournamentName || tournamentId} · {linkedPool.entries.length} entries
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+            </div>
+
+            {selectedPool && (
+              <p className="text-[10px] text-emerald-400/70 mt-2">
+                Progress: {existingResultsThrough} / {existingTotalRounds} rounds
+                {existingTotalRounds > 0 && existingResultsThrough < existingTotalRounds
+                  ? ` · next ${getExistingRoundLabel(existingNextRound)}`
+                  : ''}
+              </p>
+            )}
+
+            <div className="flex gap-2 mt-3">
+              <Button
+                onClick={handleSimulateExistingLeague}
+                disabled={!existingLeagueId || !existingPoolId || existingSimulationRunning || stepRunning || autoRunning || pipelineRunning}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl h-9 border-0 transition-colors disabled:opacity-40"
+              >
+                {existingSimulationRunning ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Play className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+                )}
+                Run Live Replay
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleResetExistingLeagueSimulation}
+                disabled={!existingPoolId || existingSimulationRunning}
+                className="text-xs rounded-xl h-9 border-white/15 text-white/60 hover:text-white hover:border-white/30 px-3 gap-1 transition-colors disabled:opacity-40"
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                Reset
+              </Button>
+            </div>
+          </StepSection>
           </div>
 
         {/* ── Footer ── */}
