@@ -29,4 +29,6 @@ export interface Pool {
   updatedAt?: string;
   /** League ID this pool belongs to, if it was auto-created for a league. */
   leagueId?: string;
+  /** User IDs that currently participate in this pool (creator and entrants). */
+  participantIds?: string[];
 }

@@ -20,8 +20,10 @@ import { AccountMenu } from './components/AccountMenu';
 import { Dashboard } from './components/Dashboard';
 import { cn } from './lib/utils';
 import { createPool, addEntry, getPool, getPools, savePool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH, POOLS_STORAGE_KEY } from './lib/pool-storage';
+import { saveLeague } from './lib/league-storage';
 import { setAuthStorageUserId, getCurrentAuthUserId, collectAndClearScopedData, authGetItem, authSetItem, authRemoveItem } from './lib/auth-storage';
-import { syncCreatePool, syncAddEntry, syncUpdateEntry } from './services/poolSyncService';
+import { syncCreatePool, syncAddEntry, syncGetPool, syncGetUserPools, syncUpdateEntry } from './services/poolSyncService';
+import { syncGetUserLeagues } from './services/leagueSyncService';
 import { onAuthStateChanged, signOut } from './services/authService';
 import { getUserId, setUserName } from './lib/user-identity';
 import { AnimatedNumber } from './components/AnimatedNumber';
@@ -179,6 +181,50 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
+
+  // Rehydrate signed-in users from Firestore so account data survives local cache clears.
+  useEffect(() => {
+    if (!authChecked || !authUser || authUser.isAnonymous) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const uid = authUser.uid;
+        const [userLeagues, userPools] = await Promise.all([
+          syncGetUserLeagues(uid),
+          syncGetUserPools(uid),
+        ]);
+
+        if (cancelled) return;
+
+        for (const league of userLeagues) {
+          saveLeague(league);
+        }
+        for (const pool of userPools) {
+          savePool(pool);
+        }
+
+        const leagueLinkedPoolIds = new Set(
+          userLeagues.flatMap(league => Object.values(league.tournamentPoolIds ?? {}))
+        );
+        if (leagueLinkedPoolIds.size > 0) {
+          const leaguePools = await Promise.all(
+            Array.from(leagueLinkedPoolIds).map(poolId => syncGetPool(poolId))
+          );
+          if (cancelled) return;
+          for (const pool of leaguePools) {
+            if (pool) savePool(pool);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to rehydrate user data from Firestore:', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authChecked, authUser]);
 
   const handleSignOut = async () => {
     await signOut();

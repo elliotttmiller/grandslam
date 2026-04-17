@@ -68,6 +68,7 @@ export function createPool(
   officialMatches: Match[],
   createdBy?: string
 ): Pool {
+  const participantIds = createdBy ? [createdBy] : [];
   const pool: Pool = {
     id: generatePoolCode(),
     name,
@@ -76,6 +77,7 @@ export function createPool(
     createdAt: new Date().toISOString(),
     officialMatches,
     entries: [],
+    participantIds,
     ...(createdBy ? { createdBy } : {}),
   };
   savePool(pool);
@@ -86,6 +88,9 @@ export function addEntry(poolId: string, entry: PoolEntry): void {
   const pool = getPool(poolId);
   if (!pool) return;
   pool.entries.push(entry);
+  if (entry.userId) {
+    pool.participantIds = [...new Set([...(pool.participantIds ?? []), entry.userId])];
+  }
   savePool(pool);
 }
 
