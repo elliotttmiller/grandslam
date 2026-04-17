@@ -17,6 +17,7 @@ import {
 import {
   subscribeToLeague,
   syncAddLeagueMember,
+  syncDeleteLeague,
   syncRemoveLeagueMember,
   syncSetLeaguePool,
 } from '@/services/leagueSyncService';
@@ -156,6 +157,7 @@ export function LeagueDetail({
 
   const handleDelete = async () => {
     if (!league) return;
+    await syncDeleteLeague(league.id);
     deleteLeague(league.id);
     onNavigate({ page: 'my-leagues' });
   };

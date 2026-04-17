@@ -15,6 +15,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   collection,
   query,
   where,
@@ -146,6 +147,17 @@ export async function syncCreatePool(pool: Pool): Promise<Pool | null> {
       console.error('Pool creation failed:', errorCode, errorMessage);
     }
     return null;
+  }
+}
+
+/** Delete a pool document by ID. */
+export async function syncDeletePool(poolId: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(getDb(), 'pools', poolId));
+    return true;
+  } catch (error) {
+    console.error('Failed to delete pool from Firestore:', error);
+    return false;
   }
 }
 

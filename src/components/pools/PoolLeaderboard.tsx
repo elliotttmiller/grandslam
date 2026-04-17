@@ -11,7 +11,12 @@ import {
   getPool, deletePool, exportPool, exportEntry, importEntry, savePool, generateId,
   updateOfficialMatches,
 } from '@/lib/pool-storage';
-import { subscribeToPool, syncAddEntry, syncUpdateOfficialMatches } from '@/services/poolSyncService';
+import {
+  subscribeToPool,
+  syncAddEntry,
+  syncDeletePool,
+  syncUpdateOfficialMatches,
+} from '@/services/poolSyncService';
 import { advancePlayer, getRoundName } from '@/lib/bracket-utils';
 import { getUserId } from '@/lib/user-identity';
 import { tournamentColor } from '@/lib/tournament-colors';
@@ -211,7 +216,8 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
     onPoolUpdate?.();
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
+    await syncDeletePool(poolData.id);
     deletePool(poolData.id);
     onNavigate({ page: 'pools' });
   };

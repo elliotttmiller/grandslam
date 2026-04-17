@@ -14,6 +14,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   getDocs,
   collection,
   query,
@@ -114,6 +115,17 @@ export async function syncCreateLeague(league: League): Promise<League | null> {
     const err = error as { code?: string; message?: string };
     console.error('League creation failed:', err?.code, err?.message);
     return null;
+  }
+}
+
+/** Delete a league document by ID. */
+export async function syncDeleteLeague(leagueId: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(getDb(), 'leagues', leagueId));
+    return true;
+  } catch (error) {
+    console.error('League deletion failed:', error);
+    return false;
   }
 }
 
