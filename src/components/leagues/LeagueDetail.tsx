@@ -192,7 +192,7 @@ export function LeagueDetail({
             My Leagues
           </Button>
 
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 <h1 className="text-xl font-black tracking-tight">{league.name}</h1>
@@ -225,7 +225,7 @@ export function LeagueDetail({
             {/* Invite code */}
             <button
               onClick={handleCopyCode}
-              className="shrink-0 flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm font-mono font-bold hover:bg-white/8 transition-colors"
+              className="shrink-0 w-full sm:w-auto justify-center sm:justify-start flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm font-mono font-bold hover:bg-white/8 transition-colors"
               aria-label="Copy invite code"
             >
               {copied ? (
@@ -239,14 +239,14 @@ export function LeagueDetail({
         </div>
 
         {/* Tabs */}
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="flex gap-1">
+        <div className="max-w-4xl mx-auto px-4 overflow-x-auto">
+          <div className="flex gap-1 min-w-max">
             {(['hub', 'standings', 'pools', 'members'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={cn(
-                  'px-4 py-2.5 text-sm font-semibold capitalize border-b-2 transition-all',
+                  'px-3 sm:px-4 py-2.5 text-sm font-semibold capitalize border-b-2 transition-all',
                   activeTab === tab
                     ? 'border-emerald-400 text-emerald-300'
                     : 'border-transparent text-muted-foreground/60 hover:text-muted-foreground',
@@ -321,7 +321,7 @@ export function LeagueDetail({
         </AnimatePresence>
 
         {/* Leave / Delete actions */}
-        <div className="mt-10 pt-6 border-t border-white/5 flex gap-3">
+        <div className="mt-10 pt-6 border-t border-white/5 flex flex-wrap gap-3">
           {!isOwner && isMember && (
             <Button
               variant="outline"
@@ -409,14 +409,14 @@ function HubTab({ league, standings, leagueTournaments, onOpenInsights }: HubTab
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-widest text-muted-foreground/40 mb-1">
             League dashboard
           </p>
           <h2 className="text-lg font-black tracking-tight text-foreground">Hub</h2>
         </div>
-        <Button size="sm" variant="outline" className="rounded-xl" onClick={onOpenInsights}>
+        <Button size="sm" variant="outline" className="rounded-xl w-full sm:w-auto justify-center" onClick={onOpenInsights}>
           <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
           View insights
         </Button>
@@ -685,7 +685,7 @@ function PoolsTab({ league, leagueTournaments, userId, joiningPool, onJoinPool, 
         return (
           <div
             key={t.id}
-            className="bg-card/40 border border-white/6 rounded-xl px-4 py-3 flex items-center gap-3"
+            className="bg-card/40 border border-white/6 rounded-xl px-4 py-3 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center"
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5 flex-wrap">
@@ -711,22 +711,22 @@ function PoolsTab({ league, leagueTournaments, userId, joiningPool, onJoinPool, 
               )}
             </div>
             {myEntry && pool ? (
-              <Button
-                size="sm"
-                variant="outline"
-                className="rounded-xl shrink-0"
-                onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: myEntry.id })}
-              >
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-xl shrink-0 w-full sm:w-auto justify-center"
+                  onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: myEntry.id })}
+                >
                 <ChevronRight className="h-3.5 w-3.5" />
                 View
               </Button>
             ) : (
-              <Button
-                size="sm"
-                className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0 shrink-0"
-                disabled={isJoining}
-                onClick={() => onJoinPool(t.id, t.name)}
-              >
+                <Button
+                  size="sm"
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0 shrink-0 w-full sm:w-auto justify-center"
+                  disabled={isJoining}
+                  onClick={() => onJoinPool(t.id, t.name)}
+                >
                 {isJoining ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (

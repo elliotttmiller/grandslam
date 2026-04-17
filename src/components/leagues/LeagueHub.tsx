@@ -148,19 +148,19 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
   return (
     <div className="flex flex-col h-full overflow-y-auto overflow-x-hidden">
       {/* Header */}
-      <div className="flex-none px-5 py-5 border-b border-border/25">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold tracking-tight">Leagues</h2>
+      <div className="flex-none px-4 sm:px-5 py-4 sm:py-5 border-b border-border/25">
+        <div className="max-w-4xl mx-auto flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold tracking-tight">Leagues</h2>
             <p className="text-[12px] text-muted-foreground/70 mt-0.5">
               Year-long competitions across every tournament
             </p>
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto shrink-0">
             <Button
               variant="ghost"
               size="sm"
-              className="rounded-xl"
+              className="rounded-xl col-span-2 sm:col-span-1 justify-center"
               onClick={() => onNavigate({ page: 'my-leagues' })}
             >
               My Leagues
@@ -168,7 +168,7 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
             <Button
               variant="outline"
               size="sm"
-              className="rounded-xl"
+              className="rounded-xl justify-center"
               onClick={() => {
                 if (!requireAuth()) return;
                 setShowJoin(true);
@@ -179,7 +179,7 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
             </Button>
             <Button
               size="sm"
-              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0"
+              className="rounded-xl col-span-2 sm:col-span-1 justify-center bg-emerald-600 hover:bg-emerald-500 text-white border-0"
               onClick={() => {
                 if (!requireAuth()) return;
                 setShowCreate(true);
@@ -198,11 +198,11 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center py-20"
+            className="text-center py-14 sm:py-20 max-w-md mx-auto"
           >
             <Trophy className="h-12 w-12 text-muted-foreground/20 mx-auto mb-4" />
             <p className="font-semibold text-foreground mb-1">No leagues yet</p>
-            <p className="text-sm text-muted-foreground mb-6">
+            <p className="text-sm text-muted-foreground mb-6 text-balance">
               Create a year-long league and invite friends to compete across every tournament.
             </p>
             <Button
@@ -364,11 +364,11 @@ function LeagueCard({ league, authUser, onClick }: LeagueCardProps) {
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
       onClick={onClick}
-      className="w-full text-left bg-card/50 border border-white/8 rounded-2xl p-5 hover:border-white/15 hover:bg-card/70 transition-all group"
+      className="w-full text-left bg-card/50 border border-white/8 rounded-2xl p-4 sm:p-5 hover:border-white/15 hover:bg-card/70 transition-all group"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="font-bold text-foreground truncate">{league.name}</span>
             {league.isPrivate ? (
               <span className="shrink-0 flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded-full border border-amber-500/25">
@@ -388,7 +388,7 @@ function LeagueCard({ league, authUser, onClick }: LeagueCardProps) {
           {league.description && (
             <p className="text-xs text-muted-foreground truncate mb-2">{league.description}</p>
           )}
-          <div className="flex items-center gap-4 text-xs text-muted-foreground/60">
+          <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-muted-foreground/60">
             <span className="flex items-center gap-1">
               <Users className="h-3 w-3" />
               {memberCount} {memberCount === 1 ? 'member' : 'members'}
