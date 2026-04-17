@@ -361,100 +361,128 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
               className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-md bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold">Create a Pool</h3>
+                <h3 className="text-base font-bold">{isCreating ? 'Generating Bracket' : 'Create a Pool'}</h3>
                 <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setShowCreate(false)} disabled={isCreating}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
 
-              <div className="flex flex-col gap-3">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground">Pool Name <span className="text-red-400">*</span></span>
-                  <input
-                    type="text"
-                    value={createPoolName}
-                    onChange={e => setCreatePoolName(e.target.value)}
-                    placeholder="e.g. Miller Family Pool"
-                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground">Your Name <span className="text-red-400">*</span></span>
-                  <input
-                    type="text"
-                    value={createUserName}
-                    onChange={e => setCreateUserName(e.target.value)}
-                    placeholder="e.g. John Smith"
-                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground">Your Bracket Name <span className="text-muted-foreground/50 font-normal">(optional)</span></span>
-                  <input
-                    type="text"
-                    value={createBracketName}
-                    onChange={e => setCreateBracketName(e.target.value)}
-                    placeholder={createUserName ? `${createUserName}'s Bracket` : "e.g. Dark Horse Picks"}
-                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground">Tournament <span className="text-red-400">*</span></span>
-                  <select
-                    value={createTournamentId}
-                    onChange={e => setCreateTournamentId(e.target.value)}
-                    className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
+              <AnimatePresence mode="wait" initial={false}>
+                {isCreating ? (
+                  <motion.div
+                    key="create-loading"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.18 }}
+                    className="min-h-[320px] flex flex-col items-center justify-center text-center gap-4 px-2"
                   >
-                    <option value="">Select tournament…</option>
-                    {(() => {
-                      const grandSlams = tournaments.filter(t => t.type === 'grand-slam' || ['ao','rg','wim','uso'].includes(t.id));
-                      const masters = tournaments.filter(t => t.type === 'masters' && !['ao','rg','wim','uso'].includes(t.id));
-                      return (
-                        <>
-                          {grandSlams.length > 0 && (
-                            <optgroup label="Grand Slams">
-                              {grandSlams.map(t => (
-                                <option key={t.id} value={t.id}>{t.name}</option>
-                              ))}
-                            </optgroup>
-                          )}
-                          {masters.length > 0 && (
-                            <optgroup label="ATP Masters 1000">
-                              {masters.map(t => (
-                                <option key={t.id} value={t.id}>{t.name}</option>
-                              ))}
-                            </optgroup>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </select>
-                </label>
+                    <div className="relative flex items-center justify-center">
+                      <div className="w-11 h-11 rounded-full border-[3px] border-white/[0.09]" />
+                      <Loader2 className="absolute h-6 w-6 text-emerald-400 animate-spin" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-semibold text-foreground/90">Building your bracket draw…</p>
+                      <p className="text-xs text-muted-foreground/70">
+                        We’re generating the official {tournaments.find(t => t.id === createTournamentId)?.name ?? 'tournament'} bracket and creating your pool.
+                      </p>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="create-form"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.18 }}
+                    className="flex flex-col gap-4"
+                  >
+                    <div className="flex flex-col gap-3">
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-xs font-semibold text-muted-foreground">Pool Name <span className="text-red-400">*</span></span>
+                        <input
+                          type="text"
+                          value={createPoolName}
+                          onChange={e => setCreatePoolName(e.target.value)}
+                          placeholder="e.g. Miller Family Pool"
+                          className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
+                        />
+                      </label>
 
-                <p className="text-[11px] text-muted-foreground/60 bg-muted/15 rounded-xl px-3 py-2.5 border border-border/20 leading-relaxed">
-                  The tournament draw will be loaded and shared with all participants. You'll fill out your picks after creating the pool.
-                </p>
-              </div>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-xs font-semibold text-muted-foreground">Your Name <span className="text-red-400">*</span></span>
+                        <input
+                          type="text"
+                          value={createUserName}
+                          onChange={e => setCreateUserName(e.target.value)}
+                          placeholder="e.g. John Smith"
+                          className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
+                        />
+                      </label>
 
-              <div className="flex gap-2 justify-end">
-                <Button variant="ghost" size="sm" onClick={() => setShowCreate(false)} disabled={isCreating}>Cancel</Button>
-                <Button
-                  size="sm"
-                  className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0"
-                  disabled={!createPoolName.trim() || !createUserName.trim() || !createTournamentId || isCreating}
-                  onClick={handleCreateSubmit}
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      Building draw…
-                    </>
-                  ) : 'Create Pool'}
-                </Button>
-              </div>
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-xs font-semibold text-muted-foreground">Your Bracket Name <span className="text-muted-foreground/50 font-normal">(optional)</span></span>
+                        <input
+                          type="text"
+                          value={createBracketName}
+                          onChange={e => setCreateBracketName(e.target.value)}
+                          placeholder={createUserName ? `${createUserName}'s Bracket` : "e.g. Dark Horse Picks"}
+                          className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
+                        />
+                      </label>
+
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-xs font-semibold text-muted-foreground">Tournament <span className="text-red-400">*</span></span>
+                        <select
+                          value={createTournamentId}
+                          onChange={e => setCreateTournamentId(e.target.value)}
+                          className="bg-background border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500/50 transition-all"
+                        >
+                          <option value="">Select tournament…</option>
+                          {(() => {
+                            const grandSlams = tournaments.filter(t => t.type === 'grand-slam' || ['ao','rg','wim','uso'].includes(t.id));
+                            const masters = tournaments.filter(t => t.type === 'masters' && !['ao','rg','wim','uso'].includes(t.id));
+                            return (
+                              <>
+                                {grandSlams.length > 0 && (
+                                  <optgroup label="Grand Slams">
+                                    {grandSlams.map(t => (
+                                      <option key={t.id} value={t.id}>{t.name}</option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                {masters.length > 0 && (
+                                  <optgroup label="ATP Masters 1000">
+                                    {masters.map(t => (
+                                      <option key={t.id} value={t.id}>{t.name}</option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </select>
+                      </label>
+
+                      <p className="text-[11px] text-muted-foreground/60 bg-muted/15 rounded-xl px-3 py-2.5 border border-border/20 leading-relaxed">
+                        The tournament draw will be loaded and shared with all participants. You'll fill out your picks after creating the pool.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="ghost" size="sm" onClick={() => setShowCreate(false)} disabled={isCreating}>Cancel</Button>
+                      <Button
+                        size="sm"
+                        className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0"
+                        disabled={!createPoolName.trim() || !createUserName.trim() || !createTournamentId || isCreating}
+                        onClick={handleCreateSubmit}
+                      >
+                        Create Pool
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           </>
         )}
