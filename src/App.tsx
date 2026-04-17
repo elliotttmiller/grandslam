@@ -69,6 +69,31 @@ function getAppViewKey(view: AppView): string {
   }
 }
 
+function isAppView(value: unknown): value is AppView {
+  if (!value || typeof value !== 'object') return false;
+  const page = (value as { page?: unknown }).page;
+  if (typeof page !== 'string') return false;
+
+  if (page === 'pool') return typeof (value as { poolId?: unknown }).poolId === 'string';
+  if (page === 'pool-entry') {
+    return typeof (value as { poolId?: unknown }).poolId === 'string'
+      && typeof (value as { entryId?: unknown }).entryId === 'string';
+  }
+  if (page === 'league-detail') return typeof (value as { leagueId?: unknown }).leagueId === 'string';
+
+  return page === 'dashboard'
+    || page === 'bracket'
+    || page === 'pools'
+    || page === 'leagues'
+    || page === 'my-leagues';
+}
+
+function normalizeNavIndex(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  if (!Number.isInteger(value) || value < 0) return 0;
+  return value;
+}
+
 export default function App() {
   const [tournaments, setTournaments] = useState<TournamentData[]>([]);
   const [selectedTournament, setSelectedTournament] = useState<string | null>(null);
@@ -148,8 +173,8 @@ export default function App() {
 
     const handlePopState = (event: PopStateEvent) => {
       const state = event.state as Partial<AppHistoryState> | null;
-      const nextView = state?.appView ?? INITIAL_APP_VIEW;
-      const nextIndex = typeof state?.navIndex === 'number' ? Math.max(0, state.navIndex) : 0;
+      const nextView = isAppView(state?.appView) ? state.appView : INITIAL_APP_VIEW;
+      const nextIndex = normalizeNavIndex(state?.navIndex);
 
       skipHistoryPushRef.current = true;
       navIndexRef.current = nextIndex;
@@ -169,8 +194,8 @@ export default function App() {
     }
 
     const currentState = window.history.state as Partial<AppHistoryState> | null;
-    if (currentState?.appView && getAppViewKey(currentState.appView as AppView) === getAppViewKey(appView)) {
-      setCanNavigateBack((currentState.navIndex ?? navIndexRef.current) > 0);
+    if (isAppView(currentState?.appView) && getAppViewKey(currentState.appView) === getAppViewKey(appView)) {
+      setCanNavigateBack(normalizeNavIndex(currentState.navIndex) > 0);
       return;
     }
 
