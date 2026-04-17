@@ -204,12 +204,12 @@ export default function App() {
           savePool(pool);
         }
 
-        const leaguePoolIds = new Set(
+        const leagueLinkedPoolIds = new Set(
           userLeagues.flatMap(league => Object.values(league.tournamentPoolIds ?? {}))
         );
-        if (leaguePoolIds.size > 0) {
+        if (leagueLinkedPoolIds.size > 0) {
           const leaguePools = await Promise.all(
-            Array.from(leaguePoolIds).map(poolId => syncGetPool(poolId))
+            Array.from(leagueLinkedPoolIds).map(poolId => syncGetPool(poolId))
           );
           if (cancelled) return;
           for (const pool of leaguePools) {
