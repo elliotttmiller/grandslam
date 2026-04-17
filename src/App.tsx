@@ -6,7 +6,7 @@ import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Button } from './components/ui/button';
-import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown, LogIn, LogOut, UserCircle, LayoutDashboard, Search, FlaskConical, Globe } from 'lucide-react';
+import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown, LogIn, LogOut, UserCircle, LayoutDashboard, Search, FlaskConical, Globe, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PoolHub } from './components/pools/PoolHub';
 import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
@@ -48,6 +48,52 @@ export type AppView =
   | { page: 'leagues' }
   | { page: 'my-leagues' }
   | { page: 'league-detail'; leagueId: string };
+
+const INITIAL_APP_VIEW: AppView = { page: 'dashboard' };
+
+type AppHistoryState = {
+  appView: AppView;
+  navIndex: number;
+};
+
+function getAppViewKey(view: AppView): string {
+  switch (view.page) {
+    case 'pool':
+      return `pool:${view.poolId}`;
+    case 'pool-entry':
+      return `pool-entry:${view.poolId}:${view.entryId}`;
+    case 'league-detail':
+      return `league-detail:${view.leagueId}`;
+    default:
+      return view.page;
+  }
+}
+
+function isAppView(value: unknown): value is AppView {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as { page?: unknown; poolId?: unknown; entryId?: unknown; leagueId?: unknown };
+  const page = candidate.page;
+  if (typeof page !== 'string') return false;
+
+  if (page === 'pool') return typeof candidate.poolId === 'string';
+  if (page === 'pool-entry') {
+    return typeof candidate.poolId === 'string'
+      && typeof candidate.entryId === 'string';
+  }
+  if (page === 'league-detail') return typeof candidate.leagueId === 'string';
+
+  return page === 'dashboard'
+    || page === 'bracket'
+    || page === 'pools'
+    || page === 'leagues'
+    || page === 'my-leagues';
+}
+
+function normalizeNavIndex(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  if (!Number.isInteger(value) || value < 0) return 0;
+  return value;
+}
 
 export default function App() {
   const [tournaments, setTournaments] = useState<TournamentData[]>([]);
@@ -94,7 +140,11 @@ export default function App() {
   const [showTiebreakerModal, setShowTiebreakerModal] = useState(false);
   const [tbGamesInput, setTbGamesInput] = useState('');
   const [tbSetsInput, setTbSetsInput] = useState('');
-  const [appView, setAppView] = useState<AppView>({ page: 'dashboard' });
+  const [appView, setAppView] = useState<AppView>(INITIAL_APP_VIEW);
+  const [canNavigateBack, setCanNavigateBack] = useState(false);
+  const navIndexRef = useRef(0);
+  const historyReadyRef = useRef(false);
+  const skipHistoryPushRef = useRef(false);
   // Code from a `?join=POOL_CODE` URL param — passed to PoolHub to pre-fill the join modal.
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null);
   // Set to true when a newly-created pool fails to sync to Firestore, so we can
@@ -113,6 +163,57 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalDefaultMode, setAuthModalDefaultMode] = useState<'sign-in' | 'sign-up'>('sign-in');
+
+  useEffect(() => {
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const initialState: AppHistoryState = { appView: INITIAL_APP_VIEW, navIndex: 0 };
+    window.history.replaceState(initialState, document.title, currentUrl);
+    historyReadyRef.current = true;
+    navIndexRef.current = 0;
+    setCanNavigateBack(false);
+
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state as Partial<AppHistoryState> | null;
+      const nextView = isAppView(state?.appView) ? state.appView : INITIAL_APP_VIEW;
+      const nextIndex = normalizeNavIndex(state?.navIndex);
+
+      skipHistoryPushRef.current = true;
+      navIndexRef.current = nextIndex;
+      setCanNavigateBack(nextIndex > 0);
+      setAppView(nextView);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (!historyReadyRef.current) return;
+    if (skipHistoryPushRef.current) {
+      skipHistoryPushRef.current = false;
+      return;
+    }
+
+    const currentState = window.history.state as Partial<AppHistoryState> | null;
+    if (isAppView(currentState?.appView) && getAppViewKey(currentState.appView) === getAppViewKey(appView)) {
+      setCanNavigateBack(normalizeNavIndex(currentState.navIndex) > 0);
+      return;
+    }
+
+    navIndexRef.current += 1;
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const nextState: AppHistoryState = { appView, navIndex: navIndexRef.current };
+    window.history.pushState(nextState, document.title, currentUrl);
+    setCanNavigateBack(true);
+  }, [appView]);
+
+  const handleBackNavigation = useCallback(() => {
+    if (canNavigateBack) {
+      window.history.back();
+      return;
+    }
+    setAppView(INITIAL_APP_VIEW);
+  }, [canNavigateBack]);
 
   // Subscribe to auth state changes once on mount
   useEffect(() => {
@@ -830,17 +931,29 @@ export default function App() {
 
           {/* Left: menu button */}
           <div className="flex items-center shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-white/60 hover:text-white hover:bg-white/8 h-9 w-9 rounded-xl"
-              onClick={() => setIsSidebarOpen(true)}
-              aria-label="Open navigation menu"
-              aria-expanded={isSidebarOpen}
-              aria-haspopup="dialog"
-            >
-              <Menu className="h-4.5 w-4.5" aria-hidden="true" />
-            </Button>
+            {canNavigateBack ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white/60 hover:text-white hover:bg-white/8 h-9 w-9 rounded-xl"
+                onClick={handleBackNavigation}
+                aria-label="Go back"
+              >
+                <ArrowLeft className="h-4.5 w-4.5" aria-hidden="true" />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white/60 hover:text-white hover:bg-white/8 h-9 w-9 rounded-xl"
+                onClick={() => setIsSidebarOpen(true)}
+                aria-label="Open navigation menu"
+                aria-expanded={isSidebarOpen}
+                aria-haspopup="dialog"
+              >
+                <Menu className="h-4.5 w-4.5" aria-hidden="true" />
+              </Button>
+            )}
           </div>
 
           {/* Center: app logo */}
