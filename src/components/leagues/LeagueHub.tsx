@@ -160,7 +160,7 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
             <Button
               variant="ghost"
               size="sm"
-              className="rounded-xl col-span-2 sm:col-span-1 justify-center"
+              className="rounded-xl col-span-2 sm:col-span-1 justify-center h-9"
               onClick={() => onNavigate({ page: 'my-leagues' })}
             >
               My Leagues
@@ -168,7 +168,7 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
             <Button
               variant="outline"
               size="sm"
-              className="rounded-xl justify-center"
+              className="rounded-xl justify-center h-9 w-full sm:w-auto"
               onClick={() => {
                 if (!requireAuth()) return;
                 setShowJoin(true);
@@ -179,7 +179,7 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
             </Button>
             <Button
               size="sm"
-              className="rounded-xl col-span-2 sm:col-span-1 justify-center bg-emerald-600 hover:bg-emerald-500 text-white border-0"
+              className="rounded-xl justify-center h-9 w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white border-0"
               onClick={() => {
                 if (!requireAuth()) return;
                 setShowCreate(true);
@@ -257,7 +257,7 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
                 />
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Year">
                   <select
                     value={createYear}
@@ -426,15 +426,15 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
         onClick={onClose}
         aria-hidden="true"
       />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: 8 }}
-        transition={{ duration: 0.18 }}
-        className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-md mx-auto bg-card border border-white/10 rounded-2xl shadow-2xl p-6"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, y: 8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: 8 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-md mx-auto bg-card border border-white/10 rounded-2xl shadow-2xl p-5 sm:p-6 max-h-[calc(100vh-2rem)] overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
       >
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-bold">{title}</h3>
