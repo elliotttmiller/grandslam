@@ -12,8 +12,12 @@
 import {
   doc,
   getDoc,
+  getDocs,
   setDoc,
   updateDoc,
+  collection,
+  query,
+  where,
   onSnapshot,
   arrayUnion,
   serverTimestamp,
@@ -72,6 +76,31 @@ export async function syncGetPool(id: string): Promise<Pool | null> {
   }
 }
 
+/** Fetch pools where the user is a participant or creator. */
+export async function syncGetUserPools(userId: string): Promise<Pool[]> {
+  try {
+    const col = collection(getDb(), 'pools');
+    const [participantSnaps, createdSnaps] = await Promise.all([
+      getDocs(query(col, where('participantIds', 'array-contains', userId))),
+      getDocs(query(col, where('createdBy', '==', userId))),
+    ]);
+
+    const byId = new Map<string, Pool>();
+    for (const snap of [...participantSnaps.docs, ...createdSnaps.docs]) {
+      const data = snap.data();
+      byId.set(snap.id, {
+        ...(data as Pool),
+        createdAt: data['createdAt']?.toDate?.()?.toISOString() ?? data['createdAt'],
+        updatedAt: data['updatedAt']?.toDate?.()?.toISOString() ?? data['updatedAt'],
+      });
+    }
+    return Array.from(byId.values());
+  } catch (error) {
+    console.error('Failed to fetch user pools:', error);
+    return [];
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Create
 // ---------------------------------------------------------------------------
@@ -93,7 +122,17 @@ export async function syncCreatePool(pool: Pool): Promise<Pool | null> {
     // Remove undefined fields recursively (including entries array)
     const poolData = removeUndefined(pool);
     
-    await setDoc(ref, { ...poolData, updatedAt: serverTimestamp() });
+    const participantIds = [
+      ...new Set(
+        [
+          ...(poolData.participantIds ?? []),
+          ...(poolData.entries ?? []).map(e => e.userId).filter((id): id is string => !!id),
+          poolData.createdBy,
+        ].filter((id): id is string => !!id)
+      ),
+    ];
+
+    await setDoc(ref, { ...poolData, participantIds, updatedAt: serverTimestamp() });
     return pool;
   } catch (error) {
     const err = error as any;
@@ -127,10 +166,15 @@ export async function syncAddEntry(
     // Remove undefined fields before writing to Firestore (Firestore rejects undefined)
     const entryData = removeUndefined(entry);
     
-    await updateDoc(doc(getDb(), 'pools', poolId), {
+    const updatePayload: Record<string, unknown> = {
       entries: arrayUnion(entryData),
       updatedAt: serverTimestamp(),
-    });
+    };
+    if (entry.userId) {
+      updatePayload['participantIds'] = arrayUnion(entry.userId);
+    }
+
+    await updateDoc(doc(getDb(), 'pools', poolId), updatePayload);
     return true;
   } catch (error) {
     const err = error as any;
@@ -269,4 +313,3 @@ export function subscribeToPool(
   }
   return () => unsubscribe?.();
 }
-
