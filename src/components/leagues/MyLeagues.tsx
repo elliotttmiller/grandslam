@@ -44,7 +44,7 @@ export function MyLeagues({ onNavigate, authUser }: MyLeaguesProps) {
   if (leagues.length === 0) {
     return (
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="max-w-4xl mx-auto px-5 py-12 text-center">
+        <div className="max-w-4xl mx-auto px-4 sm:px-5 py-12 text-center">
           <Trophy className="h-12 w-12 text-muted-foreground/20 mx-auto mb-4" />
           <p className="font-semibold text-foreground mb-1">No leagues yet</p>
           <p className="text-sm text-muted-foreground mb-6">
@@ -65,14 +65,14 @@ export function MyLeagues({ onNavigate, authUser }: MyLeaguesProps) {
   return (
     <div className="flex-1 overflow-y-auto overflow-x-hidden">
       <motion.div
-        className="max-w-4xl mx-auto px-5 py-8"
+        className="max-w-4xl mx-auto px-4 sm:px-5 py-6 sm:py-8"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
         {/* Header */}
         <motion.div variants={itemVariants} className="mb-8">
-          <h1 className="text-2xl font-black tracking-tight mb-1">My Leagues</h1>
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight mb-1">My Leagues</h1>
           <p className="text-sm text-muted-foreground">
             {leagues.length} league{leagues.length !== 1 ? 's' : ''} · your year-long competitions
           </p>
@@ -157,7 +157,7 @@ function MyLeagueCard({ league, userId, onClick, itemVariants }: MyLeagueCardPro
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
       onClick={onClick}
-      className="w-full text-left bg-card/50 border border-white/8 rounded-2xl p-5 hover:border-white/15 hover:bg-card/70 transition-all group"
+      className="w-full text-left bg-card/50 border border-white/8 rounded-2xl p-4 sm:p-5 hover:border-white/15 hover:bg-card/70 transition-all group"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
