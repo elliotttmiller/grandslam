@@ -86,15 +86,50 @@ export function generateTestMadridBracket(): Match[] {
 // ─── Official Results Simulation ─────────────────────────────────────────────
 
 /**
- * Determine the winner of a single match based on the actual 2025 Madrid Open results.
+ * How many app rounds each seeded player survived at the 2025 Mutua Madrid Open.
+ * "Survived N rounds" means the player won their match in each of app rounds 1–N.
  *
  * Round mapping (app 6-round bracket → real tournament rounds):
- *   App R1 = Real R2 (seeds entered; Alcaraz/Djokovic/Rune/Fils were eliminated)
+ *   App R1 = Real R2 (top seeds' first match; Alcaraz/Djokovic/Rune/Fils eliminated)
  *   App R2 = Real R3 (Rublev & Shelton eliminated)
- *   App R3 = Real R4 / Round of 16 (Zverev, Fritz→Ruud, De Minaur→Musetti, Paul→Draper, Dimitrov, Tiafoe)
- *   App R4 = Real QF (Ruud def. Medvedev; Draper & Musetti each beat an unseeded opponent)
- *   App R5 = Real SF (Ruud def. Cerundolo; Draper def. Musetti)
+ *   App R3 = Real R4 / Round of 16 (Zverev, Fritz, De Minaur, Paul, Dimitrov, Tiafoe out)
+ *   App R4 = Real Quarterfinals (Medvedev eliminated by Ruud)
+ *   App R5 = Real Semifinals (Musetti eliminated by Draper; Cerundolo by Ruud)
  *   App R6 = Real Final (Ruud def. Draper 7–5, 3–6, 6–4)
+ *
+ * Source: ATP official 2025 Mutua Madrid Open draw & results.
+ */
+const MADRID_2025_SEED_SURVIVALS: Record<number, number> = {
+  1:  2, // Zverev    — lost App R3 (Real R4, def. by Cerundolo)
+  2:  0, // Alcaraz   — withdrew pre-tournament; modelled as App R1 loss
+  3:  2, // Fritz     — lost App R3 (Real R4, def. by Ruud)
+  4:  0, // Djokovic  — lost App R1 (Real R2)
+  5:  5, // Draper    — runner-up; lost App R6 Final to Ruud
+  6:  2, // De Minaur — lost App R3 (Real R4, def. by Musetti)
+  7:  1, // Rublev    — lost App R2 (Real R3, def. by Bublik)
+  8:  0, // Rune      — retired App R1 (Real R2)
+  9:  3, // Medvedev  — lost App R4 QF (Real QF, def. by Ruud)
+  10: 4, // Musetti   — lost App R5 SF (Real SF, def. by Draper)
+  11: 2, // Paul      — lost App R3 (Real R4, def. by Draper)
+  12: 1, // Shelton   — lost App R2 (Real R3, def. by Menšík)
+  13: 0, // Fils      — lost App R1 (Real R2)
+  14: 6, // Ruud      — CHAMPION (won all 6 app rounds)
+  15: 2, // Dimitrov  — lost App R3 (Real R4)
+  16: 2, // Tiafoe    — lost App R3 (Real R4)
+};
+
+/**
+ * Determine the winner of a single match based on the actual 2025 Madrid Open results.
+ *
+ * Uses a draw-independent survival model: each seeded player has a fixed
+ * `MADRID_2025_SEED_SURVIVALS[seed]` value representing the number of app rounds
+ * they won.  A seeded player wins round R if and only if their survival depth >= R.
+ * This guarantees the correct champion (Casper Ruud, seed 14) regardless of which
+ * section of the randomised draw the seeds land in.
+ *
+ * Unseeded qualifiers act as stand-ins for the real unseeded players who caused
+ * upsets (Cerundolo, Bublik, Menšík): they beat a seeded opponent whenever that
+ * seed's survival depth has been exhausted.
  */
 function getMadrid2025MatchWinner(
   player1: Player | null,
@@ -103,75 +138,23 @@ function getMadrid2025MatchWinner(
 ): Player | null {
   if (!player1 || !player2) return null;
 
-  const s1 = player1.seed ?? 999;
-  const s2 = player2.seed ?? 999;
+  const s1 = player1.seed ?? 0;
+  const s2 = player2.seed ?? 0;
+  const surv1 = s1 >= 1 && s1 <= 16 ? (MADRID_2025_SEED_SURVIVALS[s1] ?? 0) : 0;
+  const surv2 = s2 >= 1 && s2 <= 16 ? (MADRID_2025_SEED_SURVIVALS[s2] ?? 0) : 0;
 
-  /** Returns the player with the given seed number, or null if neither player has it. */
-  const bySeed = (seed: number): Player | null =>
-    s1 === seed ? player1 : s2 === seed ? player2 : null;
-
-  /** Returns the player that is NOT the given seed. */
-  const notSeed = (seed: number): Player | null =>
-    s1 === seed ? player2 : s2 === seed ? player1 : null;
-
-  // Default: lower seed (higher-ranked) wins; between two unseeded players, player1 wins.
-  const defaultWinner = s1 <= s2 ? player1 : player2;
-
-  switch (round) {
-    case 1: {
-      // Alcaraz [2] withdrew, Djokovic [4] lost R2, Rune [8] retired R2, Fils [13] lost R2.
-      for (const seed of [2, 4, 8, 13]) {
-        if (bySeed(seed)) return notSeed(seed)!;
-      }
-      return defaultWinner;
-    }
-    case 2: {
-      // Rublev [7] lost R3 to Bublik; Shelton [12] lost R3 to Menšík.
-      for (const seed of [7, 12]) {
-        if (bySeed(seed)) return notSeed(seed)!;
-      }
-      return defaultWinner;
-    }
-    case 3: {
-      // Seed-vs-seed upsets in R4 (round of 16):
-      //   Fritz [3] lost to Ruud [14]
-      //   De Minaur [6] lost to Musetti [10]
-      //   Paul [11] lost to Draper [5]
-      if (bySeed(3) && bySeed(14)) return bySeed(14)!;
-      if (bySeed(6) && bySeed(10)) return bySeed(10)!;
-      if (bySeed(5) && bySeed(11)) return bySeed(5)!;
-      // Seeded players who lost to unseeded opponents in R4:
-      //   Zverev [1] → Cerundolo (unseeded 20), Dimitrov [15], Tiafoe [16]
-      for (const seed of [1, 15, 16]) {
-        if (bySeed(seed)) {
-          const opp = notSeed(seed)!;
-          const oppSeed = opp === player1 ? s1 : s2;
-          // Only apply the upset if the opponent is unseeded in the 1-16 bracket
-          if (oppSeed > 16) return opp;
-        }
-      }
-      return defaultWinner;
-    }
-    case 4: {
-      // QF: Ruud [14] def. Medvedev [9]
-      if (bySeed(9) && bySeed(14)) return bySeed(14)!;
-      // Draper [5] and Musetti [10] each beat unseeded opponents — default handles it.
-      // Unseeded vs unseeded (Cerundolo def. Menšík) — player1 wins by default.
-      return defaultWinner;
-    }
-    case 5: {
-      // SF: Draper [5] def. Musetti [10]; Ruud [14] def. Cerundolo (unseeded) → default
-      if (bySeed(5) && bySeed(10)) return bySeed(5)!;
-      return defaultWinner;
-    }
-    case 6: {
-      // Final: Ruud [14] def. Draper [5]
-      if (bySeed(5) && bySeed(14)) return bySeed(14)!;
-      return defaultWinner;
-    }
-    default:
-      return defaultWinner;
+  // Both players are seeded: higher survival wins; equal survival → lower seed number wins.
+  if (s1 >= 1 && s1 <= 16 && s2 >= 1 && s2 <= 16) {
+    if (surv1 !== surv2) return surv1 > surv2 ? player1 : player2;
+    return s1 < s2 ? player1 : player2;
   }
+
+  // One seeded, one unseeded qualifier: seeded wins only if they survived this round.
+  if (s1 >= 1 && s1 <= 16) return surv1 >= round ? player1 : player2;
+  if (s2 >= 1 && s2 <= 16) return surv2 >= round ? player2 : player1;
+
+  // Both unseeded qualifiers: player1 wins by default.
+  return player1;
 }
 
 /**
@@ -219,61 +202,98 @@ type PickProfile =
 /**
  * Per-profile pick configuration.
  *
- * champSeed   — the seed this user picks to win the whole tournament.
- * earlyLosers — set of seed numbers this user predicts will be eliminated
- *               before the semis (upsets they "call" in their bracket).
- * upsetBias   — 0–1: probability that a seeded player loses to an unseeded
- *               opponent in rounds 1–3 (when not covered by earlyLosers).
- *               Higher = wilder bracket.
+ * champSeed      — the seed this user picks to win the whole tournament.
+ * predictedExits — maps seed number → the app round in which this user predicts
+ *                  that seed will be eliminated.  Applied only if the seed is
+ *                  still alive in that round of the user's own bracket cascade.
  */
 const PROFILE_CONFIG: Record<
   Exclude<PickProfile, 'partial'>,
-  { champSeed: number; earlyLosers: Set<number>; upsetBias: number }
+  { champSeed: number; predictedExits: Map<number, number> }
 > = {
-  'zverev-wins': {
-    champSeed: 1,
-    // Very chalk — only expects the clear outliers to fall
-    earlyLosers: new Set([4, 8]),
-    upsetBias: 0.10,
-  },
-  'draper-wins': {
-    champSeed: 5,
-    // Expects Zverev to stumble and a couple of favorites to fall early
-    earlyLosers: new Set([1, 4, 8, 13]),
-    upsetBias: 0.20,
-  },
+  /**
+   * Near-perfect bracket: predicts all real upsets and the true champion Ruud [14].
+   * Should score highest against the official results.
+   */
   'ruud-wins': {
     champSeed: 14,
-    // Dark-horse pick — predicts several favorites to crash out
-    earlyLosers: new Set([1, 3, 4, 8, 11, 13, 16]),
-    upsetBias: 0.30,
+    predictedExits: new Map([
+      [2,  1], [4,  1], [8,  1], [13, 1],           // R1 exits — matches reality
+      [7,  2], [12, 2],                               // R2 exits — matches reality
+      [1,  3], [3,  3], [6,  3], [11, 3], [15, 3], [16, 3], // R3 exits — matches reality
+      [9,  4],                                        // Medvedev QF exit — matches reality
+      [10, 5],                                        // Musetti SF exit — matches reality
+      [5,  6],                                        // Draper runner-up — matches reality
+    ]),
   },
+
+  /**
+   * Runner-up picker: calls Draper [5] as champion; gets many real upsets correct
+   * but misses the final (Ruud beats Draper in reality).
+   */
+  'draper-wins': {
+    champSeed: 5,
+    predictedExits: new Map([
+      [2,  1], [4,  1], [8,  1], [13, 1],
+      [7,  2], [12, 2],
+      [1,  3], [3,  3], [6,  3], [11, 3],
+      [9,  4],
+      [10, 5],
+      [14, 6],  // user predicts Ruud as runner-up (loses the final to Draper)
+    ]),
+  },
+
+  /**
+   * Medvedev run: picks Medvedev [9] to win; correctly calls early rounds but
+   * picks the wrong player from QF onwards.
+   */
   'medvedev-deep': {
     champSeed: 9,
-    // Middle-ground prediction; Medvedev quietly takes the title
-    earlyLosers: new Set([4, 8, 13, 15]),
-    upsetBias: 0.18,
+    predictedExits: new Map([
+      [2,  1], [4,  1], [8,  1], [13, 1],
+      [7,  2], [12, 2],
+      [3,  3], [6,  3], [11, 3],
+      [14, 4],  // user predicts Ruud exits QF (Medvedev beats him in their bracket)
+      [5,  5],  // user predicts Draper exits SF (Medvedev beats him in their bracket)
+    ]),
+  },
+
+  /**
+   * Chalk player: always picks the higher-ranked (lower seed number) player;
+   * only calls the most widely expected R1 withdrawals/retirements.
+   * Picks Zverev [1] to win the title.
+   */
+  'zverev-wins': {
+    champSeed: 1,
+    predictedExits: new Map([
+      [2, 1], [4, 1], [8, 1], [13, 1],  // obvious R1 exits
+    ]),
   },
 };
 
 /**
  * Build a bracket prediction for a test pool entry.
  *
- * Profiles:
- * - `zverev-wins`   — chalk picks, Zverev [1] lifts the trophy.
- * - `draper-wins`   — Draper [5] wins (the runner-up), upsets Zverev early.
- * - `ruud-wins`     — Dark horse! Ruud [14] goes all the way (the actual result).
- * - `medvedev-deep` — Medvedev [9] makes a surprise run to win.
- * - `partial`       — only R1 & R2 picks (simulates an incomplete entry).
+ * For each round the winner is decided deterministically:
+ *   1. If exactly one player's seed appears in `cfg.predictedExits` for the
+ *      current round, the other player wins (the user "calls" that exit).
+ *   2. In the final (round 6) the champSeed player wins if present; otherwise
+ *      the lower seed number wins.
+ *   3. Default: lower seed number wins (chalk; unseeded treated as seed 999).
  *
- * Each non-partial profile applies its `earlyLosers` as guaranteed upsets and
- * adds random variation (via `upsetBias`) in rounds 1–3 so that every
- * generated bracket is unique.
+ * The `partial` profile uses chalk logic for rounds 1–2 only.
  */
 function buildTestPicks(officialMatches: Match[], profile: PickProfile): Match[] {
   let picks = officialMatches.map(m => ({ ...m, winnerId: null as string | null }));
 
   const maxRound = profile === 'partial' ? 2 : MASTERS_TOTAL_ROUNDS;
+
+  /** Lower seed number wins; unseeded treated as seed 999. */
+  const chalkWinner = (m: Match): Player | null => {
+    const s1 = m.player1?.seed ?? 999;
+    const s2 = m.player2?.seed ?? 999;
+    return s1 <= s2 ? m.player1 : m.player2;
+  };
 
   if (profile === 'partial') {
     for (let round = 1; round <= maxRound; round++) {
@@ -281,9 +301,7 @@ function buildTestPicks(officialMatches: Match[], profile: PickProfile): Match[]
         m => m.round === round && !m.winnerId && m.player1 !== null && m.player2 !== null,
       );
       for (const match of pending) {
-        const s1 = match.player1?.seed ?? 999;
-        const s2 = match.player2?.seed ?? 999;
-        const winner = s1 <= s2 ? match.player1 : match.player2;
+        const winner = chalkWinner(match);
         if (winner) picks = advancePlayer(picks, match.id, winner.id);
       }
     }
@@ -304,29 +322,21 @@ function buildTestPicks(officialMatches: Match[], profile: PickProfile): Match[]
       let winner: Player | null = null;
 
       if (round === MASTERS_TOTAL_ROUNDS) {
-        // Final: pick the designated champion if present, else fall back to lower seed.
-        const champ =
+        // Final: champion seed wins if they made it here; otherwise chalk.
+        winner =
           s1 === cfg.champSeed ? match.player1
           : s2 === cfg.champSeed ? match.player2
-          : null;
-        winner = champ ?? (s1 <= s2 ? match.player1 : match.player2);
+          : chalkWinner(match);
       } else {
-        const lowerSeedPlayer = s1 <= s2 ? match.player1 : match.player2;
-        const higherSeedPlayer = s1 <= s2 ? match.player2 : match.player1;
-        const lowerSeedNum = Math.min(s1, s2);
+        const p1ExitsHere = cfg.predictedExits.get(s1) === round;
+        const p2ExitsHere = cfg.predictedExits.get(s2) === round;
 
-        // If this user "calls" this seed to lose early, let the opponent win.
-        if (cfg.earlyLosers.has(lowerSeedNum) && round <= 3) {
-          winner = higherSeedPlayer;
+        if (p1ExitsHere && !p2ExitsHere) {
+          winner = match.player2;  // user calls p1 out this round
+        } else if (p2ExitsHere && !p1ExitsHere) {
+          winner = match.player1;  // user calls p2 out this round
         } else {
-          // Random variation: seeded players can occasionally fall in rounds 1–3.
-          const hasSeededPlayer = s1 <= 16 || s2 <= 16;
-          const roll = Math.random();
-          if (hasSeededPlayer && round <= 3 && roll < cfg.upsetBias) {
-            winner = higherSeedPlayer;
-          } else {
-            winner = lowerSeedPlayer;
-          }
+          winner = chalkWinner(match); // chalk default
         }
       }
 
@@ -345,12 +355,12 @@ function buildTestPicks(officialMatches: Match[], profile: PickProfile): Match[]
  * Always uses the fixed pool ID `MADRID_TEST_POOL_ID` so that calling this
  * function a second time simply replaces the previous test pool.
  *
- * Five simulated participants are created, each with a unique randomized bracket:
- *   1. Zverev Fan     — chalk picks, Zverev [1] wins
- *   2. Draper Believer — Draper [5] goes all the way, calls Zverev out early
- *   3. Ruud Dark Horse — correctly predicts Ruud [14] to win it all
- *   4. Medvedev Deep Run — Medvedev [9] surprises everyone
- *   5. Casual Player  — only R1 & R2 picks made
+ * Five simulated participants are created, each with a distinct deterministic bracket:
+ *   1. Zverev Fan      — chalk picks (lower seed always wins); Zverev [1] as champion
+ *   2. Draper Believer — calls many real upsets correctly; Draper [5] as champion
+ *   3. Ruud Dark Horse — near-perfect: mirrors actual results, Ruud [14] as champion
+ *   4. Medvedev Fan    — picks Medvedev [9] for a deep run; correct early rounds only
+ *   5. Casual Player   — only R1 & R2 picks made (incomplete bracket)
  *
  * Returns the pool ID.
  */
