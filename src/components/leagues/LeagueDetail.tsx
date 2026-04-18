@@ -29,6 +29,10 @@ import {
 } from '@/lib/pool-storage';
 import { syncCreatePool, syncAddEntry } from '@/services/poolSyncService';
 import { calculatePoolEntryScore } from '@/lib/scoring';
+import {
+  MADRID_2025_TEST_POOL_OPTION_ID,
+  MADRID_2025_TEST_POOL_OPTION_NAME,
+} from '@/lib/test-tournament-data';
 import type { League, LeagueStanding } from '@/lib/league-types';
 import type { Pool } from '@/lib/pool-types';
 import type { AppView } from '@/App';
@@ -201,10 +205,26 @@ export function LeagueDetail({
   );
 
   // Tournaments for this league's year
-  const leagueTournaments = tournaments.filter(t => {
-    const year = new Date(t.startDate).getFullYear();
-    return year === league.year;
-  });
+  const leagueTournaments = (() => {
+    const options: TournamentData[] = [
+      ...tournaments,
+      {
+        id: MADRID_2025_TEST_POOL_OPTION_ID,
+        name: MADRID_2025_TEST_POOL_OPTION_NAME,
+        startDate: '2025-04-23',
+        endDate: '2025-05-04',
+        type: 'masters',
+      },
+    ];
+
+    const seen = new Set<string>();
+    return options.filter(t => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      const year = new Date(t.startDate).getFullYear();
+      return year === league.year;
+    });
+  })();
 
   return (
     <div className="flex flex-col h-full overflow-y-auto overflow-x-hidden">
