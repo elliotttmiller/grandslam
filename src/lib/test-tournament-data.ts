@@ -27,7 +27,7 @@ export const MADRID_TEST_POOL_NAME = '🧪 Test: Madrid 2025';
 export const MADRID_TEST_TOURNAMENT_NAME = 'Mutua Madrid Open';
 export const MADRID_TEST_LEAGUE_ID = 'TSTMDL';
 export const MADRID_2025_TEST_POOL_OPTION_ID = 'madrid-2025-official-test-pool';
-export const MADRID_2025_TEST_POOL_OPTION_NAME = '🧪 Test Pool: Madrid 2025 (Official Draw)';
+export const MADRID_2025_TEST_POOL_OPTION_NAME = 'Madrid 2025 (Official Draw)';
 
 /** Total rounds in an ATP Masters 1000 bracket (64-player draw). */
 const MASTERS_TOTAL_ROUNDS = 6;
@@ -671,10 +671,11 @@ export function setupTestMadridPool(createdByUserId: string | null): string {
  * Update the official results on the existing test pool up to a given round.
  *
  * @param upToRound  0 = clear all results; 1–6 = apply through that round.
- * @returns The updated pool, or `null` if no test pool exists.
+ * @param poolId Pool to update (defaults to the fixed Madrid test pool).
+ * @returns The updated pool, or `null` if the pool is not found.
  */
-export function updateTestPoolResults(upToRound: number): Pool | null {
-  const pool = getPool(MADRID_TEST_POOL_ID);
+export function updateTestPoolResults(upToRound: number, poolId: string = MADRID_TEST_POOL_ID): Pool | null {
+  const pool = getPool(poolId);
   if (!pool) return null;
 
   // Reset all official results to blank first, then reapply up to the target round.

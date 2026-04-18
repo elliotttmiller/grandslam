@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { getRoundFullName } from '@/lib/bracket-utils';
 import type { Match } from '@/lib/bracket-utils';
 import {
+  MADRID_2025_TEST_POOL_OPTION_ID,
   MADRID_TEST_POOL_ID,
   setupTestMadridPool,
   setupTestMadridLeagueRun,
@@ -68,6 +69,10 @@ const AUTO_RUN_DELAY = 700;
 
 function stepLabel(round: number): string {
   return ROUNDS.find(r => r.round === round)?.fullLabel ?? `Round ${round}`;
+}
+
+function isMadridOfficialReplayPool(pool: Pool | null, poolId: string): boolean {
+  return poolId === MADRID_TEST_POOL_ID || pool?.tournamentId === MADRID_2025_TEST_POOL_OPTION_ID;
 }
 
 // ─── SimulatorPanel ─────────────────────────────────────────────────────────
@@ -332,8 +337,8 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
 
     // Use the real 2025 Madrid results when replaying the Madrid test pool;
     // fall back to fake (lower-seed-wins) logic for any other pool.
-    const applyRoundFn = existingPoolId === MADRID_TEST_POOL_ID
-      ? (round: number) => updateTestPoolResults(round)
+    const applyRoundFn = isMadridOfficialReplayPool(currentPool, existingPoolId)
+      ? (round: number) => updateTestPoolResults(round, existingPoolId)
       : (round: number) => updatePoolResultsFake(existingPoolId, round);
 
     setExistingSimulationRunning(true);
@@ -365,8 +370,9 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
       flash('⚠️ Select an existing linked pool first', false);
       return;
     }
-    const updated = existingPoolId === MADRID_TEST_POOL_ID
-      ? updateTestPoolResults(0)
+    const currentPool = getPool(existingPoolId);
+    const updated = isMadridOfficialReplayPool(currentPool, existingPoolId)
+      ? updateTestPoolResults(0, existingPoolId)
       : updatePoolResultsFake(existingPoolId, 0);
     onPoolChanged?.();
     if (!updated) {
@@ -762,7 +768,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
           >
             <p className="text-xs text-white/50 leading-relaxed mb-3">
               Uses an <strong className="text-white/70">already created league</strong> with real users/pools and
-              simulates official results round-by-round. When the Madrid 2025 test pool is selected,{' '}
+              simulates official results round-by-round. When a Madrid 2025 official-draw pool is selected,{' '}
               <strong className="text-white/70">real match results</strong> are applied; otherwise a seeded fallback is used.
             </p>
 
