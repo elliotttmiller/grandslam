@@ -8,6 +8,10 @@ import { syncGetPool, syncAddEntry } from '@/services/poolSyncService';
 import { getUserId, setUserName } from '@/lib/user-identity';
 import { calculateBracketScore } from '@/lib/scoring';
 import { tournamentColor } from '@/lib/tournament-colors';
+import {
+  MADRID_2025_TEST_POOL_OPTION_ID,
+  MADRID_2025_TEST_POOL_OPTION_NAME,
+} from '@/lib/test-tournament-data';
 import type { Pool } from '@/lib/pool-types';
 import type { TournamentData } from '@/services/geminiService';
 import type { AppView } from '@/App';
@@ -52,6 +56,16 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
   const [joinError, setJoinError] = useState('');
 
   const [isJoining, setIsJoining] = useState(false);
+  const createTournamentOptions: TournamentData[] = [
+    ...tournaments,
+    {
+      id: MADRID_2025_TEST_POOL_OPTION_ID,
+      name: MADRID_2025_TEST_POOL_OPTION_NAME,
+      startDate: '2025-04-23',
+      endDate: '2025-05-04',
+      type: 'masters',
+    },
+  ];
 
   // Stable refs so effects never capture stale callbacks.
   const onJoinHandledRef = useRef(onJoinHandled);
@@ -98,7 +112,7 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
 
   const handleCreateSubmit = async () => {
     if (!createPoolName.trim() || !createUserName.trim() || !createTournamentId) return;
-    const tournament = tournaments.find(t => t.id === createTournamentId);
+    const tournament = createTournamentOptions.find(t => t.id === createTournamentId);
     if (!tournament) return;
 
     localStorage.setItem('gs_user_name', createUserName.trim());
@@ -440,8 +454,13 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                         >
                           <option value="">Select tournament…</option>
                           {(() => {
-                            const grandSlams = tournaments.filter(t => t.type === 'grand-slam' || ['ao','rg','wim','uso'].includes(t.id));
-                            const masters = tournaments.filter(t => t.type === 'masters' && !['ao','rg','wim','uso'].includes(t.id));
+                            const grandSlams = createTournamentOptions.filter(t => t.type === 'grand-slam' || ['ao','rg','wim','uso'].includes(t.id));
+                            const masters = createTournamentOptions.filter(
+                              t =>
+                                t.type === 'masters'
+                                && !['ao', 'rg', 'wim', 'uso'].includes(t.id)
+                                && t.id !== MADRID_2025_TEST_POOL_OPTION_ID,
+                            );
                             return (
                               <>
                                 {grandSlams.length > 0 && (
@@ -458,6 +477,9 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                                     ))}
                                   </optgroup>
                                 )}
+                                <optgroup label="Test Pools">
+                                  <option value={MADRID_2025_TEST_POOL_OPTION_ID}>{MADRID_2025_TEST_POOL_OPTION_NAME}</option>
+                                </optgroup>
                               </>
                             );
                           })()}

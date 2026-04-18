@@ -34,7 +34,11 @@ import { MastersTournamentModal } from './components/MastersTournamentModal';
 import { DevPanel } from './components/DevPanel';
 import { SimulatorPanel, SimulatorButton } from './components/SimulatorPanel';
 import { MASTERS_TOURNAMENTS, GRAND_SLAM_STATIC_INFO, surfaceColor, type MastersTournament } from './lib/masters-tournaments';
-import { MADRID_TEST_POOL_ID } from './lib/test-tournament-data';
+import {
+  MADRID_2025_TEST_POOL_OPTION_ID,
+  MADRID_TEST_POOL_ID,
+  generateTestMadridBracket,
+} from './lib/test-tournament-data';
 import type { Pool } from './lib/pool-types';
 
 import type { User } from 'firebase/auth';
@@ -588,6 +592,9 @@ export default function App() {
   };
 
   const generateOfficialDraw = async (tournamentId: string, tournamentName: string): Promise<Match[]> => {
+    if (tournamentId === MADRID_2025_TEST_POOL_OPTION_ID) {
+      return generateTestMadridBracket();
+    }
     const isMasters = MASTERS_TOURNAMENTS.some(t => t.id === tournamentId);
     if (isMasters) {
       // Masters 1000: 64-player bracket with AI-predicted/official seedings
