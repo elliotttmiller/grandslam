@@ -233,6 +233,56 @@ export function generateBracket(players: Player[]): Match[] {
  * Generate a 64-player ATP Masters 1000 bracket using Masters seeding positions.
  * Expects up to 16 seeded players; fills remaining spots with qualifiers.
  */
+/**
+ * Build a 6-round Masters bracket from a pre-ordered 64-player draw array.
+ * draw[0] vs draw[1] = match 1, draw[2] vs draw[3] = match 2, etc.
+ * Use this when the draw is already determined (e.g. historical tournament data).
+ */
+export function buildBracketFromDraw(draw: Player[]): Match[] {
+  const matches: Match[] = [];
+  const totalRounds = Math.log2(draw.length);
+
+  let matchIdCounter = 1;
+  let previousRoundMatches: Match[] = [];
+
+  for (let round = 1; round <= totalRounds; round++) {
+    const numMatches = draw.length / Math.pow(2, round);
+    const currentRoundMatches: Match[] = [];
+
+    for (let i = 0; i < numMatches; i++) {
+      const match: Match = {
+        id: `m${matchIdCounter++}`,
+        round,
+        matchNumber: i + 1,
+        player1: null,
+        player2: null,
+        winnerId: null,
+        nextMatchId: null,
+      };
+
+      if (round === 1) {
+        match.player1 = draw[i * 2];
+        match.player2 = draw[i * 2 + 1];
+      }
+
+      currentRoundMatches.push(match);
+      matches.push(match);
+    }
+
+    if (round > 1) {
+      for (let i = 0; i < previousRoundMatches.length; i++) {
+        const prevMatch = previousRoundMatches[i];
+        const nextMatchIndex = Math.floor(i / 2);
+        prevMatch.nextMatchId = currentRoundMatches[nextMatchIndex].id;
+      }
+    }
+
+    previousRoundMatches = currentRoundMatches;
+  }
+
+  return matches;
+}
+
 export function generateMastersBracket(players: Player[]): Match[] {
   const draw = getSeededDrawMasters(players);
   const matches: Match[] = [];
