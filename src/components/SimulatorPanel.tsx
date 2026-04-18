@@ -308,11 +308,17 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
       return;
     }
 
+    // Use the real 2025 Madrid results when replaying the Madrid test pool;
+    // fall back to fake (lower-seed-wins) logic for any other pool.
+    const applyRoundFn = existingPoolId === MADRID_TEST_POOL_ID
+      ? (round: number) => updateTestPoolResults(round)
+      : (round: number) => updatePoolResultsFake(existingPoolId, round);
+
     setExistingSimulationRunning(true);
     try {
       for (let round = throughRound + 1; round <= totalRounds; round++) {
         await new Promise(res => setTimeout(res, AUTO_RUN_DELAY));
-        const updated = updatePoolResultsFake(existingPoolId, round);
+        const updated = applyRoundFn(round);
         onPoolChanged?.();
         if (!updated) {
           throw new Error(`Failed to simulate ${getRoundFullName(round, totalRounds)} for pool ${existingPoolId}`);
@@ -336,7 +342,9 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
       flash('⚠️ Select an existing linked pool first', false);
       return;
     }
-    const updated = updatePoolResultsFake(existingPoolId, 0);
+    const updated = existingPoolId === MADRID_TEST_POOL_ID
+      ? updateTestPoolResults(0)
+      : updatePoolResultsFake(existingPoolId, 0);
     onPoolChanged?.();
     if (!updated) {
       flash('⚠️ Could not reset selected pool results', false);
@@ -730,7 +738,8 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
           >
             <p className="text-xs text-white/50 leading-relaxed mb-3">
               Uses an <strong className="text-white/70">already created league</strong> with real users/pools and
-              fake-simulates official results round-by-round for workflow/performance testing.
+              simulates official results round-by-round. When the Madrid 2025 test pool is selected,{' '}
+              <strong className="text-white/70">real match results</strong> are applied; otherwise a seeded fallback is used.
             </p>
 
             <div className="space-y-2.5">
@@ -813,7 +822,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
         {/* ── Footer ── */}
         <div className="px-5 py-3 border-t border-white/[0.05] shrink-0">
           <p className="text-[10px] text-white/20 text-center">
-            Local storage only · no Firestore writes · lower seed always wins
+            Local storage only · no Firestore writes · real 2025 Madrid results applied
           </p>
         </div>
       </motion.div>
