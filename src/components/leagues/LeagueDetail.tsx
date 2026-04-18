@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Trophy, Users, Calendar, Globe, Lock, Shield,
@@ -42,6 +42,12 @@ interface LeagueDetailProps {
   tournaments: TournamentData[];
   /** Generates the official draw for a tournament (matches). */
   onGenerateOfficialDraw: (tournamentId: string, tournamentName: string) => Promise<import('@/lib/bracket-utils').Match[]>;
+  /**
+   * Incremented by the simulator panel whenever it writes new official results
+   * to localStorage. Forces a re-render so `computeStandings` re-reads pool
+   * data fresh and standings reflect the latest round.
+   */
+  poolVersion?: number;
 }
 
 export function LeagueDetail({
@@ -50,6 +56,7 @@ export function LeagueDetail({
   authUser,
   tournaments,
   onGenerateOfficialDraw,
+  poolVersion,
 }: LeagueDetailProps) {
   const [league, setLeague] = useState<League | null>(getLeague(leagueId));
   const [activeTab, setActiveTab] = useState<'hub' | 'standings' | 'pools' | 'members'>('hub');
@@ -79,6 +86,15 @@ export function LeagueDetail({
     });
     return unsubscribe;
   }, [leagueId]);
+
+  // Bump a local tick whenever the simulator applies a new round so that
+  // computeStandings() (which reads getPool() from localStorage) re-runs
+  // and standings reflect the latest results in real time.
+  const [poolDataTick, setPoolDataTick] = useState(0);
+  useEffect(() => {
+    if (!poolVersion) return;
+    setPoolDataTick(v => v + 1);
+  }, [poolVersion]);
 
   const refreshLeague = useCallback(() => {
     setLeague(getLeague(leagueId));
@@ -175,8 +191,14 @@ export function LeagueDetail({
     );
   }
 
-  // Compute standings
-  const standings = computeStandings(league);
+  // Compute standings — useMemo re-runs when `league` changes (Firestore push)
+  // or when `poolDataTick` increments (simulator writes a new round to localStorage),
+  // ensuring computeStandings() re-reads getPool() with fresh data each time.
+  const standings = useMemo(
+    () => computeStandings(league),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [league, poolDataTick],
+  );
 
   // Tournaments for this league's year
   const leagueTournaments = tournaments.filter(t => {

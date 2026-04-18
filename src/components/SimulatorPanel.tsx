@@ -30,12 +30,18 @@ import {
   clearTestPool,
 } from '@/lib/test-tournament-data';
 import { getPool } from '@/lib/pool-storage';
-import { getLeagues } from '@/lib/league-storage';
+import { getLeagues, getLeague } from '@/lib/league-storage';
 import { calculatePoolEntryScore } from '@/lib/scoring';
 import type { Pool } from '@/lib/pool-types';
 import type { League } from '@/lib/league-types';
 import type { AppView } from '@/App';
 import type { User } from 'firebase/auth';
+import {
+  syncSavePool,
+  syncUpdateOfficialMatches,
+  syncDeletePool,
+} from '@/services/poolSyncService';
+import { syncSaveLeague } from '@/services/leagueSyncService';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -119,6 +125,8 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
   const handleSetup = () => {
     const userId = authUser?.uid ?? null;
     setupTestMadridPool(userId);
+    const createdPool = getPool(MADRID_TEST_POOL_ID);
+    if (createdPool) void syncSavePool(createdPool);
     refresh();
     flash('Test pool ready — 5 simulated users created ✅');
   };
@@ -127,6 +135,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
   const applyRound = (round: number): Pool | null => {
     const updated = updateTestPoolResults(round);
     refresh();
+    if (updated) void syncUpdateOfficialMatches(MADRID_TEST_POOL_ID, updated.officialMatches);
     return updated;
   };
 
@@ -194,6 +203,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
         flash('⚠️ No pool found — create one first', false);
         return;
       }
+      void syncUpdateOfficialMatches(MADRID_TEST_POOL_ID, updated.officialMatches);
       refresh();
       if (round === 0) {
         flash('Results cleared — pool reset to start');
@@ -211,6 +221,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
   // ── Remove pool ──
   const handleClear = () => {
     clearTestPool();
+    void syncDeletePool(MADRID_TEST_POOL_ID);
     setPool(null);
     onPoolChanged?.();
     flash('Simulation cleared', true);
@@ -230,6 +241,10 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
     setTimeout(() => {
       const userId = authUser?.uid ?? null;
       const leagueId = setupTestMadridLeagueRun(userId);
+      const leaguePool = getPool(MADRID_TEST_POOL_ID);
+      const league = getLeague(leagueId);
+      if (leaguePool) void syncSavePool(leaguePool);
+      if (league) void syncSaveLeague(league);
       refresh();
       setStepRunning(false);
       flash('League simulation complete — opening league view ✅');
@@ -250,6 +265,8 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
 
       const poolId = setupTestMadridPool(userId);
       if (!poolId) throw new Error(`Failed to create test pool for user ${userId ?? 'null'}`);
+      const createdPool = getPool(MADRID_TEST_POOL_ID);
+      if (createdPool) void syncSavePool(createdPool);
       refresh();
       onNavigate({ page: 'pool', poolId: MADRID_TEST_POOL_ID });
       flash('Step 1/4: Test pool created — opening Pool interface ✅');
@@ -259,6 +276,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
       for (const round of ROUNDS) {
         const updated = updateTestPoolResults(round.round);
         if (!updated) throw new Error(`Failed to simulate round ${round.fullLabel} for pool ${poolId}`);
+        void syncUpdateOfficialMatches(MADRID_TEST_POOL_ID, updated.officialMatches);
         refresh();
         await new Promise(res => setTimeout(res, 260));
       }
@@ -268,6 +286,10 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
 
       const leagueId = setupTestMadridLeagueRun(userId);
       if (!leagueId) throw new Error(`Failed to create test league for user ${userId ?? 'null'} with pool ${poolId}`);
+      const pipelineLeaguePool = getPool(MADRID_TEST_POOL_ID);
+      const pipelineLeague = getLeague(leagueId);
+      if (pipelineLeaguePool) void syncSavePool(pipelineLeaguePool);
+      if (pipelineLeague) void syncSaveLeague(pipelineLeague);
       refresh();
       onNavigate({ page: 'league-detail', leagueId });
       flash('Step 4/4: League ready — opening League interface ✅');
@@ -308,15 +330,22 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
       return;
     }
 
+    // Use the real 2025 Madrid results when replaying the Madrid test pool;
+    // fall back to fake (lower-seed-wins) logic for any other pool.
+    const applyRoundFn = existingPoolId === MADRID_TEST_POOL_ID
+      ? (round: number) => updateTestPoolResults(round)
+      : (round: number) => updatePoolResultsFake(existingPoolId, round);
+
     setExistingSimulationRunning(true);
     try {
       for (let round = throughRound + 1; round <= totalRounds; round++) {
         await new Promise(res => setTimeout(res, AUTO_RUN_DELAY));
-        const updated = updatePoolResultsFake(existingPoolId, round);
+        const updated = applyRoundFn(round);
         onPoolChanged?.();
         if (!updated) {
           throw new Error(`Failed to simulate ${getRoundFullName(round, totalRounds)} for pool ${existingPoolId}`);
         }
+        void syncUpdateOfficialMatches(existingPoolId, updated.officialMatches);
         flash(`Live replay: ${getRoundFullName(round, totalRounds)} complete ✅`);
       }
       flash('Live league simulation complete — opening league view ✅');
@@ -336,12 +365,15 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
       flash('⚠️ Select an existing linked pool first', false);
       return;
     }
-    const updated = updatePoolResultsFake(existingPoolId, 0);
+    const updated = existingPoolId === MADRID_TEST_POOL_ID
+      ? updateTestPoolResults(0)
+      : updatePoolResultsFake(existingPoolId, 0);
     onPoolChanged?.();
     if (!updated) {
       flash('⚠️ Could not reset selected pool results', false);
       return;
     }
+    void syncUpdateOfficialMatches(existingPoolId, updated.officialMatches);
     flash('Existing pool results cleared — ready to replay');
   };
 
@@ -730,7 +762,8 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
           >
             <p className="text-xs text-white/50 leading-relaxed mb-3">
               Uses an <strong className="text-white/70">already created league</strong> with real users/pools and
-              fake-simulates official results round-by-round for workflow/performance testing.
+              simulates official results round-by-round. When the Madrid 2025 test pool is selected,{' '}
+              <strong className="text-white/70">real match results</strong> are applied; otherwise a seeded fallback is used.
             </p>
 
             <div className="space-y-2.5">
@@ -813,7 +846,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
         {/* ── Footer ── */}
         <div className="px-5 py-3 border-t border-white/[0.05] shrink-0">
           <p className="text-[10px] text-white/20 text-center">
-            Local storage only · no Firestore writes · lower seed always wins
+            Syncs to Firestore in real time · real 2025 Madrid results applied
           </p>
         </div>
       </motion.div>
