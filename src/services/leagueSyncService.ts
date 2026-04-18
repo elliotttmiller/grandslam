@@ -118,6 +118,24 @@ export async function syncCreateLeague(league: League): Promise<League | null> {
   }
 }
 
+/**
+ * Unconditional upsert — writes the full league document regardless of whether
+ * one already exists. Use when the simulator recreates the same test league so
+ * the Firestore document is always replaced with the current local state.
+ */
+export async function syncSaveLeague(league: League): Promise<boolean> {
+  try {
+    const leagueData = removeUndefined(league);
+    const ref = doc(getDb(), 'leagues', league.id);
+    await setDoc(ref, { ...leagueData, updatedAt: serverTimestamp() });
+    return true;
+  } catch (error) {
+    const err = error as { code?: string; message?: string };
+    console.error('Failed to save league to Firestore:', err?.code, err?.message);
+    return false;
+  }
+}
+
 /** Delete a league document by ID. */
 export async function syncDeleteLeague(leagueId: string): Promise<boolean> {
   try {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Trophy, Users, Calendar, Globe, Lock, Shield,
@@ -191,11 +191,14 @@ export function LeagueDetail({
     );
   }
 
-  // Compute standings — re-runs on every render (reads getPool from localStorage).
-  // poolDataTick is referenced here so that simulator-triggered re-renders
-  // (via setPoolDataTick) cause fresh pool data to be picked up.
-  void poolDataTick;
-  const standings = computeStandings(league);
+  // Compute standings — useMemo re-runs when `league` changes (Firestore push)
+  // or when `poolDataTick` increments (simulator writes a new round to localStorage),
+  // ensuring computeStandings() re-reads getPool() with fresh data each time.
+  const standings = useMemo(
+    () => computeStandings(league),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [league, poolDataTick],
+  );
 
   // Tournaments for this league's year
   const leagueTournaments = tournaments.filter(t => {

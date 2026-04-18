@@ -150,6 +150,34 @@ export async function syncCreatePool(pool: Pool): Promise<Pool | null> {
   }
 }
 
+/**
+ * Unconditional upsert — writes the full pool document regardless of whether
+ * one already exists. Use this when resetting or re-creating a pool (e.g. the
+ * simulator "Reset Pool" action) so the Firestore document is always replaced
+ * with the current local state.
+ */
+export async function syncSavePool(pool: Pool): Promise<boolean> {
+  try {
+    const poolData = removeUndefined(pool);
+    const participantIds = [
+      ...new Set(
+        [
+          ...(poolData.participantIds ?? []),
+          ...(poolData.entries ?? []).map(e => e.userId).filter((id): id is string => !!id),
+          poolData.createdBy,
+        ].filter((id): id is string => !!id),
+      ),
+    ];
+    const ref = doc(getDb(), 'pools', pool.id);
+    await setDoc(ref, { ...poolData, participantIds, updatedAt: serverTimestamp() });
+    return true;
+  } catch (error) {
+    const err = error as { code?: string; message?: string };
+    console.error('Failed to save pool to Firestore:', err?.code, err?.message);
+    return false;
+  }
+}
+
 /** Delete a pool document by ID. */
 export async function syncDeletePool(poolId: string): Promise<boolean> {
   try {
