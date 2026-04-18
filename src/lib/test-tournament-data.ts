@@ -26,6 +26,8 @@ export const MADRID_TEST_POOL_ID = 'TSTMDP';
 export const MADRID_TEST_POOL_NAME = '🧪 Test: Madrid 2025';
 export const MADRID_TEST_TOURNAMENT_NAME = 'Mutua Madrid Open';
 export const MADRID_TEST_LEAGUE_ID = 'TSTMDL';
+export const MADRID_2025_TEST_POOL_OPTION_ID = 'madrid-2025-official-test-pool';
+export const MADRID_2025_TEST_POOL_OPTION_NAME = '🧪 Test Pool: Madrid 2025 (Official Draw)';
 
 /** Total rounds in an ATP Masters 1000 bracket (64-player draw). */
 const MASTERS_TOTAL_ROUNDS = 6;
