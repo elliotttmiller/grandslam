@@ -5,7 +5,7 @@ import { generateBracket, generateMastersBracket, advancePlayer, Match, Player, 
 import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
-import { Button } from './components/ui/button';
+import { Button, buttonVariants } from './components/ui/button';
 import { RefreshCw, ZoomIn, ZoomOut, Share2, Download, MoreHorizontal, Menu, X, Trophy, Calendar, Lock, Users, Maximize2, LayoutGrid, ChevronUp, ChevronDown, LogIn, LogOut, UserCircle, LayoutDashboard, Search, FlaskConical, Globe, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PoolHub } from './components/pools/PoolHub';
@@ -1661,15 +1661,11 @@ export default function App() {
                   <Maximize2 className="w-3.5 h-3.5" aria-hidden="true" />
                 </Button>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation"
-                      aria-label="Bracket actions"
-                    >
-                      <MoreHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
-                    </Button>
+                  <DropdownMenuTrigger
+                    className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "h-7 w-7 rounded-lg hover:bg-white/10 touch-manipulation")}
+                    aria-label="Bracket actions"
+                  >
+                    <MoreHorizontal className="w-3.5 h-3.5" aria-hidden="true" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" side="bottom" sideOffset={8} className="w-44">
                     <DropdownMenuItem onClick={handleReset}>
