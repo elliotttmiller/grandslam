@@ -28,6 +28,7 @@ interface LeagueHubProps {
 }
 
 const CURRENT_YEAR = new Date().getFullYear();
+const MIN_LEAGUE_YEAR = 2025;
 
 export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProps) {
   const [leagues, setLeagues] = useState<League[]>([]);
@@ -47,6 +48,8 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
   const [isJoining, setIsJoining] = useState(false);
 
   const isAuthed = authUser && !authUser.isAnonymous;
+  const yearOptionCount = Math.max(CURRENT_YEAR + 1 - MIN_LEAGUE_YEAR + 1, 1);
+  const createYearOptions = Array.from({ length: yearOptionCount }, (_, index) => MIN_LEAGUE_YEAR + index);
 
   const refreshLeagues = useCallback(() => {
     setLeagues(getLeagues());
@@ -264,7 +267,7 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
                     onChange={e => setCreateYear(Number(e.target.value))}
                     className={inputCls}
                   >
-                    {[CURRENT_YEAR, CURRENT_YEAR + 1].map(y => (
+                    {createYearOptions.map(y => (
                       <option key={y} value={y}>{y}</option>
                     ))}
                   </select>
