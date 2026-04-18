@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, ZoomIn, ZoomOut, Lock, Check, X, Maximize2, LayoutGrid, ChevronUp, ChevronDown,
+  ZoomIn, ZoomOut, Lock, Check, X, Maximize2, LayoutGrid, ChevronUp, ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -21,7 +21,6 @@ interface PoolBracketEditorProps {
   entry: PoolEntry;
   onSave: (matches: Match[]) => void;
   onSubmit: (matches: Match[], tbGames?: number, tbSets?: number) => void;
-  onBack: () => void;
   readOnly?: boolean;
   officialMatches?: Match[];
 }
@@ -31,7 +30,6 @@ export function PoolBracketEditor({
   entry,
   onSave,
   onSubmit,
-  onBack,
   readOnly = false,
   officialMatches,
 }: PoolBracketEditorProps) {
@@ -142,17 +140,7 @@ export function PoolBracketEditor({
       {/* Header */}
       <header className="flex-none border-b border-border/20 bg-card/50 backdrop-blur-xl px-4 py-2.5 z-20">
         <div className="flex items-center gap-2.5 min-h-10">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 px-2 text-muted-foreground/70 hover:text-foreground shrink-0 rounded-lg"
-            onClick={onBack}
-            aria-label={`Back to ${pool.name}`}
-          >
-            <ArrowLeft className="h-4 w-4 mr-1" aria-hidden="true" />
-            <span className="max-w-20 truncate text-[13px]">{pool.name}</span>
-          </Button>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 pl-1">
             <div className="text-[13px] font-semibold truncate leading-tight">{entry.bracketName}</div>
             <div className="text-[10px] text-muted-foreground/60">by {entry.userName}</div>
           </div>

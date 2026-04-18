@@ -1462,7 +1462,6 @@ export default function App() {
                     });
                     setAppView({ page: 'pool', poolId: pool.id });
                   }}
-                  onBack={() => setAppView({ page: 'pool', poolId: pool.id })}
                   readOnly={entry.isSubmitted || (entry.userId !== undefined && entry.userId !== (authUser?.uid ?? getUserId()))}
                 />
               </motion.div>
