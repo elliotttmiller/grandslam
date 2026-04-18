@@ -42,6 +42,12 @@ interface LeagueDetailProps {
   tournaments: TournamentData[];
   /** Generates the official draw for a tournament (matches). */
   onGenerateOfficialDraw: (tournamentId: string, tournamentName: string) => Promise<import('@/lib/bracket-utils').Match[]>;
+  /**
+   * Incremented by the simulator panel whenever it writes new official results
+   * to localStorage. Forces a re-render so `computeStandings` re-reads pool
+   * data fresh and standings reflect the latest round.
+   */
+  poolVersion?: number;
 }
 
 export function LeagueDetail({
@@ -50,6 +56,7 @@ export function LeagueDetail({
   authUser,
   tournaments,
   onGenerateOfficialDraw,
+  poolVersion,
 }: LeagueDetailProps) {
   const [league, setLeague] = useState<League | null>(getLeague(leagueId));
   const [activeTab, setActiveTab] = useState<'hub' | 'standings' | 'pools' | 'members'>('hub');
@@ -79,6 +86,15 @@ export function LeagueDetail({
     });
     return unsubscribe;
   }, [leagueId]);
+
+  // Bump a local tick whenever the simulator applies a new round so that
+  // computeStandings() (which reads getPool() from localStorage) re-runs
+  // and standings reflect the latest results in real time.
+  const [poolDataTick, setPoolDataTick] = useState(0);
+  useEffect(() => {
+    if (!poolVersion) return;
+    setPoolDataTick(v => v + 1);
+  }, [poolVersion]);
 
   const refreshLeague = useCallback(() => {
     setLeague(getLeague(leagueId));
@@ -175,7 +191,10 @@ export function LeagueDetail({
     );
   }
 
-  // Compute standings
+  // Compute standings — re-runs on every render (reads getPool from localStorage).
+  // poolDataTick is referenced here so that simulator-triggered re-renders
+  // (via setPoolDataTick) cause fresh pool data to be picked up.
+  void poolDataTick;
   const standings = computeStandings(league);
 
   // Tournaments for this league's year

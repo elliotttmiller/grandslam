@@ -1415,6 +1415,7 @@ export default function App() {
                   onNavigate={setAppView}
                   authUser={authUser}
                   onRequireAuth={handleRequireAuth}
+                  simulatorVersion={devPoolVersion}
                 />
               </motion.div>
             );
@@ -1506,6 +1507,7 @@ export default function App() {
                 authUser={authUser}
                 tournaments={tournaments}
                 onGenerateOfficialDraw={generateOfficialDraw}
+                poolVersion={devPoolVersion}
               />
             </motion.div>
           )}

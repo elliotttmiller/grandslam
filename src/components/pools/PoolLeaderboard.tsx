@@ -39,9 +39,15 @@ interface PoolLeaderboardProps {
   authUser: User | null;
   /** Open the sign-in modal — called when a pool action requires authentication. */
   onRequireAuth: () => void;
+  /**
+   * Incremented by the simulator panel whenever it writes new official results
+   * to localStorage. Triggers a re-read from storage so the leaderboard
+   * reflects the latest round results in real time.
+   */
+  simulatorVersion?: number;
 }
 
-export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRequireAuth }: PoolLeaderboardProps) {
+export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRequireAuth, simulatorVersion }: PoolLeaderboardProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState('');
@@ -80,6 +86,14 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
     });
     return unsubscribe;
   }, [pool.id]);
+
+  // Re-read pool data from localStorage whenever the simulator applies a new
+  // round of results (simulatorVersion increments via onPoolChanged).
+  useEffect(() => {
+    if (!simulatorVersion) return;
+    const refreshed = getPool(pool.id);
+    if (refreshed) setPoolData(refreshed);
+  }, [simulatorVersion, pool.id]);
 
   const savedUserName = localStorage.getItem('gs_user_name') ?? '';
   const currentUserId = getUserId();
