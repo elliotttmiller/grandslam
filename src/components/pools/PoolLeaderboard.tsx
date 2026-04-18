@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, Share2, Copy, Users, Trophy, Lock,
+  Share2, Copy, Users, Trophy, Lock,
   ChevronRight, Check, X, Plus, Trash2, ClipboardCheck, Radio, ClipboardList, Loader2, LogIn,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -313,17 +313,6 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
       {/* Header */}
       <div className="flex-none px-5 py-4 border-b border-border/25 bg-card/30">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-2 mb-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2 text-muted-foreground/70 hover:text-foreground rounded-xl"
-              onClick={() => onNavigate({ page: 'pools' })}
-            >
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Pools
-            </Button>
-          </div>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
               <h2 className="text-lg font-bold tracking-tight truncate">{poolData.name}</h2>

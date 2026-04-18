@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, Trophy, Users, Calendar, Globe, Lock, Shield,
+  Trophy, Users, Calendar, Globe, Lock, Shield,
   Copy, Check, ChevronRight, Plus, Loader2, X, Medal, BarChart3, Sparkles, TrendingUp, TrendingDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -231,16 +231,6 @@ export function LeagueDetail({
       {/* Header */}
       <div className="flex-none border-b border-border/25">
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-foreground mb-4 -ml-2 rounded-xl"
-            onClick={() => onNavigate({ page: 'my-leagues' })}
-          >
-            <ArrowLeft className="h-4 w-4 mr-1.5" />
-            My Leagues
-          </Button>
-
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
