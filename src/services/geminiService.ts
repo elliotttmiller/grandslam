@@ -19,8 +19,7 @@ export const CACHE_KEY_TOURNAMENTS = 'tennis_tournaments_cache_v5';
 const CACHE_KEY_PLAYERS_PREFIX = 'tennis_players_cache_v5_';
 export const CACHE_KEY_MASTERS_PREFIX = 'tennis_masters_details_v1_';
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
-const LIVE_TOURNAMENT_CACHE_EXPIRY = 60 * 60 * 1000; // 1 hour
-const LIVE_MASTERS_CACHE_EXPIRY = 60 * 60 * 1000; // 1 hour
+const LIVE_DATA_CACHE_EXPIRY = 60 * 60 * 1000; // 1 hour
 
 export interface TournamentData {
   id: string;
@@ -32,7 +31,7 @@ export interface TournamentData {
   type?: 'grand-slam' | 'masters';
 }
 
-function readFreshAuthCache<T>(key: string, maxAgeMs: number): T | null {
+function readAuthCacheIfFresh<T>(key: string, maxAgeMs: number): T | null {
   const raw = authGetItem(key);
   if (!raw) return null;
   try {
@@ -40,13 +39,18 @@ function readFreshAuthCache<T>(key: string, maxAgeMs: number): T | null {
     if (!parsed || !parsed.data || typeof parsed.timestamp !== 'number') return null;
     if (Date.now() - parsed.timestamp > maxAgeMs) return null;
     return parsed.data as T;
-  } catch {
+  } catch (error) {
+    console.warn(`Failed to parse auth cache for key "${key}"`, error);
     return null;
   }
 }
 
-function writeAuthCache<T>(key: string, data: T): void {
-  authSetItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+function writeAuthCacheWithTimestamp<T>(key: string, data: T): void {
+  try {
+    authSetItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch (error) {
+    console.warn(`Failed to write auth cache for key "${key}"`, error);
+  }
 }
 
 function extractJsonArray(text: string): any[] {
@@ -73,7 +77,7 @@ const TOURNAMENT_LOGOS: Record<string, string> = {
 
 export async function fetchTournamentsWithDates() {
   // Check user-scoped cache first (short-lived so dates stay fresh).
-  const cached = readFreshAuthCache<TournamentData[]>(CACHE_KEY_TOURNAMENTS, LIVE_TOURNAMENT_CACHE_EXPIRY);
+  const cached = readAuthCacheIfFresh<TournamentData[]>(CACHE_KEY_TOURNAMENTS, LIVE_DATA_CACHE_EXPIRY);
   if (cached && cached.length > 0) {
     return cached;
   }
@@ -174,7 +178,7 @@ export async function fetchTournamentsWithDates() {
     }
     // Filter out unrecognised entries (keep only the four Grand Slams)
     data = data.filter(t => REQUIRED_IDS.includes(t.id));
-    writeAuthCache(CACHE_KEY_TOURNAMENTS, data);
+    writeAuthCacheWithTimestamp(CACHE_KEY_TOURNAMENTS, data);
     return data as TournamentData[];
   }
 
@@ -349,7 +353,7 @@ export async function fetchMastersTournamentDetails(
   const cacheKey = `${CACHE_KEY_MASTERS_PREFIX}${tournamentId}`;
 
   // Check user-scoped cache first (short-lived so details stay current).
-  const cached = readFreshAuthCache<MastersTournamentDetails>(cacheKey, LIVE_MASTERS_CACHE_EXPIRY);
+  const cached = readAuthCacheIfFresh<MastersTournamentDetails>(cacheKey, LIVE_DATA_CACHE_EXPIRY);
   if (cached) {
     return cached;
   }
@@ -457,7 +461,7 @@ Do not include any markdown formatting. Return only the JSON object.`;
   }
 
   if (data && data.seedings) {
-    writeAuthCache(cacheKey, data);
+    writeAuthCacheWithTimestamp(cacheKey, data);
     return data;
   }
 

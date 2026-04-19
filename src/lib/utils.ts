@@ -12,7 +12,7 @@ export function cn(...inputs: ClassValue[]) {
 export function parseDateSafe(value: string): Date {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const [y, m, d] = value.split('-').map(Number);
-    return new Date(y, (m ?? 1) - 1, d ?? 1);
+    return new Date(y, m - 1, d);
   }
   return new Date(value);
 }
