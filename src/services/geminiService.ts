@@ -19,6 +19,7 @@ export const CACHE_KEY_TOURNAMENTS = 'tennis_tournaments_cache_v5';
 const CACHE_KEY_PLAYERS_PREFIX = 'tennis_players_cache_v5_';
 export const CACHE_KEY_MASTERS_PREFIX = 'tennis_masters_details_v1_';
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+const LIVE_DATA_CACHE_EXPIRY = 60 * 60 * 1000; // 1 hour
 
 export interface TournamentData {
   id: string;
@@ -28,6 +29,28 @@ export interface TournamentData {
   logo?: string;
   /** Distinguishes Grand Slam from ATP Masters 1000 entries. */
   type?: 'grand-slam' | 'masters';
+}
+
+function readAuthCacheIfFresh<T>(key: string, maxAgeMs: number): T | null {
+  const raw = authGetItem(key);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.data || typeof parsed.timestamp !== 'number') return null;
+    if (Date.now() - parsed.timestamp > maxAgeMs) return null;
+    return parsed.data as T;
+  } catch (error) {
+    console.warn(`Failed to parse auth cache for key "${key}"`, error);
+    return null;
+  }
+}
+
+function writeAuthCacheWithTimestamp<T>(key: string, data: T): void {
+  try {
+    authSetItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch (error) {
+    console.warn(`Failed to write auth cache for key "${key}"`, error);
+  }
 }
 
 function extractJsonArray(text: string): any[] {
@@ -53,15 +76,10 @@ const TOURNAMENT_LOGOS: Record<string, string> = {
 };
 
 export async function fetchTournamentsWithDates() {
-  // Check user-scoped cache first — no time-based expiry; persists until user refreshes
-  const cached = authGetItem(CACHE_KEY_TOURNAMENTS);
-  if (cached) {
-    try {
-      const { data } = JSON.parse(cached);
-      if (data && data.length > 0) return data as TournamentData[];
-    } catch {
-      // Ignore corrupt cache
-    }
+  // Check user-scoped cache first (short-lived so dates stay fresh).
+  const cached = readAuthCacheIfFresh<TournamentData[]>(CACHE_KEY_TOURNAMENTS, LIVE_DATA_CACHE_EXPIRY);
+  if (cached && cached.length > 0) {
+    return cached;
   }
 
   const prompt = `Today is ${TODAY_STR}. Find the dates for the NEXT upcoming edition of the four Grand Slam tennis tournaments (Australian Open, French Open/Roland Garros, Wimbledon, US Open) relative to today. 
@@ -160,7 +178,7 @@ export async function fetchTournamentsWithDates() {
     }
     // Filter out unrecognised entries (keep only the four Grand Slams)
     data = data.filter(t => REQUIRED_IDS.includes(t.id));
-    authSetItem(CACHE_KEY_TOURNAMENTS, JSON.stringify({ data }));
+    writeAuthCacheWithTimestamp(CACHE_KEY_TOURNAMENTS, data);
     return data as TournamentData[];
   }
 
@@ -334,15 +352,10 @@ export async function fetchMastersTournamentDetails(
 ): Promise<MastersTournamentDetails> {
   const cacheKey = `${CACHE_KEY_MASTERS_PREFIX}${tournamentId}`;
 
-  // Check user-scoped cache first — no time-based expiry; persists until user refreshes
-  const cached = authGetItem(cacheKey);
+  // Check user-scoped cache first (short-lived so details stay current).
+  const cached = readAuthCacheIfFresh<MastersTournamentDetails>(cacheKey, LIVE_DATA_CACHE_EXPIRY);
   if (cached) {
-    try {
-      const { data } = JSON.parse(cached);
-      if (data) return data as MastersTournamentDetails;
-    } catch {
-      // Ignore corrupt cache
-    }
+    return cached;
   }
 
   const prompt = `Today is ${TODAY_STR}. Find the most accurate and up-to-date information about the 2026 ATP Masters 1000 men's singles tournament: "${tournamentName}".
@@ -448,7 +461,7 @@ Do not include any markdown formatting. Return only the JSON object.`;
   }
 
   if (data && data.seedings) {
-    authSetItem(cacheKey, JSON.stringify({ data }));
+    writeAuthCacheWithTimestamp(cacheKey, data);
     return data;
   }
 

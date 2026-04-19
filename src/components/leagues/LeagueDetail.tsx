@@ -5,7 +5,7 @@ import {
   Copy, Check, ChevronRight, Plus, Loader2, X, Medal, BarChart3, Sparkles, TrendingUp, TrendingDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, parseDateSafe } from '@/lib/utils';
 import {
   getLeague,
   saveLeague,
@@ -221,7 +221,7 @@ export function LeagueDetail({
     return options.filter(t => {
       if (seen.has(t.id)) return false;
       seen.add(t.id);
-      const year = new Date(t.startDate).getFullYear();
+      const year = parseDateSafe(t.startDate).getFullYear();
       return year === league.year;
     });
   })();
@@ -440,8 +440,8 @@ function HubTab({ league, standings, leagueTournaments, onOpenInsights }: HubTab
   const poolIds = Object.values(league.tournamentPoolIds);
   const now = new Date();
   const activeTournamentCount = leagueTournaments.filter(t => {
-    const start = new Date(t.startDate);
-    const end = new Date(t.endDate);
+    const start = parseDateSafe(t.startDate);
+    const end = parseDateSafe(t.endDate);
     return now >= start && now <= end;
   }).length;
   const completedResults = buildLeagueResults(league, leagueTournaments).slice(0, 3);
@@ -714,8 +714,8 @@ function PoolsTab({ league, leagueTournaments, userId, joiningPool, onJoinPool, 
         const poolId = league.tournamentPoolIds[t.id];
         const pool = poolId ? getPool(poolId) : null;
         const myEntry = pool?.entries.find(e => e.userId === userId);
-        const start = new Date(t.startDate);
-        const end = new Date(t.endDate);
+        const start = parseDateSafe(t.startDate);
+        const end = parseDateSafe(t.endDate);
         const isLive = now >= start && now <= end;
         const isPast = end < now;
         const isUpcoming = start > now;
@@ -916,7 +916,7 @@ function buildLeagueResults(league: League, leagueTournaments: TournamentData[])
       const tournament = tournamentsById.get(tournamentId);
       if (!pool || !tournament) return null;
 
-      const endDate = new Date(tournament.endDate);
+      const endDate = parseDateSafe(tournament.endDate);
       if (endDate > new Date()) return null;
       if (pool.entries.length === 0) return null;
 

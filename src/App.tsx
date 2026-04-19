@@ -18,7 +18,7 @@ import { LeagueDetail } from './components/leagues/LeagueDetail';
 import { AuthModal } from './components/AuthModal';
 import { AccountMenu } from './components/AccountMenu';
 import { Dashboard } from './components/Dashboard';
-import { cn } from './lib/utils';
+import { cn, parseDateSafe } from './lib/utils';
 import { createPool, addEntry, getPool, getPools, savePool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH, POOLS_STORAGE_KEY } from './lib/pool-storage';
 import { saveLeague } from './lib/league-storage';
 import { setAuthStorageUserId, getCurrentAuthUserId, collectAndClearScopedData, authGetItem, authSetItem, authRemoveItem } from './lib/auth-storage';
@@ -405,10 +405,10 @@ export default function App() {
   // followed by past tournaments (most recently ended first).
   function sortByUpcomingFirst(a: TournamentData, b: TournamentData): number {
     const now = new Date();
-    const endA = new Date(a.endDate);
-    const endB = new Date(b.endDate);
-    const startA = new Date(a.startDate);
-    const startB = new Date(b.startDate);
+    const endA = parseDateSafe(a.endDate);
+    const endB = parseDateSafe(b.endDate);
+    const startA = parseDateSafe(a.startDate);
+    const startB = parseDateSafe(b.startDate);
     const isPastA = endA < now;
     const isPastB = endB < now;
     if (!isPastA && isPastB) return -1;
@@ -813,7 +813,7 @@ export default function App() {
   // Bracket lock status
   const isLocked = useMemo(() => {
     if (!currentTournament) return false;
-    return new Date() >= new Date(currentTournament.startDate);
+    return new Date() >= parseDateSafe(currentTournament.startDate);
   }, [currentTournament]);
 
   // All tournament scores (re-computes when current matches change)
@@ -988,8 +988,8 @@ export default function App() {
                   <span>Locked</span>
                 </span>
               ) : (
-                <span className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-white/40 px-2 py-1" aria-label={`Tournament starts ${new Date(currentTournament.startDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}>
-                  ⏰ {new Date(currentTournament.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                <span className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-white/40 px-2 py-1" aria-label={`Tournament starts ${parseDateSafe(currentTournament.startDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}>
+                  ⏰ {parseDateSafe(currentTournament.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                 </span>
               )
             )}
@@ -1133,8 +1133,8 @@ export default function App() {
                   const tScore = allTournamentScores[t.id];
                   const isSelected = selectedTournament === t.id;
                   const now = new Date();
-                  const start = new Date(t.startDate);
-                  const end = new Date(t.endDate);
+                  const start = parseDateSafe(t.startDate);
+                  const end = parseDateSafe(t.endDate);
                   const isActive = now >= start && now <= end;
                   const isPast = now > end;
                   return (
@@ -1187,7 +1187,7 @@ export default function App() {
                       <div className="flex items-center gap-1.5 pl-8.5 text-white/35">
                         <Calendar className="h-3 w-3 shrink-0" aria-hidden="true" />
                         <span className="text-[11px]">
-                          {new Date(t.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – {new Date(t.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {parseDateSafe(t.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – {parseDateSafe(t.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </span>
                       </div>
                     </button>
@@ -1277,8 +1277,8 @@ export default function App() {
                     ));
 
                     return filtered.map(t => {
-                      const start = t.startDate ? new Date(t.startDate) : null;
-                      const end = t.endDate ? new Date(t.endDate) : null;
+                      const start = t.startDate ? parseDateSafe(t.startDate) : null;
+                      const end = t.endDate ? parseDateSafe(t.endDate) : null;
                       const isActive = start && end ? now >= start && now <= end : false;
                       const isPast = end ? end < now : false;
                       const surfaceTagClass = surfaceColor(t.surface);
