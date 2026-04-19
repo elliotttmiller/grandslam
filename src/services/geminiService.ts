@@ -22,6 +22,7 @@ const TODAY_STR = formatLocalDateIso(new Date());
 const GROUNDING_MODEL = "gemini-2.5-flash";
 const PRIMARY_MODEL = "gemini-3.1-flash-lite-preview";
 const FALLBACK_MODEL = "gemini-2.5-flash";
+const MAX_MASTERS_SEEDS = 16;
 
 export const CACHE_KEY_TOURNAMENTS = 'tennis_tournaments_cache_v5';
 const CACHE_KEY_PLAYERS_PREFIX = 'tennis_players_cache_v5_';
@@ -372,7 +373,7 @@ function normalizeMastersSeedings(seedings: unknown): MastersSeededPlayer[] {
       country: typeof p.country === 'string' ? p.country.trim().toUpperCase() : '',
       ranking: typeof p.ranking === 'number' ? p.ranking : undefined,
     }))
-    .filter(p => Number.isInteger(p.seed) && p.seed > 0 && p.seed <= 16 && p.name.length > 0);
+    .filter(p => Number.isInteger(p.seed) && p.seed > 0 && p.seed <= MAX_MASTERS_SEEDS && p.name.length > 0);
   normalized.sort((a, b) => a.seed - b.seed);
   return normalized;
 }
@@ -383,28 +384,29 @@ function normalizeMastersDetails(
   tournamentName: string,
 ): MastersTournamentDetails {
   const staticTournament = getMastersTournamentById(tournamentId);
-  const fallbackSeedings = FALLBACK_PLAYERS.slice(0, 16).map(p => ({ ...p, ranking: undefined }));
 
   const seedings = normalizeMastersSeedings(data?.seedings);
   const seedingsStatus: 'official' | 'predicted' = data?.seedingsStatus === 'official' ? 'official' : 'predicted';
 
   const notes = hasUsableValue(data?.notes)
-    ? data!.notes
+    ? (data?.notes as string)
     : seedingsStatus === 'official'
       ? undefined
       : 'Live official draw data is not available yet. Showing predicted seedings.';
 
   return {
     id: tournamentId,
-    name: hasUsableValue(data?.name) ? data!.name : `2026 ${tournamentName}`,
-    startDate: isIsoDate(data?.startDate) ? data!.startDate : (staticTournament?.approxStart ?? ''),
-    endDate: isIsoDate(data?.endDate) ? data!.endDate : (staticTournament?.approxEnd ?? ''),
-    location: hasUsableValue(data?.location) ? data!.location : (staticTournament?.location ?? 'Location unavailable'),
-    venue: hasUsableValue(data?.venue) ? data!.venue : 'Venue unavailable',
-    surface: hasUsableValue(data?.surface) ? data!.surface : (staticTournament?.surface ?? 'Hard'),
+    name: hasUsableValue(data?.name) ? (data?.name as string) : `2026 ${tournamentName}`,
+    startDate: isIsoDate(data?.startDate) ? data.startDate : (staticTournament?.approxStart ?? ''),
+    endDate: isIsoDate(data?.endDate) ? data.endDate : (staticTournament?.approxEnd ?? ''),
+    location: hasUsableValue(data?.location) ? (data?.location as string) : (staticTournament?.location ?? 'Location unavailable'),
+    venue: hasUsableValue(data?.venue) ? (data?.venue as string) : 'Venue unavailable',
+    surface: hasUsableValue(data?.surface) ? (data?.surface as string) : (staticTournament?.surface ?? 'Hard'),
     drawSize: typeof data?.drawSize === 'number' && data.drawSize > 0 ? data.drawSize : 96,
-    prizeMoney: hasUsableValue(data?.prizeMoney) ? data!.prizeMoney : undefined,
-    seedings: seedings.length > 0 ? seedings : fallbackSeedings,
+    prizeMoney: hasUsableValue(data?.prizeMoney) ? (data?.prizeMoney as string) : undefined,
+    seedings: seedings.length > 0
+      ? seedings
+      : FALLBACK_PLAYERS.slice(0, MAX_MASTERS_SEEDS).map(p => ({ ...p, ranking: undefined })),
     seedingsStatus,
     notes,
   };
