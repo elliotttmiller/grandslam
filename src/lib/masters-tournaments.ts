@@ -1,6 +1,6 @@
 /**
  * Static ATP Masters 1000 men's singles tournament list for 2026.
- * Dates are approximate placeholders; accurate dates are fetched via AI at runtime.
+ * Dates mirror ATP overview pages and are used as UI/default fallback values.
  */
 
 export interface MastersTournament {
@@ -10,9 +10,9 @@ export interface MastersTournament {
   location: string;
   country: string;
   surface: 'Hard' | 'Clay' | 'Indoor Hard' | 'Grass';
-  /** Approximate start date in YYYY-MM-DD format */
+  /** Start date in YYYY-MM-DD format */
   approxStart: string;
-  /** Approximate end date in YYYY-MM-DD format */
+  /** End date in YYYY-MM-DD format */
   approxEnd: string;
 }
 
@@ -24,8 +24,8 @@ export const MASTERS_TOURNAMENTS: MastersTournament[] = [
     location: 'Indian Wells, California, USA',
     country: 'USA',
     surface: 'Hard',
-    approxStart: '2026-03-08',
-    approxEnd: '2026-03-22',
+    approxStart: '2026-03-04',
+    approxEnd: '2026-03-15',
   },
   {
     id: 'miami',
@@ -34,8 +34,8 @@ export const MASTERS_TOURNAMENTS: MastersTournament[] = [
     location: 'Miami, Florida, USA',
     country: 'USA',
     surface: 'Hard',
-    approxStart: '2026-03-24',
-    approxEnd: '2026-04-05',
+    approxStart: '2026-03-18',
+    approxEnd: '2026-03-29',
   },
   {
     id: 'monte-carlo',
@@ -44,8 +44,8 @@ export const MASTERS_TOURNAMENTS: MastersTournament[] = [
     location: 'Monte-Carlo, Monaco',
     country: 'MON',
     surface: 'Clay',
-    approxStart: '2026-04-12',
-    approxEnd: '2026-04-19',
+    approxStart: '2026-04-05',
+    approxEnd: '2026-04-12',
   },
   {
     id: 'madrid',
@@ -54,8 +54,8 @@ export const MASTERS_TOURNAMENTS: MastersTournament[] = [
     location: 'Madrid, Spain',
     country: 'ESP',
     surface: 'Clay',
-    approxStart: '2026-05-03',
-    approxEnd: '2026-05-10',
+    approxStart: '2026-04-22',
+    approxEnd: '2026-05-03',
   },
   {
     id: 'rome',
@@ -64,7 +64,7 @@ export const MASTERS_TOURNAMENTS: MastersTournament[] = [
     location: 'Rome, Italy',
     country: 'ITA',
     surface: 'Clay',
-    approxStart: '2026-05-11',
+    approxStart: '2026-05-06',
     approxEnd: '2026-05-17',
   },
   {
@@ -75,8 +75,8 @@ export const MASTERS_TOURNAMENTS: MastersTournament[] = [
     location: 'Montréal, Canada',
     country: 'CAN',
     surface: 'Hard',
-    approxStart: '2026-08-09',
-    approxEnd: '2026-08-16',
+    approxStart: '2026-08-02',
+    approxEnd: '2026-08-13',
   },
   {
     id: 'cincinnati',
@@ -85,7 +85,7 @@ export const MASTERS_TOURNAMENTS: MastersTournament[] = [
     location: 'Cincinnati, Ohio, USA',
     country: 'USA',
     surface: 'Hard',
-    approxStart: '2026-08-17',
+    approxStart: '2026-08-13',
     approxEnd: '2026-08-23',
   },
   {
@@ -95,8 +95,8 @@ export const MASTERS_TOURNAMENTS: MastersTournament[] = [
     location: 'Shanghai, China',
     country: 'CHN',
     surface: 'Hard',
-    approxStart: '2026-10-05',
-    approxEnd: '2026-10-11',
+    approxStart: '2026-10-07',
+    approxEnd: '2026-10-18',
   },
   {
     id: 'paris',
