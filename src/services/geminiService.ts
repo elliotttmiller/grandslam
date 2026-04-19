@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { authGetItem, authSetItem } from '@/lib/auth-storage';
+import { getMastersTournamentById } from '@/lib/masters-tournaments';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -10,14 +11,21 @@ if (!apiKey) {
 
 const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
-const TODAY_STR = new Date().toISOString().split('T')[0];
+function formatLocalDateIso(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+const TODAY_STR = formatLocalDateIso(new Date());
 const GROUNDING_MODEL = "gemini-2.5-flash";
 const PRIMARY_MODEL = "gemini-3.1-flash-lite-preview";
 const FALLBACK_MODEL = "gemini-2.5-flash";
 
 export const CACHE_KEY_TOURNAMENTS = 'tennis_tournaments_cache_v5';
 const CACHE_KEY_PLAYERS_PREFIX = 'tennis_players_cache_v5_';
-export const CACHE_KEY_MASTERS_PREFIX = 'tennis_masters_details_v1_';
+export const CACHE_KEY_MASTERS_PREFIX = 'tennis_masters_details_v2_';
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 const LIVE_DATA_CACHE_EXPIRY = 60 * 60 * 1000; // 1 hour
 
@@ -342,6 +350,66 @@ export interface MastersTournamentDetails {
   notes?: string;
 }
 
+function isIsoDate(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function hasUsableValue(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return false;
+  return !normalized.includes('unavailable') && normalized !== 'tbd' && normalized !== 'unknown';
+}
+
+function normalizeMastersSeedings(seedings: unknown): MastersSeededPlayer[] {
+  if (!Array.isArray(seedings)) return [];
+  const normalized = seedings
+    .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
+    .map((p) => ({
+      seed: typeof p.seed === 'number' ? p.seed : Number(p.seed),
+      name: typeof p.name === 'string' ? p.name.trim() : '',
+      country: typeof p.country === 'string' ? p.country.trim().toUpperCase() : '',
+      ranking: typeof p.ranking === 'number' ? p.ranking : undefined,
+    }))
+    .filter(p => Number.isInteger(p.seed) && p.seed > 0 && p.seed <= 16 && p.name.length > 0);
+  normalized.sort((a, b) => a.seed - b.seed);
+  return normalized;
+}
+
+function normalizeMastersDetails(
+  data: MastersTournamentDetails | null,
+  tournamentId: string,
+  tournamentName: string,
+): MastersTournamentDetails {
+  const staticTournament = getMastersTournamentById(tournamentId);
+  const fallbackSeedings = FALLBACK_PLAYERS.slice(0, 16).map(p => ({ ...p, ranking: undefined }));
+
+  const seedings = normalizeMastersSeedings(data?.seedings);
+  const seedingsStatus: 'official' | 'predicted' = data?.seedingsStatus === 'official' ? 'official' : 'predicted';
+
+  const notes = hasUsableValue(data?.notes)
+    ? data!.notes
+    : seedingsStatus === 'official'
+      ? undefined
+      : 'Live official draw data is not available yet. Showing predicted seedings.';
+
+  return {
+    id: tournamentId,
+    name: hasUsableValue(data?.name) ? data!.name : `2026 ${tournamentName}`,
+    startDate: isIsoDate(data?.startDate) ? data!.startDate : (staticTournament?.approxStart ?? ''),
+    endDate: isIsoDate(data?.endDate) ? data!.endDate : (staticTournament?.approxEnd ?? ''),
+    location: hasUsableValue(data?.location) ? data!.location : (staticTournament?.location ?? 'Location unavailable'),
+    venue: hasUsableValue(data?.venue) ? data!.venue : 'Venue unavailable',
+    surface: hasUsableValue(data?.surface) ? data!.surface : (staticTournament?.surface ?? 'Hard'),
+    drawSize: typeof data?.drawSize === 'number' && data.drawSize > 0 ? data.drawSize : 96,
+    prizeMoney: hasUsableValue(data?.prizeMoney) ? data!.prizeMoney : undefined,
+    seedings: seedings.length > 0 ? seedings : fallbackSeedings,
+    seedingsStatus,
+    notes,
+  };
+}
+
 /**
  * Fetch comprehensive details for an ATP Masters 1000 tournament using the Gemini AI.
  * Returns cached results for 24 hours to avoid hitting rate limits.
@@ -460,26 +528,9 @@ Do not include any markdown formatting. Return only the JSON object.`;
     }
   }
 
-  if (data && data.seedings) {
-    writeAuthCacheWithTimestamp(cacheKey, data);
-    return data;
-  }
-
-  // Last-resort fallback using static data
-  const fallback: MastersTournamentDetails = {
-    id: tournamentId,
-    name: `2026 ${tournamentName}`,
-    startDate: '',
-    endDate: '',
-    location: 'Location unavailable',
-    venue: 'Venue unavailable',
-    surface: 'Hard',
-    drawSize: 96,
-    seedings: FALLBACK_PLAYERS.slice(0, 16).map(p => ({ ...p, ranking: undefined })),
-    seedingsStatus: 'predicted',
-    notes: 'Live data unavailable. Showing approximate predicted seedings.',
-  };
-  return fallback;
+  const normalizedData = normalizeMastersDetails(data, tournamentId, tournamentName);
+  writeAuthCacheWithTimestamp(cacheKey, normalizedData);
+  return normalizedData;
 }
 
 /**
