@@ -85,6 +85,10 @@ function phaseCacheTtl(phase: TournamentPhase): number {
   }
 }
 
+function isOfficialDataExpectedPhase(phase: TournamentPhase): boolean {
+  return phase !== 'pre-draw';
+}
+
 // ── Per-tournament authoritative URL registry ──────────────────────────────────
 // Gives the AI specific, prioritised sources to search instead of guessing.
 interface TournamentDrawUrls {
@@ -606,15 +610,9 @@ function normalizeMastersDetails(
 
   const seedings = normalizeMastersSeedings(data?.seedings);
 
-  // If the AI returned 'official', trust it.
-  // If the AI returned 'predicted' but the tournament starts within 7 days AND we have
-  // valid seedings from a grounded search, upgrade to 'official': the draw will have
-  // been released by this point and the AI may have found it without labelling it correctly.
+  // Trust explicit official/predicted status from the data source.
   const startDate = isIsoDate(data?.startDate) ? data!.startDate : (staticTournament?.approxStart ?? '');
-  const daysToStart = startDate ? daysUntil(startDate) : 999;
-  const aiSaysOfficial = data?.seedingsStatus === 'official';
-  const drawImminentAndHasSeedings = daysToStart <= 7 && seedings.length > 0;
-  const seedingsStatus: 'official' | 'predicted' = (aiSaysOfficial || drawImminentAndHasSeedings) ? 'official' : 'predicted';
+  const seedingsStatus: 'official' | 'predicted' = data?.seedingsStatus === 'official' ? 'official' : 'predicted';
 
   const notes = hasUsableValue(data?.notes)
     ? (data?.notes as string)
@@ -662,8 +660,8 @@ export async function fetchMastersTournamentDetails(
   // Check user-scoped cache first.
   const cached = readAuthCacheIfFresh<MastersTournamentDetails>(cacheKey, cacheExpiry);
   if (cached) {
-    // Skip predicted cache during draw-released/live so fresh official data is fetched.
-    if (cached.seedingsStatus === 'predicted' && (phase === 'draw-released' || phase === 'live')) {
+    // Skip predicted cache when official data should exist so fresh official data is fetched.
+    if (cached.seedingsStatus === 'predicted' && isOfficialDataExpectedPhase(phase)) {
       // fall through to re-fetch
     } else {
       return cached;
@@ -774,9 +772,9 @@ Do not include any markdown formatting. Return only the JSON object.`;
 
   const normalizedData = normalizeMastersDetails(data, tournamentId, tournamentName);
 
-  // Last resort: if all AI tiers returned 'predicted' during draw-released/live, fall back to
-  // trusted hardcoded official data so the bracket isn't populated with stale seeds.
-  if (normalizedData.seedingsStatus === 'predicted' && (phase === 'draw-released' || phase === 'live')) {
+  // Last resort: if all AI tiers returned 'predicted' when official data should exist,
+  // fall back to trusted hardcoded official data.
+  if (normalizedData.seedingsStatus === 'predicted' && isOfficialDataExpectedPhase(phase)) {
     if (tournamentId === 'madrid' && currentYear === 2026) {
       const hardcoded: MastersTournamentDetails = {
         id: 'madrid',
@@ -855,11 +853,14 @@ export async function fetchMastersOfficialDrawPlayers(
   const drawCacheExpiry = phaseCacheTtl(phase);
 
   const cached = readAuthCacheIfFresh<MastersOfficialDrawResponse>(cacheKey, drawCacheExpiry);
+  let cachedOfficialSlots: MastersOfficialDrawSlot[] | null = null;
   if (cached?.drawStatus === 'official') {
-    // Skip predicted cache during draw-released/live — always re-fetch official data.
-    if (phase !== 'draw-released' && phase !== 'live') {
-      const cachedSlots = normalizeMastersOfficialDrawSlots(cached.drawPlayers);
-      if (cachedSlots.length === 64) {
+    const cachedSlots = normalizeMastersOfficialDrawSlots(cached.drawPlayers);
+    if (cachedSlots.length === 64) {
+      cachedOfficialSlots = cachedSlots;
+      // During draw-released/live we still re-fetch for freshness, but keep cached official
+      // data as a fallback if the live fetch fails.
+      if (phase !== 'draw-released' && phase !== 'live') {
         return cachedSlots.map((p) => ({
           name: p.name,
           seed: p.seed,
@@ -987,23 +988,6 @@ Output JSON object shape:
     }
   }
 
-  // Relaxed drawStatus gate: during draw-released/live phases accept a "predicted" response
-  // if it contains ≥32 real player names (not just Qualifier/TBD/bye/wildcard placeholders).
-  // The AI often finds the correct draw but mislabels it "predicted" out of caution.
-  const isPlaceholderName = (name: string): boolean =>
-    /^(qualifier|tbd|lucky loser|bye|q\d|ll\b)/i.test(name) || /^winner:/i.test(name);
-
-  if (data && data.drawStatus !== 'official' && Array.isArray(data.drawPlayers)) {
-    if (phase === 'draw-released' || phase === 'live') {
-      const realNames = data.drawPlayers.filter(
-        (p) => p.name && !isPlaceholderName(p.name),
-      ).length;
-      if (realNames >= 32) {
-        data = { ...data, drawStatus: 'official' };
-      }
-    }
-  }
-
   if (!data || data.drawStatus !== 'official') {
     // Last resort for known tournaments with locally-available official data.
     if (tournamentId === 'madrid' && currentYear === 2026) {
@@ -1016,6 +1000,13 @@ Output JSON object shape:
       };
       writeAuthCacheWithTimestamp(cacheKey, fallbackData);
       return drawSlots;
+    }
+    if (cachedOfficialSlots?.length === 64) {
+      return cachedOfficialSlots.map((p) => ({
+        name: p.name,
+        seed: p.seed,
+        country: p.country,
+      }));
     }
     return null;
   }
@@ -1033,6 +1024,13 @@ Output JSON object shape:
       };
       writeAuthCacheWithTimestamp(cacheKey, fallbackData);
       return drawSlots;
+    }
+    if (cachedOfficialSlots?.length === 64) {
+      return cachedOfficialSlots.map((p) => ({
+        name: p.name,
+        seed: p.seed,
+        country: p.country,
+      }));
     }
     return null;
   }

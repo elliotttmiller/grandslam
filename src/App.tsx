@@ -552,7 +552,9 @@ export default function App() {
         const isMasters = tournament?.type === 'masters';
 
         if (isMasters) {
-          // Masters 1000: prefer official live draw structure, fallback to seeded prediction.
+          const phase = getTournamentPhase(tournament!.startDate, tournament!.endDate);
+          const officialRequired = phase !== 'pre-draw';
+          // Masters 1000: use official draw once released; only predict before draw release.
           const officialDrawPlayers = await fetchMastersOfficialDrawPlayers(tournament!.id, tournament!.name);
           let initialMatches: Match[];
           if (officialDrawPlayers && officialDrawPlayers.length === 64) {
@@ -564,6 +566,9 @@ export default function App() {
             }));
             initialMatches = buildBracketFromDraw(drawPlayers);
           } else {
+            if (officialRequired) {
+              throw new Error(`Official draw unavailable for ${tournament!.name} (${phase} phase).`);
+            }
             const aiPlayers = await fetchMastersDrawPlayers(tournament!.id, tournament!.name);
             const players: Player[] = aiPlayers.map((p, i) => ({
               id: `p${i + 1}`,
@@ -576,7 +581,6 @@ export default function App() {
 
           // For live tournaments, fetch and apply known results so the bracket reflects
           // real match outcomes rather than just the initial draw structure.
-          const phase = getTournamentPhase(tournament!.startDate, tournament!.endDate);
           if (phase === 'live') {
             const year = Number(tournament!.startDate.slice(0, 4));
             try {
@@ -614,6 +618,7 @@ export default function App() {
         }
       } catch (error) {
         console.error("Failed to fetch players:", error);
+        setMatches([]);
       } finally {
         setLoading(false);
       }
@@ -631,7 +636,10 @@ export default function App() {
     }
     const isMasters = MASTERS_TOURNAMENTS.some(t => t.id === tournamentId);
     if (isMasters) {
-      // Masters 1000: prefer official live draw structure, fallback to seeded prediction.
+      const mastersMeta = MASTERS_TOURNAMENTS.find(t => t.id === tournamentId);
+      const phase = getTournamentPhase(mastersMeta?.approxStart, mastersMeta?.approxEnd);
+      const officialRequired = phase !== 'pre-draw';
+      // Masters 1000: use official draw once released; only predict before draw release.
       const officialDrawPlayers = await fetchMastersOfficialDrawPlayers(tournamentId, tournamentName);
       if (officialDrawPlayers && officialDrawPlayers.length === 64) {
         const drawPlayers: Player[] = officialDrawPlayers.map((p, i) => ({
@@ -641,6 +649,9 @@ export default function App() {
           country: p.country,
         }));
         return buildBracketFromDraw(drawPlayers);
+      }
+      if (officialRequired) {
+        throw new Error(`Official draw unavailable for ${tournamentName} (${phase} phase).`);
       }
       const aiPlayers = await fetchMastersDrawPlayers(tournamentId, tournamentName);
       const players: Player[] = aiPlayers.map((p, i) => ({
