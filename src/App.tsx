@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useBracketCanvas } from './hooks/useBracketCanvas';
-import { fetchTournamentPlayers, fetchTournamentsWithDates, fetchMastersDrawPlayers, fetchMastersOfficialDrawPlayers, TournamentData, CACHE_KEY_TOURNAMENTS } from './services/geminiService';
+import { fetchTournamentPlayers, fetchTournamentsWithDates, fetchMastersDrawPlayers, fetchMastersOfficialDrawPlayers, TournamentData, CACHE_KEY_TOURNAMENTS, CACHE_KEY_MASTERS_PREFIX, CACHE_KEY_MASTERS_DRAW_PREFIX } from './services/geminiService';
 import { generateBracket, generateMastersBracket, buildBracketFromDraw, advancePlayer, Match, Player, getRoundName, getRoundFullName } from './lib/bracket-utils';
 import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
@@ -701,6 +701,9 @@ export default function App() {
         const cacheKey = `tennis_players_cache_v5_${tournament.name.replace(/\s+/g, '_').toLowerCase()}`;
         localStorage.removeItem(cacheKey);
       }
+      // Clear the official draw caches so fresh data is fetched from the ATP source
+      authRemoveItem(`${CACHE_KEY_MASTERS_PREFIX}${selectedTournament}`);
+      authRemoveItem(`${CACHE_KEY_MASTERS_DRAW_PREFIX}${selectedTournament}`);
       // Clear tiebreaker data for this tournament
       setTiebreakerGames(prev => { const next = { ...prev }; delete next[selectedTournament]; return next; });
       setTiebreakerSets(prev => { const next = { ...prev }; delete next[selectedTournament]; return next; });

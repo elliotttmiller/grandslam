@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Calendar, Trophy, RefreshCw, AlertCircle, Layers, DollarSign, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn, parseDateSafe } from '@/lib/utils';
-import { fetchMastersTournamentDetails, CACHE_KEY_MASTERS_PREFIX, type MastersTournamentDetails } from '@/services/geminiService';
+import { fetchMastersTournamentDetails, CACHE_KEY_MASTERS_PREFIX, CACHE_KEY_MASTERS_DRAW_PREFIX, type MastersTournamentDetails } from '@/services/geminiService';
 import { authRemoveItem } from '@/lib/auth-storage';
 import { type MastersTournament, surfaceColor } from '@/lib/masters-tournaments';
 
@@ -38,9 +38,9 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
 
   const handleRefresh = () => {
     if (!tournament) return;
-    // Clear user-scoped cache for this tournament so fresh data is fetched
-    const cacheKey = `${CACHE_KEY_MASTERS_PREFIX}${tournament.id}`;
-    authRemoveItem(cacheKey);
+    // Clear both the tournament details cache and the draw cache so fresh data is fetched
+    authRemoveItem(`${CACHE_KEY_MASTERS_PREFIX}${tournament.id}`);
+    authRemoveItem(`${CACHE_KEY_MASTERS_DRAW_PREFIX}${tournament.id}`);
     setDetails(null);
     setError(null);
     setLoading(true);
