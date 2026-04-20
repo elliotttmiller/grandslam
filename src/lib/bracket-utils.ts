@@ -376,3 +376,52 @@ export function advancePlayer(matches: Match[], matchId: string, winnerId: strin
   
   return newMatches;
 }
+
+/**
+ * Apply known live match results to a bracket by calling advancePlayer for each
+ * completed match. Results are processed in round order so that later-round winners
+ * are correctly propagated into their subsequent match slots.
+ *
+ * Player name matching is case-insensitive and diacritic-agnostic for robustness
+ * (e.g. "Felix Auger-Aliassime" matches "Félix Auger-Aliassime").
+ */
+export function applyLiveResults(
+  matches: Match[],
+  results: Array<{ round: number; winnerName: string; loserName: string }>,
+): Match[] {
+  if (!results || results.length === 0) return matches;
+
+  const normalize = (name: string): string =>
+    name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+  // Sort by round so earlier rounds are applied first (needed for nextMatchId propagation).
+  const sorted = [...results].sort((a, b) => a.round - b.round);
+
+  let current = matches;
+  for (const result of sorted) {
+    const winnerNorm = normalize(result.winnerName);
+    const loserNorm = normalize(result.loserName);
+
+    const match = current.find((m) => {
+      if (m.round !== result.round) return false;
+      if (m.winnerId !== null) return false; // already decided, skip
+      const p1 = normalize(m.player1?.name ?? '');
+      const p2 = normalize(m.player2?.name ?? '');
+      // Both players must be identified (not placeholders) and match the result.
+      return (
+        (p1 === winnerNorm || p2 === winnerNorm) &&
+        (p1 === loserNorm || p2 === loserNorm)
+      );
+    });
+
+    if (match) {
+      const winner =
+        normalize(match.player1?.name ?? '') === winnerNorm ? match.player1 : match.player2;
+      if (winner) {
+        current = advancePlayer(current, match.id, winner.id);
+      }
+    }
+  }
+
+  return current;
+}

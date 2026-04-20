@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useBracketCanvas } from './hooks/useBracketCanvas';
-import { fetchTournamentPlayers, fetchTournamentsWithDates, fetchMastersDrawPlayers, fetchMastersOfficialDrawPlayers, TournamentData, CACHE_KEY_TOURNAMENTS, CACHE_KEY_MASTERS_PREFIX, CACHE_KEY_MASTERS_DRAW_PREFIX } from './services/geminiService';
-import { generateBracket, generateMastersBracket, buildBracketFromDraw, advancePlayer, Match, Player, getRoundName, getRoundFullName } from './lib/bracket-utils';
+import { fetchTournamentPlayers, fetchTournamentsWithDates, fetchMastersDrawPlayers, fetchMastersOfficialDrawPlayers, fetchMastersTournamentResults, getTournamentPhase, TournamentData, CACHE_KEY_TOURNAMENTS, CACHE_KEY_MASTERS_PREFIX, CACHE_KEY_MASTERS_DRAW_PREFIX } from './services/geminiService';
+import { generateBracket, generateMastersBracket, buildBracketFromDraw, advancePlayer, applyLiveResults, Match, Player, getRoundName, getRoundFullName } from './lib/bracket-utils';
 import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
@@ -573,6 +573,22 @@ export default function App() {
             }));
             initialMatches = generateMastersBracket(players);
           }
+
+          // For live tournaments, fetch and apply known results so the bracket reflects
+          // real match outcomes rather than just the initial draw structure.
+          const phase = getTournamentPhase(tournament!.startDate, tournament!.endDate);
+          if (phase === 'live') {
+            const year = Number(tournament!.startDate.slice(0, 4));
+            try {
+              const liveResults = await fetchMastersTournamentResults(tournament!.id, tournament!.name, year);
+              if (liveResults.length > 0) {
+                initialMatches = applyLiveResults(initialMatches, liveResults);
+              }
+            } catch (e) {
+              console.warn('Failed to fetch live results:', e);
+            }
+          }
+
           setMatches(initialMatches);
           setZoom(0.7);
         } else {
