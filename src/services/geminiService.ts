@@ -40,6 +40,18 @@ function daysUntil(isoDate: string): number {
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
 
+/**
+ * Builds an urgency note for AI prompts when a tournament's draw is expected to be released.
+ * When the start is ≤ 3 days away, it instructs the model to aggressively search for the
+ * official draw and to label results as "official" whenever a live source is found.
+ */
+function buildDrawImminenceNote(startDate: string | undefined, daysToStart: number): string {
+  if (!startDate || daysToStart > 3) return `Today is ${TODAY_STR}.`;
+  return `IMPORTANT: Today is ${TODAY_STR} and this tournament's main draw starts on ${startDate}. ` +
+    `The official draw has almost certainly been released already (ATP draws are published 1-2 days before the main draw begins). ` +
+    `Please search live ATP Tour sources and mark the status as "official" if you find draw information from any source published in the last 14 days.`;
+}
+
 export interface TournamentData {
   id: string;
   name: string;
@@ -463,8 +475,9 @@ function normalizeMastersOfficialDrawSlots(drawPlayers: unknown): MastersOfficia
 
   // Partial draw (32-63 entries): build a complete 64-slot array, filling gaps with qualifiers.
   // Re-index the received entries sequentially, then pad to 64.
+  // Qualifier numbers always start at 1 to keep labelling consistent and unambiguous.
   const reindexed: MastersOfficialDrawSlot[] = unique.map((p, i) => ({ ...p, slot: i + 1 }));
-  let qualifierNum = unique.length + 1;
+  let qualifierNum = 1;
   while (reindexed.length < 64) {
     reindexed.push({ slot: reindexed.length + 1, name: `Qualifier ${qualifierNum++}`, seed: undefined, country: undefined });
   }
@@ -542,9 +555,7 @@ export async function fetchMastersTournamentDetails(
     }
   }
 
-  const drawReleaseContext = daysToStart <= 3
-    ? `IMPORTANT: Today is ${TODAY_STR} and this tournament starts on ${staticTournament?.approxStart ?? 'soon'}. The official draw has almost certainly been released already (ATP draws are published 1-2 days before the main draw begins). Search the official ATP Tour website and recent news for the current seedings and mark "seedingsStatus" as "official" if you find them from any live source published in the last 7 days.`
-    : `Today is ${TODAY_STR}.`;
+  const drawReleaseContext = buildDrawImminenceNote(staticTournament?.approxStart, daysToStart);
 
   const madridUrl = tournamentId === 'madrid'
     ? `\nOfficial draw sources to search:\n- https://www.atptour.com/en/tournaments/madrid/1536/draws\n- https://www.atptour.com/en/scores/current/madrid/1536/draws`
@@ -563,7 +574,7 @@ Return a JSON object with these fields:
 - "drawSize": number of players in main draw (96 for most Masters 1000 events)
 - "prizeMoney": total prize money string (e.g. "$7,849,040") or null if unknown
 - "seedings": JSON array of the top 16 official seeds, each object with "seed" (number), "name" (string), "country" (3-letter ISO code), "ranking" (ATP ranking number or null). Use official seedings if the draw has been released, otherwise use current ATP rankings adjusted for surface.
-- "seedingsStatus": MUST be "official" if you found this information from the official ATP draw or any reliable news published in the past 14 days; otherwise "predicted"
+- "seedingsStatus": MUST be "official" if you found this information from the official ATP draw or any reliable source published in the last 14 days; otherwise "predicted"
 - "notes": one sentence of context (defending champion, notable withdrawals) or null
 
 Do not include any markdown formatting. Return only the JSON object.`;
@@ -728,9 +739,7 @@ export async function fetchMastersOfficialDrawPlayers(
     ? parsedYear
     : currentYear;
 
-  const drawImminentNote = daysToStart <= 3
-    ? `IMPORTANT: Today is ${TODAY_STR} and this tournament's main draw starts on ${approxStart ?? 'very soon'}. The official draw has almost certainly been released. Please search live ATP Tour sources and mark "drawStatus" as "official" if you find any draw information from the past 7 days.`
-    : `Today is ${TODAY_STR}.`;
+  const drawImminentNote = buildDrawImminenceNote(approxStart, daysToStart);
 
   const madridHint = tournamentId === 'madrid'
     ? `Official draw sources for ${year} Mutua Madrid Open (search these first):
@@ -757,7 +766,7 @@ Rules:
 - For "official", return exactly 64 "drawPlayers" items ordered from slot 1 (top of bracket) to slot 64 (bottom).
 - Each slot object must include:
   - "slot": integer 1..64
-  - "name": player's full name, OR use the exact format "Winner: Player A vs Player B" for a slot that will be filled by the winner of a first-round match
+  - "name": player's full name, OR use the exact format "Winner: Player A vs Player B" for a slot that will be filled by the winner of a first-round match. Use official draw information from the past 14 days.
   - "seed": integer tournament seed when known (1-32), else null
   - "country": ISO 3166-1 alpha-3 3-letter code when known, else null
 - Keep slot ordering aligned with the official bracket (top-to-bottom).
