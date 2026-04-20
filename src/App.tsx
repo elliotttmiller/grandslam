@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useBracketCanvas } from './hooks/useBracketCanvas';
-import { fetchTournamentPlayers, fetchTournamentsWithDates, fetchMastersDrawPlayers, TournamentData, CACHE_KEY_TOURNAMENTS } from './services/geminiService';
-import { generateBracket, generateMastersBracket, advancePlayer, Match, Player, getRoundName, getRoundFullName } from './lib/bracket-utils';
+import { fetchTournamentPlayers, fetchTournamentsWithDates, fetchMastersDrawPlayers, fetchMastersOfficialDrawPlayers, TournamentData, CACHE_KEY_TOURNAMENTS } from './services/geminiService';
+import { generateBracket, generateMastersBracket, buildBracketFromDraw, advancePlayer, Match, Player, getRoundName, getRoundFullName } from './lib/bracket-utils';
 import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
@@ -540,9 +540,9 @@ export default function App() {
         return;
       }
 
-      setLoading(true);
+        setLoading(true);
       try {
-        if (selectedTournament === 'madrid' || selectedTournament === MADRID_2025_TEST_POOL_OPTION_ID) {
+        if (selectedTournament === MADRID_2025_TEST_POOL_OPTION_ID) {
           setMatches(generateTestMadridBracket());
           setZoom(0.7);
           return;
@@ -552,15 +552,27 @@ export default function App() {
         const isMasters = tournament?.type === 'masters';
 
         if (isMasters) {
-          // Masters 1000: 64-player bracket with 16 AI-predicted/official seeds
-          const aiPlayers = await fetchMastersDrawPlayers(tournament!.id, tournament!.name);
-          const players: Player[] = aiPlayers.map((p, i) => ({
-            id: `p${i + 1}`,
-            name: p.name,
-            seed: p.seed,
-            country: p.country,
-          }));
-          const initialMatches = generateMastersBracket(players);
+          // Masters 1000: prefer official live draw structure, fallback to seeded prediction.
+          const officialDrawPlayers = await fetchMastersOfficialDrawPlayers(tournament!.id, tournament!.name);
+          let initialMatches: Match[];
+          if (officialDrawPlayers && officialDrawPlayers.length === 64) {
+            const drawPlayers: Player[] = officialDrawPlayers.map((p, i) => ({
+              id: `p${i + 1}`,
+              name: p.name,
+              seed: p.seed,
+              country: p.country,
+            }));
+            initialMatches = buildBracketFromDraw(drawPlayers);
+          } else {
+            const aiPlayers = await fetchMastersDrawPlayers(tournament!.id, tournament!.name);
+            const players: Player[] = aiPlayers.map((p, i) => ({
+              id: `p${i + 1}`,
+              name: p.name,
+              seed: p.seed,
+              country: p.country,
+            }));
+            initialMatches = generateMastersBracket(players);
+          }
           setMatches(initialMatches);
           setZoom(0.7);
         } else {
@@ -598,12 +610,22 @@ export default function App() {
   };
 
   const generateOfficialDraw = async (tournamentId: string, tournamentName: string): Promise<Match[]> => {
-    if (tournamentId === 'madrid' || tournamentId === MADRID_2025_TEST_POOL_OPTION_ID) {
+    if (tournamentId === MADRID_2025_TEST_POOL_OPTION_ID) {
       return generateTestMadridBracket();
     }
     const isMasters = MASTERS_TOURNAMENTS.some(t => t.id === tournamentId);
     if (isMasters) {
-      // Masters 1000: 64-player bracket with AI-predicted/official seedings
+      // Masters 1000: prefer official live draw structure, fallback to seeded prediction.
+      const officialDrawPlayers = await fetchMastersOfficialDrawPlayers(tournamentId, tournamentName);
+      if (officialDrawPlayers && officialDrawPlayers.length === 64) {
+        const drawPlayers: Player[] = officialDrawPlayers.map((p, i) => ({
+          id: `p${i + 1}`,
+          name: p.name,
+          seed: p.seed,
+          country: p.country,
+        }));
+        return buildBracketFromDraw(drawPlayers);
+      }
       const aiPlayers = await fetchMastersDrawPlayers(tournamentId, tournamentName);
       const players: Player[] = aiPlayers.map((p, i) => ({
         id: `p${i + 1}`,
