@@ -393,22 +393,100 @@ export function applyLiveResults(
 ): Match[] {
   if (!results || results.length === 0) return matches;
 
+  const cloneMatches = (source: Match[]): Match[] =>
+    source.map((m) => ({
+      ...m,
+      player1: m.player1 ? { ...m.player1 } : null,
+      player2: m.player2 ? { ...m.player2 } : null,
+    }));
+
   const normalize = (name: string): string =>
     // NFD decomposes diacritics into base + combining marks; the regex strips the combining marks.
     name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const isDegenerateResult = (winnerNorm: string, loserNorm: string): boolean => winnerNorm === loserNorm;
+
+  const placeholderRegex = /^Winner:\s*(.+)\s+vs\s+(.+)$/i;
+  const parsePlaceholder = (name: string | undefined): { a: string; b: string } | null => {
+    if (!name) return null;
+    const match = name.match(placeholderRegex);
+    if (!match) return null;
+    return { a: normalize(match[1]), b: normalize(match[2]) };
+  };
+  const placeholderMatchesResult = (
+    parsed: { a: string; b: string } | null,
+    winnerNorm: string,
+    loserNorm: string,
+  ): boolean =>
+    !!parsed && (
+      (parsed.a === winnerNorm && parsed.b === loserNorm) ||
+      (parsed.a === loserNorm && parsed.b === winnerNorm)
+    );
+
+  const isCompressedMastersDraw = matches.some((m) => {
+    if (m.round !== 1) return false;
+    return placeholderRegex.test(m.player1?.name ?? '') || placeholderRegex.test(m.player2?.name ?? '');
+  });
+
+  const livePlayerByName = new Map<string, Player>();
+  let livePlayerCounter = 0;
+  const getLivePlayer = (name: string): Player => {
+    const normalized = normalize(name);
+    const existing = livePlayerByName.get(normalized);
+    if (existing) return existing;
+    let slug = normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    if (!slug) {
+      livePlayerCounter += 1;
+      slug = `player-${livePlayerCounter}`;
+    }
+    const created: Player = { id: `live-${slug}`, name };
+    livePlayerByName.set(normalized, created);
+    return created;
+  };
 
   // Sort by round so earlier rounds are applied first (needed for nextMatchId propagation).
   const sorted = [...results].sort((a, b) => a.round - b.round);
+  let current = cloneMatches(matches);
 
-  let current = matches;
-  for (const result of sorted) {
+  // In compressed 96-player Masters draws, app round 1 represents ATP round 2.
+  // ATP round-1 results should resolve "Winner: A vs B" placeholders to concrete players.
+  if (isCompressedMastersDraw) {
+    const roundOneResults = sorted.filter((r) => r.round === 1);
+    for (const result of roundOneResults) {
+      const winnerNorm = normalize(result.winnerName);
+      const loserNorm = normalize(result.loserName);
+      if (isDegenerateResult(winnerNorm, loserNorm)) continue;
+
+      for (const match of current) {
+        if (match.round !== 1) continue;
+
+        const p1 = parsePlaceholder(match.player1?.name);
+        if (placeholderMatchesResult(p1, winnerNorm, loserNorm)) {
+          match.player1 = getLivePlayer(result.winnerName);
+        }
+
+        const p2 = parsePlaceholder(match.player2?.name);
+        if (placeholderMatchesResult(p2, winnerNorm, loserNorm)) {
+          match.player2 = getLivePlayer(result.winnerName);
+        }
+      }
+    }
+  }
+
+  const mappedResults = sorted
+    .filter((r) => !isCompressedMastersDraw || r.round >= 2)
+    .map((r) => ({
+      ...r,
+      appRound: isCompressedMastersDraw ? r.round - 1 : r.round,
+    }));
+
+  for (const result of mappedResults) {
     const winnerNorm = normalize(result.winnerName);
     const loserNorm = normalize(result.loserName);
+    if (isDegenerateResult(winnerNorm, loserNorm)) continue;
 
     const match = current.find((m) => {
-      if (m.round !== result.round) return false;
+      if (m.round !== result.appRound) return false;
       if (m.winnerId !== null) return false; // already decided, skip
-      if (winnerNorm === loserNorm) return false; // degenerate result, skip
       const p1 = normalize(m.player1?.name ?? '');
       const p2 = normalize(m.player2?.name ?? '');
       // Both players must be identified (not placeholders) and match the result.
