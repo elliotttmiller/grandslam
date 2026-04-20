@@ -892,7 +892,7 @@ If both players in a bracket slot are named (no bye), list both; do not use the 
     : '';
 
   const phaseInstruction = (phase === 'draw-released' || phase === 'live')
-    ? `CRITICAL: Today is ${TODAY_STR}. The draw has been published — set "drawStatus" to "official". Do NOT return "predicted" if you find draw information from any source published in the last 30 days.`
+    ? `CRITICAL: Today is ${TODAY_STR}. The draw has been published — set "drawStatus" to "official". Do NOT return "predicted" if you find draw information from any source published in the last 14 days.`
     : '';
 
   const prompt = `${drawImminentNote}${phaseInstruction ? ' ' + phaseInstruction : ''} Find the official ATP men's singles main-draw bracket for "${tournamentName}" (${year}) and transform it into the app's 64-slot representation.
@@ -988,12 +988,15 @@ Output JSON object shape:
   }
 
   // Relaxed drawStatus gate: during draw-released/live phases accept a "predicted" response
-  // if it contains ≥32 real player names (not just Qualifier/TBD placeholders).
+  // if it contains ≥32 real player names (not just Qualifier/TBD/bye/wildcard placeholders).
   // The AI often finds the correct draw but mislabels it "predicted" out of caution.
+  const isPlaceholderName = (name: string): boolean =>
+    /^(qualifier|tbd|lucky loser|bye|q\d|ll\b)/i.test(name) || /^winner:/i.test(name);
+
   if (data && data.drawStatus !== 'official' && Array.isArray(data.drawPlayers)) {
     if (phase === 'draw-released' || phase === 'live') {
       const realNames = data.drawPlayers.filter(
-        (p) => p.name && !p.name.startsWith('Qualifier') && !p.name.startsWith('TBD'),
+        (p) => p.name && !isPlaceholderName(p.name),
       ).length;
       if (realNames >= 32) {
         data = { ...data, drawStatus: 'official' };

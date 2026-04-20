@@ -392,6 +392,7 @@ export function applyLiveResults(
   if (!results || results.length === 0) return matches;
 
   const normalize = (name: string): string =>
+    // NFD decomposes diacritics into base + combining marks; the regex strips the combining marks.
     name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
   // Sort by round so earlier rounds are applied first (needed for nextMatchId propagation).
@@ -405,6 +406,7 @@ export function applyLiveResults(
     const match = current.find((m) => {
       if (m.round !== result.round) return false;
       if (m.winnerId !== null) return false; // already decided, skip
+      if (winnerNorm === loserNorm) return false; // degenerate result, skip
       const p1 = normalize(m.player1?.name ?? '');
       const p2 = normalize(m.player2?.name ?? '');
       // Both players must be identified (not placeholders) and match the result.
