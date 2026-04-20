@@ -19,6 +19,7 @@ function formatLocalDateIso(date: Date): string {
 }
 
 const TODAY_STR = formatLocalDateIso(new Date());
+const TODAY_DATE = new Date();
 const GROUNDING_MODEL = "gemini-2.5-flash";
 const PRIMARY_MODEL = "gemini-3.1-flash-lite-preview";
 const FALLBACK_MODEL = "gemini-2.5-flash";
@@ -27,9 +28,29 @@ const MAX_MASTERS_SEEDS = 16;
 export const CACHE_KEY_TOURNAMENTS = 'tennis_tournaments_cache_v5';
 const CACHE_KEY_PLAYERS_PREFIX = 'tennis_players_cache_v5_';
 export const CACHE_KEY_MASTERS_PREFIX = 'tennis_masters_details_v2_';
+export const CACHE_KEY_MASTERS_DRAW_PREFIX = 'tennis_masters_draw_v1_';
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 const LIVE_DATA_CACHE_EXPIRY = 60 * 60 * 1000; // 1 hour
-const CACHE_KEY_MASTERS_DRAW_PREFIX = 'tennis_masters_draw_v1_';
+const LIVE_DATA_CACHE_EXPIRY_SHORT = 15 * 60 * 1000; // 15 minutes — used near tournament start
+
+/** Returns how many days from today until the given YYYY-MM-DD date (negative = past). */
+function daysUntil(isoDate: string): number {
+  const target = new Date(isoDate + 'T00:00:00');
+  const diffMs = target.getTime() - TODAY_DATE.getTime();
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Builds an urgency note for AI prompts when a tournament's draw is expected to be released.
+ * When the start is ≤ 3 days away, it instructs the model to aggressively search for the
+ * official draw and to label results as "official" whenever a live source is found.
+ */
+function buildDrawImminenceNote(startDate: string | undefined, daysToStart: number): string {
+  if (!startDate || daysToStart > 3) return `Today is ${TODAY_STR}.`;
+  return `IMPORTANT: Today is ${TODAY_STR} and this tournament's main draw starts on ${startDate}. ` +
+    `The official draw has almost certainly been released already (ATP draws are published 1-2 days before the main draw begins). ` +
+    `Please search live ATP Tour sources and mark the status as "official" if you find draw information from any source published in the last 14 days.`;
+}
 
 export interface TournamentData {
   id: string;
@@ -394,18 +415,34 @@ function normalizeMastersSeedings(seedings: unknown): MastersSeededPlayer[] {
   return normalized;
 }
 
+/**
+ * Normalize the AI-returned draw slots into a clean 64-entry array.
+ *
+ * Tolerant of:
+ *  - 96-player draws: AI may return up to 128 slots; we accept any with slot 1-128 and
+ *    pick the first 64 by slot order (or re-index them sequentially when they are compact
+ *    but not starting at 1).
+ *  - Partial draws: if we receive ≥32 valid entries we fill the remaining slots with
+ *    "Qualifier N" placeholders so the bracket can still be built from official data.
+ *  - Minor slot-numbering gaps: missing positions are filled with qualifiers.
+ *
+ * Returns an empty array only when fewer than 32 valid entries are found.
+ */
 function normalizeMastersOfficialDrawSlots(drawPlayers: unknown): MastersOfficialDrawSlot[] {
   if (!Array.isArray(drawPlayers)) return [];
+
+  // Accept slots up to 128 (covers 96-player Masters draws where AI may include all positions)
+  const MAX_SLOT = 128;
 
   const normalized = drawPlayers
     .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
     .map((p) => ({
       slot: typeof p.slot === 'number' ? p.slot : Number(p.slot),
       name: typeof p.name === 'string' ? p.name.trim() : '',
-      seed: typeof p.seed === 'number' ? p.seed : Number(p.seed),
+      seed: typeof p.seed === 'number' ? p.seed : (typeof p.seed === 'string' ? Number(p.seed) : NaN),
       country: typeof p.country === 'string' ? p.country.trim().toUpperCase() : undefined,
     }))
-    .filter((p) => Number.isInteger(p.slot) && p.slot >= 1 && p.slot <= 64 && p.name.length > 0)
+    .filter((p) => Number.isInteger(p.slot) && p.slot >= 1 && p.slot <= MAX_SLOT && p.name.length > 0)
     .filter((p) => {
       const looksLikeWinnerPlaceholder = /^Winner:/i.test(p.name);
       if (!looksLikeWinnerPlaceholder) return true;
@@ -414,22 +451,37 @@ function normalizeMastersOfficialDrawSlots(drawPlayers: unknown): MastersOfficia
     .map((p) => ({
       slot: p.slot,
       name: p.name,
-      seed: Number.isInteger(p.seed) && p.seed > 0 && p.seed <= 32 ? p.seed : undefined,
+      seed: Number.isFinite(p.seed) && Number.isInteger(p.seed) && p.seed > 0 && p.seed <= 32 ? p.seed : undefined,
       country: typeof p.country === 'string' && p.country.length === 3 ? p.country : undefined,
     }))
     .sort((a, b) => a.slot - b.slot);
 
+  // Deduplicate by slot, keeping first occurrence
   const uniqueBySlot = new Map<number, MastersOfficialDrawSlot>();
   for (const slot of normalized) {
     if (!uniqueBySlot.has(slot.slot)) uniqueBySlot.set(slot.slot, slot);
   }
   const unique = Array.from(uniqueBySlot.values()).sort((a, b) => a.slot - b.slot);
 
-  if (unique.length !== 64) return [];
-  for (let i = 0; i < 64; i++) {
-    if (unique[i].slot !== i + 1) return [];
+  // Require at least 32 real entries to be considered a usable draw
+  if (unique.length < 32) return [];
+
+  // If all 64 slots (1-64) are present and sequential, return as-is
+  if (unique.length >= 64) {
+    const first64 = unique.slice(0, 64);
+    // Re-index to sequential 1-64 regardless of original slot numbers
+    return first64.map((p, i) => ({ ...p, slot: i + 1 }));
   }
-  return unique;
+
+  // Partial draw (32-63 entries): build a complete 64-slot array, filling gaps with qualifiers.
+  // Re-index the received entries sequentially, then pad to 64.
+  // Qualifier numbers always start at 1 to keep labelling consistent and unambiguous.
+  const reindexed: MastersOfficialDrawSlot[] = unique.map((p, i) => ({ ...p, slot: i + 1 }));
+  let qualifierNum = 1;
+  while (reindexed.length < 64) {
+    reindexed.push({ slot: reindexed.length + 1, name: `Qualifier ${qualifierNum++}`, seed: undefined, country: undefined });
+  }
+  return reindexed;
 }
 
 function normalizeMastersDetails(
@@ -440,7 +492,16 @@ function normalizeMastersDetails(
   const staticTournament = getMastersTournamentById(tournamentId);
 
   const seedings = normalizeMastersSeedings(data?.seedings);
-  const seedingsStatus: 'official' | 'predicted' = data?.seedingsStatus === 'official' ? 'official' : 'predicted';
+
+  // If the AI returned 'official', trust it.
+  // If the AI returned 'predicted' but the tournament starts within 7 days AND we have
+  // valid seedings from a grounded search, upgrade to 'official': the draw will have
+  // been released by this point and the AI may have found it without labelling it correctly.
+  const startDate = isIsoDate(data?.startDate) ? data!.startDate : (staticTournament?.approxStart ?? '');
+  const daysToStart = startDate ? daysUntil(startDate) : 999;
+  const aiSaysOfficial = data?.seedingsStatus === 'official';
+  const drawImminentAndHasSeedings = daysToStart <= 7 && seedings.length > 0;
+  const seedingsStatus: 'official' | 'predicted' = (aiSaysOfficial || drawImminentAndHasSeedings) ? 'official' : 'predicted';
 
   const notes = hasUsableValue(data?.notes)
     ? (data?.notes as string)
@@ -451,8 +512,8 @@ function normalizeMastersDetails(
   return {
     id: tournamentId,
     name: hasUsableValue(data?.name) ? (data?.name as string) : `2026 ${tournamentName}`,
-    startDate: isIsoDate(data?.startDate) ? data.startDate : (staticTournament?.approxStart ?? ''),
-    endDate: isIsoDate(data?.endDate) ? data.endDate : (staticTournament?.approxEnd ?? ''),
+    startDate,
+    endDate: isIsoDate(data?.endDate) ? data!.endDate : (staticTournament?.approxEnd ?? ''),
     location: hasUsableValue(data?.location) ? (data?.location as string) : (staticTournament?.location ?? 'Location unavailable'),
     venue: hasUsableValue(data?.venue) ? (data?.venue as string) : 'Venue unavailable',
     surface: hasUsableValue(data?.surface) ? (data?.surface as string) : (staticTournament?.surface ?? 'Hard'),
@@ -468,7 +529,8 @@ function normalizeMastersDetails(
 
 /**
  * Fetch comprehensive details for an ATP Masters 1000 tournament using the Gemini AI.
- * Returns cached results for 24 hours to avoid hitting rate limits.
+ * Uses a shorter 15-minute cache when the tournament starts within 7 days so that
+ * newly-released draw data is picked up quickly.
  */
 export async function fetchMastersTournamentDetails(
   tournamentId: string,
@@ -476,27 +538,44 @@ export async function fetchMastersTournamentDetails(
 ): Promise<MastersTournamentDetails> {
   const cacheKey = `${CACHE_KEY_MASTERS_PREFIX}${tournamentId}`;
 
-  // Check user-scoped cache first (short-lived so details stay current).
-  const cached = readAuthCacheIfFresh<MastersTournamentDetails>(cacheKey, LIVE_DATA_CACHE_EXPIRY);
+  // Use a shorter cache when the tournament is imminent so fresh draw data is picked up.
+  const staticTournament = getMastersTournamentById(tournamentId);
+  const daysToStart = staticTournament?.approxStart ? daysUntil(staticTournament.approxStart) : 999;
+  const cacheExpiry = daysToStart <= 7 ? LIVE_DATA_CACHE_EXPIRY_SHORT : LIVE_DATA_CACHE_EXPIRY;
+
+  // Check user-scoped cache first.
+  const cached = readAuthCacheIfFresh<MastersTournamentDetails>(cacheKey, cacheExpiry);
   if (cached) {
-    return cached;
+    // If the cached entry says 'predicted' but the tournament is now within 7 days,
+    // it may be stale — skip the cache and re-fetch with the updated prompt.
+    if (cached.seedingsStatus === 'predicted' && daysToStart <= 7) {
+      // fall through to re-fetch
+    } else {
+      return cached;
+    }
   }
 
-  const prompt = `Today is ${TODAY_STR}. Find the most accurate and up-to-date information about the 2026 ATP Masters 1000 men's singles tournament: "${tournamentName}".
+  const drawReleaseContext = buildDrawImminenceNote(staticTournament?.approxStart, daysToStart);
+
+  const madridUrl = tournamentId === 'madrid'
+    ? `\nOfficial draw sources to search:\n- https://www.atptour.com/en/tournaments/madrid/1536/draws\n- https://www.atptour.com/en/scores/current/madrid/1536/draws`
+    : '';
+
+  const prompt = `${drawReleaseContext} Find the most accurate and up-to-date information about the 2026 ATP Masters 1000 men's singles tournament: "${tournamentName}".${madridUrl}
 
 Return a JSON object with these fields:
 - "id": "${tournamentId}"
-- "name": full official tournament name including year (e.g. "2026 BNP Paribas Open")
+- "name": full official tournament name including year (e.g. "2026 Mutua Madrid Open")
 - "startDate": main draw start date in YYYY-MM-DD format
 - "endDate": final date in YYYY-MM-DD format
-- "location": city and country (e.g. "Indian Wells, California, USA")
-- "venue": full venue/stadium name (e.g. "Indian Wells Tennis Garden")
-- "surface": court surface (e.g. "Hard", "Clay", "Indoor Hard")
-- "drawSize": number of players in main draw (usually 96 for Masters 1000)
-- "prizeMoney": total prize money string (e.g. "$8,800,000") or null if unknown
-- "seedings": JSON array of the top 16 seeds, each object with "seed" (number), "name" (string), "country" (3-letter code), "ranking" (ATP ranking number). If official seedings are not yet available, provide AI-predicted seedings based on current ATP rankings with surface adjustments.
-- "seedingsStatus": "official" if official draw has been released, otherwise "predicted"
-- "notes": one sentence of current context about this tournament (e.g. defending champion, key absences) or null
+- "location": city and country (e.g. "Madrid, Spain")
+- "venue": full venue/stadium name (e.g. "Caja Mágica")
+- "surface": court surface (e.g. "Clay")
+- "drawSize": number of players in main draw (96 for most Masters 1000 events)
+- "prizeMoney": total prize money string (e.g. "$7,849,040") or null if unknown
+- "seedings": JSON array of the top 16 official seeds, each object with "seed" (number), "name" (string), "country" (3-letter ISO code), "ranking" (ATP ranking number or null). Use official seedings if the draw has been released, otherwise use current ATP rankings adjusted for surface.
+- "seedingsStatus": MUST be "official" if you found this information from the official ATP draw or any reliable source published in the last 14 days; otherwise "predicted"
+- "notes": one sentence of context (defending champion, notable withdrawals) or null
 
 Do not include any markdown formatting. Return only the JSON object.`;
 
@@ -617,15 +696,30 @@ export async function fetchMastersDrawPlayers(
 /**
  * Fetch the official ATP Masters singles draw transformed into an ordered
  * 64-slot array (the app's Round-of-64 view: seed vs "winner of R1 pairing").
- * Returns null when official draw data cannot be confidently extracted.
+ *
+ * For 96-player Masters draws (e.g. Madrid, Rome):
+ *   - Top 32 seeds have first-round byes and occupy the odd-numbered bracket positions.
+ *   - The even-numbered positions are filled by first-round match winners, represented
+ *     as "Winner: Player A vs Player B" placeholders.
+ *   - The AI may return up to 96 (or 128) draw entries; normalizeMastersOfficialDrawSlots
+ *     will compact them into exactly 64 sequential slots.
+ *
+ * Returns null when official draw data cannot be extracted (AI returns "predicted").
  */
 export async function fetchMastersOfficialDrawPlayers(
   tournamentId: string,
   tournamentName: string,
 ): Promise<Array<{ name: string; seed?: number; country?: string }> | null> {
   const cacheKey = `${CACHE_KEY_MASTERS_DRAW_PREFIX}${tournamentId}`;
-  const cached = readAuthCacheIfFresh<MastersOfficialDrawResponse>(cacheKey, LIVE_DATA_CACHE_EXPIRY);
+
+  // Use a shorter cache near tournament start so freshly-released draws are picked up.
+  const staticMeta = getMastersTournamentById(tournamentId);
+  const daysToStart = staticMeta?.approxStart ? daysUntil(staticMeta.approxStart) : 999;
+  const drawCacheExpiry = daysToStart <= 7 ? LIVE_DATA_CACHE_EXPIRY_SHORT : LIVE_DATA_CACHE_EXPIRY;
+
+  const cached = readAuthCacheIfFresh<MastersOfficialDrawResponse>(cacheKey, drawCacheExpiry);
   if (cached?.drawStatus === 'official') {
+    // Skip stale 'predicted' cache fallthrough — re-fetch if tournament is imminent
     const cachedSlots = normalizeMastersOfficialDrawSlots(cached.drawPlayers);
     if (cachedSlots.length === 64) {
       return cachedSlots.map((p) => ({
@@ -636,7 +730,7 @@ export async function fetchMastersOfficialDrawPlayers(
     }
   }
 
-  const approxStart = getMastersTournamentById(tournamentId)?.approxStart;
+  const approxStart = staticMeta?.approxStart;
   const currentYear = Number(TODAY_STR.slice(0, 4));
   const parsedYear = approxStart && /^\d{4}-\d{2}-\d{2}$/.test(approxStart)
     ? Number(approxStart.slice(0, 4))
@@ -644,26 +738,38 @@ export async function fetchMastersOfficialDrawPlayers(
   const year = parsedYear >= currentYear - 1 && parsedYear <= currentYear + 1
     ? parsedYear
     : currentYear;
+
+  const drawImminentNote = buildDrawImminenceNote(approxStart, daysToStart);
+
   const madridHint = tournamentId === 'madrid'
-    ? `Prioritize these official sources first:
-- ATP draw page: https://www.atptour.com/en/scores/current/madrid/1536/draws
-- Official PDF: https://www.protennislive.com/posting/${year}/1536/mds.pdf`
+    ? `Official draw sources for ${year} Mutua Madrid Open (search these first):
+- https://www.atptour.com/en/tournaments/madrid/1536/draws
+- https://www.atptour.com/en/scores/current/madrid/1536/draws
+- https://www.protennislive.com/posting/${year}/1536/mds.pdf
+
+MADRID FORMAT NOTE: Madrid is a 96-player draw where the top 32 seeds have first-round byes. Map it to 64 bracket slots as follows:
+- Slot 1: Seed 1 (first-round bye — plays the winner of the adjacent first-round match)
+- Slot 2: "Winner: [Player A] vs [Player B]" — the first-round match that Seed 1 will face in Round 2
+- Slot 3: Next seeded player or lucky loser
+- Slot 4: "Winner: [Player C] vs [Player D]" — their Round 1 opponents
+- … continue pairing seeded/bye players with their first-round challenger through slot 64.
+If both players in a bracket slot are named (no bye), list both players; do not use the "Winner:" format.`
     : '';
 
-  const prompt = `Today is ${TODAY_STR}. Find the official ATP men's singles main-draw bracket for "${tournamentName}" (${year}) and transform it into the app's 64-slot Round-of-64 representation.
+  const prompt = `${drawImminentNote} Find the official ATP men's singles main-draw bracket for "${tournamentName}" (${year}) and transform it into the app's 64-slot representation.
 
 ${madridHint}
 
 Rules:
-- If an official draw is published, set "drawStatus" to "official".
-- If not published, set "drawStatus" to "predicted" and return an empty "drawPlayers" array.
-- For "official", return exactly 64 "drawPlayers" items with unique slot values 1..64 in official bracket order.
+- If an official draw is published (even if released very recently), set "drawStatus" to "official".
+- If genuinely not yet published, set "drawStatus" to "predicted" and return an empty "drawPlayers" array.
+- For "official", return exactly 64 "drawPlayers" items ordered from slot 1 (top of bracket) to slot 64 (bottom).
 - Each slot object must include:
-  - "slot": integer (1..64)
-  - "name": player name OR placeholder in the exact format "Winner: Player A vs Player B" when that slot is the future winner of a first-round pairing
-  - "seed": integer when known (typically 1..32), else null
+  - "slot": integer 1..64
+  - "name": player's full name, OR use the exact format "Winner: Player A vs Player B" for a slot that will be filled by the winner of a first-round match. Use official draw information from the past 14 days.
+  - "seed": integer tournament seed when known (1-32), else null
   - "country": ISO 3166-1 alpha-3 3-letter code when known, else null
-- Keep slot ordering aligned with the official bracket structure (top-to-bottom).
+- Keep slot ordering aligned with the official bracket (top-to-bottom).
 - Return only JSON (no markdown).
 
 Output JSON object shape:
