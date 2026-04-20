@@ -129,25 +129,22 @@ export function getSeededDraw(players: Player[]): Player[] {
   return draw.map((p, i) => p ?? { id: `bye-${i}`, name: 'BYE' });
 }
 
-// ATP Masters 1000 64-player seeded draw placement
-// Seeded positions (0-indexed) follow standard ATP draw logic scaled to 64:
-//   S1 → 0, S2 → 63
-//   S3/S4 → randomly {16, 48}
-//   S5-S8 → randomly {8, 24, 40, 56}
-//   S9-S16 → randomly {4, 12, 20, 28, 36, 44, 52, 60}
+// ATP Masters 1000 64-slot Round-of-64 representation for 96-player events.
+// Top 32 seeds receive first-round byes and therefore occupy seeded positions
+// in this 64-slot bracket.
 export function getSeededDrawMasters(players: Player[]): Player[] {
   const size = 64;
 
   const seeded = players
-    .filter(p => p.seed && p.seed >= 1 && p.seed <= 16)
+    .filter(p => p.seed && p.seed >= 1 && p.seed <= 32)
     .sort((a, b) => (a.seed ?? 99) - (b.seed ?? 99));
 
-  const unseeded = players.filter(p => !p.seed || p.seed > 16);
+  const unseeded = players.filter(p => !p.seed || p.seed > 32);
 
-  // Auto-fill qualifiers if fewer than 48 unseeded provided
+  // Auto-fill qualifiers if fewer than 32 unseeded provided
   const allUnseeded = [...unseeded];
   let qNum = 1;
-  while (allUnseeded.length < 48) {
+  while (allUnseeded.length < 32) {
     allUnseeded.push({ id: `q${qNum}`, name: `Qualifier ${qNum}`, seed: undefined, country: '' });
     qNum++;
   }
@@ -163,6 +160,11 @@ export function getSeededDrawMasters(players: Player[]): Player[] {
 
   const s9s16 = shuffle([4, 12, 20, 28, 36, 44, 52, 60]);
   [9, 10, 11, 12, 13, 14, 15, 16].forEach((s, i) => { seedPos[s] = s9s16[i]; });
+
+  const s17s32 = shuffle([2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62]);
+  [17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32].forEach((s, i) => {
+    seedPos[s] = s17s32[i];
+  });
 
   const draw: (Player | null)[] = new Array(size).fill(null);
 
@@ -230,8 +232,8 @@ export function generateBracket(players: Player[]): Match[] {
 }
 
 /**
- * Generate a 64-player ATP Masters 1000 bracket using Masters seeding positions.
- * Expects up to 16 seeded players; fills remaining spots with qualifiers.
+ * Generate a 64-slot ATP Masters bracket using Masters seeding positions.
+ * Expects up to 32 seeded players (96-player draw format); fills remaining spots with qualifiers.
  */
 /**
  * Build a 6-round Masters bracket from a pre-ordered 64-player draw array.

@@ -24,7 +24,7 @@ const TODAY_DATE = new Date();
 const GROUNDING_MODEL = "gemini-2.5-flash";
 const PRIMARY_MODEL = "gemini-3.1-flash-lite-preview";
 const FALLBACK_MODEL = "gemini-2.5-flash";
-const MAX_MASTERS_SEEDS = 16;
+const MAX_MASTERS_SEEDS = 32;
 
 export const CACHE_KEY_TOURNAMENTS = 'tennis_tournaments_cache_v5';
 const CACHE_KEY_PLAYERS_PREFIX = 'tennis_players_cache_v5_';
@@ -803,7 +803,7 @@ Do not include any markdown formatting. Return only the JSON object.`;
 
 /**
  * Fetch the 64-player draw for an ATP Masters 1000 bracket.
- * Returns 16 seeded players (from AI/official seedings) plus 48 qualifier slots.
+ * Returns up to 32 seeded players (from AI/official seedings) plus qualifier slots.
  * Used by generateMastersBracket() to build the pool/bracket draw.
  */
 export async function fetchMastersDrawPlayers(
