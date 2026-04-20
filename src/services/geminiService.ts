@@ -637,9 +637,13 @@ export async function fetchMastersOfficialDrawPlayers(
   }
 
   const approxStart = getMastersTournamentById(tournamentId)?.approxStart;
-  const year = approxStart && /^\d{4}-\d{2}-\d{2}$/.test(approxStart)
+  const currentYear = Number(TODAY_STR.slice(0, 4));
+  const parsedYear = approxStart && /^\d{4}-\d{2}-\d{2}$/.test(approxStart)
     ? Number(approxStart.slice(0, 4))
-    : Number(TODAY_STR.slice(0, 4));
+    : currentYear;
+  const year = parsedYear >= currentYear - 1 && parsedYear <= currentYear + 1
+    ? parsedYear
+    : currentYear;
   const madridHint = tournamentId === 'madrid'
     ? `Prioritize these official sources first:
 - ATP draw page: https://www.atptour.com/en/scores/current/madrid/1536/draws
