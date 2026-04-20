@@ -354,8 +354,10 @@ export interface MastersTournamentDetails {
 
 interface MastersOfficialDrawSlot {
   slot: number;
+  /** Player name, or placeholder "Winner: A vs B" for unknown round-2 opponents. */
   name: string;
   seed?: number;
+  /** ISO 3166-1 alpha-3 country code when available. */
   country?: string;
 }
 
@@ -401,14 +403,19 @@ function normalizeMastersOfficialDrawSlots(drawPlayers: unknown): MastersOfficia
       slot: typeof p.slot === 'number' ? p.slot : Number(p.slot),
       name: typeof p.name === 'string' ? p.name.trim() : '',
       seed: typeof p.seed === 'number' ? p.seed : Number(p.seed),
-      country: typeof p.country === 'string' ? p.country.trim().toUpperCase() : '',
+      country: typeof p.country === 'string' ? p.country.trim().toUpperCase() : undefined,
     }))
     .filter((p) => Number.isInteger(p.slot) && p.slot >= 1 && p.slot <= 64 && p.name.length > 0)
+    .filter((p) => {
+      const looksLikeWinnerPlaceholder = /^Winner:/i.test(p.name);
+      if (!looksLikeWinnerPlaceholder) return true;
+      return /^Winner:\s*.+\s+vs\s+.+$/i.test(p.name);
+    })
     .map((p) => ({
       slot: p.slot,
       name: p.name,
       seed: Number.isInteger(p.seed) && p.seed > 0 && p.seed <= 32 ? p.seed : undefined,
-      country: p.country || undefined,
+      country: typeof p.country === 'string' && p.country.length === 3 ? p.country : undefined,
     }))
     .sort((a, b) => a.slot - b.slot);
 
@@ -629,7 +636,10 @@ export async function fetchMastersOfficialDrawPlayers(
     }
   }
 
-  const year = new Date().getFullYear();
+  const approxStart = getMastersTournamentById(tournamentId)?.approxStart;
+  const year = approxStart && /^\d{4}-\d{2}-\d{2}$/.test(approxStart)
+    ? Number(approxStart.slice(0, 4))
+    : Number(TODAY_STR.slice(0, 4));
   const madridHint = tournamentId === 'madrid'
     ? `Prioritize these official sources first:
 - ATP draw page: https://www.atptour.com/en/scores/current/madrid/1536/draws
@@ -646,9 +656,9 @@ Rules:
 - For "official", return exactly 64 "drawPlayers" items with unique slot values 1..64 in official bracket order.
 - Each slot object must include:
   - "slot": integer (1..64)
-  - "name": player name OR placeholder like "Winner: Player A vs Player B" when that slot is the future winner of a first-round pairing
+  - "name": player name OR placeholder in the exact format "Winner: Player A vs Player B" when that slot is the future winner of a first-round pairing
   - "seed": integer when known (typically 1..32), else null
-  - "country": 3-letter code when known, else null
+  - "country": ISO 3166-1 alpha-3 3-letter code when known, else null
 - Keep slot ordering aligned with the official bracket structure (top-to-bottom).
 - Return only JSON (no markdown).
 
