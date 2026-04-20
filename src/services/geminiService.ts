@@ -29,6 +29,7 @@ const CACHE_KEY_PLAYERS_PREFIX = 'tennis_players_cache_v5_';
 export const CACHE_KEY_MASTERS_PREFIX = 'tennis_masters_details_v2_';
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 const LIVE_DATA_CACHE_EXPIRY = 60 * 60 * 1000; // 1 hour
+const CACHE_KEY_MASTERS_DRAW_PREFIX = 'tennis_masters_draw_v1_';
 
 export interface TournamentData {
   id: string;
@@ -351,6 +352,21 @@ export interface MastersTournamentDetails {
   notes?: string;
 }
 
+interface MastersOfficialDrawSlot {
+  slot: number;
+  /** Player name, or placeholder "Winner: A vs B" for unknown round-2 opponents. */
+  name: string;
+  seed?: number;
+  /** ISO 3166-1 alpha-3 country code when available. */
+  country?: string;
+}
+
+interface MastersOfficialDrawResponse {
+  drawStatus: 'official' | 'predicted';
+  notes?: string;
+  drawPlayers: MastersOfficialDrawSlot[];
+}
+
 function isIsoDate(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -376,6 +392,44 @@ function normalizeMastersSeedings(seedings: unknown): MastersSeededPlayer[] {
     .filter(p => Number.isInteger(p.seed) && p.seed > 0 && p.seed <= MAX_MASTERS_SEEDS && p.name.length > 0);
   normalized.sort((a, b) => a.seed - b.seed);
   return normalized;
+}
+
+function normalizeMastersOfficialDrawSlots(drawPlayers: unknown): MastersOfficialDrawSlot[] {
+  if (!Array.isArray(drawPlayers)) return [];
+
+  const normalized = drawPlayers
+    .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
+    .map((p) => ({
+      slot: typeof p.slot === 'number' ? p.slot : Number(p.slot),
+      name: typeof p.name === 'string' ? p.name.trim() : '',
+      seed: typeof p.seed === 'number' ? p.seed : Number(p.seed),
+      country: typeof p.country === 'string' ? p.country.trim().toUpperCase() : undefined,
+    }))
+    .filter((p) => Number.isInteger(p.slot) && p.slot >= 1 && p.slot <= 64 && p.name.length > 0)
+    .filter((p) => {
+      const looksLikeWinnerPlaceholder = /^Winner:/i.test(p.name);
+      if (!looksLikeWinnerPlaceholder) return true;
+      return /^Winner:\s*.+\s+vs\s+.+$/i.test(p.name);
+    })
+    .map((p) => ({
+      slot: p.slot,
+      name: p.name,
+      seed: Number.isInteger(p.seed) && p.seed > 0 && p.seed <= 32 ? p.seed : undefined,
+      country: typeof p.country === 'string' && p.country.length === 3 ? p.country : undefined,
+    }))
+    .sort((a, b) => a.slot - b.slot);
+
+  const uniqueBySlot = new Map<number, MastersOfficialDrawSlot>();
+  for (const slot of normalized) {
+    if (!uniqueBySlot.has(slot.slot)) uniqueBySlot.set(slot.slot, slot);
+  }
+  const unique = Array.from(uniqueBySlot.values()).sort((a, b) => a.slot - b.slot);
+
+  if (unique.length !== 64) return [];
+  for (let i = 0; i < 64; i++) {
+    if (unique[i].slot !== i + 1) return [];
+  }
+  return unique;
 }
 
 function normalizeMastersDetails(
@@ -558,4 +612,158 @@ export async function fetchMastersDrawPlayers(
     players.push({ name: `Qualifier ${i}`, seed: undefined, country: '' });
   }
   return players;
+}
+
+/**
+ * Fetch the official ATP Masters singles draw transformed into an ordered
+ * 64-slot array (the app's Round-of-64 view: seed vs "winner of R1 pairing").
+ * Returns null when official draw data cannot be confidently extracted.
+ */
+export async function fetchMastersOfficialDrawPlayers(
+  tournamentId: string,
+  tournamentName: string,
+): Promise<Array<{ name: string; seed?: number; country?: string }> | null> {
+  const cacheKey = `${CACHE_KEY_MASTERS_DRAW_PREFIX}${tournamentId}`;
+  const cached = readAuthCacheIfFresh<MastersOfficialDrawResponse>(cacheKey, LIVE_DATA_CACHE_EXPIRY);
+  if (cached?.drawStatus === 'official') {
+    const cachedSlots = normalizeMastersOfficialDrawSlots(cached.drawPlayers);
+    if (cachedSlots.length === 64) {
+      return cachedSlots.map((p) => ({
+        name: p.name,
+        seed: p.seed,
+        country: p.country,
+      }));
+    }
+  }
+
+  const approxStart = getMastersTournamentById(tournamentId)?.approxStart;
+  const currentYear = Number(TODAY_STR.slice(0, 4));
+  const parsedYear = approxStart && /^\d{4}-\d{2}-\d{2}$/.test(approxStart)
+    ? Number(approxStart.slice(0, 4))
+    : currentYear;
+  const year = parsedYear >= currentYear - 1 && parsedYear <= currentYear + 1
+    ? parsedYear
+    : currentYear;
+  const madridHint = tournamentId === 'madrid'
+    ? `Prioritize these official sources first:
+- ATP draw page: https://www.atptour.com/en/scores/current/madrid/1536/draws
+- Official PDF: https://www.protennislive.com/posting/${year}/1536/mds.pdf`
+    : '';
+
+  const prompt = `Today is ${TODAY_STR}. Find the official ATP men's singles main-draw bracket for "${tournamentName}" (${year}) and transform it into the app's 64-slot Round-of-64 representation.
+
+${madridHint}
+
+Rules:
+- If an official draw is published, set "drawStatus" to "official".
+- If not published, set "drawStatus" to "predicted" and return an empty "drawPlayers" array.
+- For "official", return exactly 64 "drawPlayers" items with unique slot values 1..64 in official bracket order.
+- Each slot object must include:
+  - "slot": integer (1..64)
+  - "name": player name OR placeholder in the exact format "Winner: Player A vs Player B" when that slot is the future winner of a first-round pairing
+  - "seed": integer when known (typically 1..32), else null
+  - "country": ISO 3166-1 alpha-3 3-letter code when known, else null
+- Keep slot ordering aligned with the official bracket structure (top-to-bottom).
+- Return only JSON (no markdown).
+
+Output JSON object shape:
+{
+  "drawStatus": "official" | "predicted",
+  "notes": string | null,
+  "drawPlayers": [{ "slot": number, "name": string, "seed": number|null, "country": string|null }]
+}`;
+
+  const drawSlotSchema = {
+    type: Type.OBJECT,
+    properties: {
+      slot: { type: Type.INTEGER },
+      name: { type: Type.STRING },
+      seed: { type: Type.INTEGER, nullable: true },
+      country: { type: Type.STRING, nullable: true },
+    },
+    required: ['slot', 'name'],
+  };
+
+  const schema = {
+    type: Type.OBJECT,
+    properties: {
+      drawStatus: { type: Type.STRING },
+      notes: { type: Type.STRING, nullable: true },
+      drawPlayers: { type: Type.ARRAY, items: drawSlotSchema },
+    },
+    required: ['drawStatus', 'drawPlayers'],
+  };
+
+  let data: MastersOfficialDrawResponse | null = null;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: GROUNDING_MODEL,
+      contents: prompt,
+      config: { tools: [{ googleSearch: {} }] },
+    });
+    const text = response.text || '';
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && end > start) {
+      data = JSON.parse(text.substring(start, end + 1));
+    }
+  } catch (e) {
+    console.warn('Masters draw Tier 1 (Grounded) error:', e);
+  }
+
+  if (!data || !Array.isArray(data.drawPlayers)) {
+    try {
+      const response = await ai.models.generateContent({
+        model: PRIMARY_MODEL,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        },
+      });
+      data = JSON.parse(response.text || 'null');
+    } catch (e) {
+      console.warn('Masters draw Tier 2 (Primary) error:', e);
+    }
+  }
+
+  if (!data || !Array.isArray(data.drawPlayers)) {
+    try {
+      const response = await ai.models.generateContent({
+        model: FALLBACK_MODEL,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+        },
+      });
+      data = JSON.parse(response.text || 'null');
+    } catch (e) {
+      console.warn('Masters draw Tier 3 (Fallback) error:', e);
+    }
+  }
+
+  if (!data || data.drawStatus !== 'official') {
+    return null;
+  }
+
+  const normalizedSlots = normalizeMastersOfficialDrawSlots(data.drawPlayers);
+  if (normalizedSlots.length !== 64) {
+    return null;
+  }
+
+  const normalizedData: MastersOfficialDrawResponse = {
+    drawStatus: 'official',
+    notes: hasUsableValue(data.notes) ? data.notes : undefined,
+    drawPlayers: normalizedSlots,
+  };
+  writeAuthCacheWithTimestamp(cacheKey, normalizedData);
+
+  return normalizedSlots.map((p) => ({
+    name: p.name,
+    seed: p.seed,
+    country: p.country,
+  }));
 }
