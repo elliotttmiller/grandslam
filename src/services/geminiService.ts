@@ -2,6 +2,7 @@
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { authGetItem, authSetItem } from '@/lib/auth-storage';
 import { getMastersTournamentById } from '@/lib/masters-tournaments';
+import { getMadrid2026OfficialDrawSlots, getMadrid2026Seedings } from '@/lib/madrid-2026-data';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -50,6 +51,118 @@ function buildDrawImminenceNote(startDate: string | undefined, daysToStart: numb
   return `IMPORTANT: Today is ${TODAY_STR} and this tournament's main draw starts on ${startDate}. ` +
     `The official draw has almost certainly been released already (ATP draws are published 1-2 days before the main draw begins). ` +
     `Please search live ATP Tour sources and mark the status as "official" if you find draw information from any source published in the last 14 days.`;
+}
+
+// ── Phase-aware cache TTL constants ────────────────────────────────────────────
+const LIVE_DATA_CACHE_EXPIRY_DRAW_RELEASED = 10 * 60 * 1000; // 10 min — draw just released
+const LIVE_DATA_CACHE_EXPIRY_LIVE = 3 * 60 * 1000;           // 3 min — tournament in progress
+
+/**
+ * Tournament phase driven by today's date relative to start/end dates.
+ * Controls cache TTL and how aggressively AI is asked to search for official data.
+ */
+export type TournamentPhase = 'pre-draw' | 'draw-released' | 'live' | 'completed';
+
+export function getTournamentPhase(
+  approxStart: string | undefined,
+  approxEnd: string | undefined,
+): TournamentPhase {
+  if (!approxStart) return 'pre-draw';
+  const daysToStart = daysUntil(approxStart);
+  const daysToEnd = approxEnd ? daysUntil(approxEnd) : daysToStart + 14;
+  if (daysToEnd < 0) return 'completed';
+  if (daysToStart <= 0) return 'live';
+  if (daysToStart <= 2) return 'draw-released';
+  return 'pre-draw';
+}
+
+function phaseCacheTtl(phase: TournamentPhase): number {
+  switch (phase) {
+    case 'live':           return LIVE_DATA_CACHE_EXPIRY_LIVE;
+    case 'draw-released':  return LIVE_DATA_CACHE_EXPIRY_DRAW_RELEASED;
+    case 'pre-draw':       return LIVE_DATA_CACHE_EXPIRY;
+    case 'completed':      return CACHE_EXPIRY;
+  }
+}
+
+// ── Per-tournament authoritative URL registry ──────────────────────────────────
+// Gives the AI specific, prioritised sources to search instead of guessing.
+interface TournamentDrawUrls {
+  /** Tournament code on protennislive.com, used in /posting/{year}/{code}/mds.pdf */
+  protennisliveCode: string;
+  /** ATP tour path segment used in atptour.com/en/scores/current/{atpPath}/draws */
+  atpPath: string;
+  /** Wikipedia article title prefix for {year}_{wikiTitle}_–_Men's_singles */
+  wikiTitle: string;
+}
+
+const TOURNAMENT_DRAW_URLS: Record<string, TournamentDrawUrls> = {
+  'madrid':       { protennisliveCode: '1536', atpPath: 'madrid/1536',       wikiTitle: 'Mutua_Madrid_Open' },
+  'indian-wells': { protennisliveCode: '404',  atpPath: 'indian-wells/404',  wikiTitle: 'BNP_Paribas_Open' },
+  'miami':        { protennisliveCode: '403',  atpPath: 'miami-open/403',    wikiTitle: 'Miami_Open_(tennis)' },
+  'monte-carlo':  { protennisliveCode: '410',  atpPath: 'monte-carlo/410',   wikiTitle: 'Monte-Carlo_Masters' },
+  'rome':         { protennisliveCode: '416',  atpPath: 'rome/416',          wikiTitle: 'Italian_Open_(tennis)' },
+  'canada':       { protennisliveCode: '421',  atpPath: 'canada/421',        wikiTitle: 'Canadian_Open_(tennis)' },
+  'cincinnati':   { protennisliveCode: '422',  atpPath: 'cincinnati/422',    wikiTitle: 'Western_%26_Southern_Open' },
+  'shanghai':     { protennisliveCode: '5014', atpPath: 'shanghai/5014',     wikiTitle: 'Shanghai_Masters' },
+  'paris':        { protennisliveCode: '341',  atpPath: 'paris/341',         wikiTitle: 'BNP_Paribas_Masters' },
+};
+
+/** Builds a numbered list of prioritised draw sources for inclusion in AI prompts. */
+function buildTournamentUrlHints(tournamentId: string, year: number): string {
+  const urls = TOURNAMENT_DRAW_URLS[tournamentId];
+  if (!urls) return '';
+  return `Official draw sources (search in this order):
+1. https://www.protennislive.com/posting/${year}/${urls.protennisliveCode}/mds.pdf
+2. https://www.atptour.com/en/scores/current/${urls.atpPath}/draws
+3. https://en.wikipedia.org/wiki/${year}_${urls.wikiTitle}_%E2%80%93_Men%27s_singles`;
+}
+
+/** Cache key with year-month suffix so keys auto-invalidate across tournament editions. */
+function drawCacheKey(tournamentId: string, approxStart: string | undefined): string {
+  const yearMonth = approxStart ? approxStart.slice(0, 7).replace('-', '') : '';
+  return yearMonth
+    ? `${CACHE_KEY_MASTERS_DRAW_PREFIX}${tournamentId}_${yearMonth}`
+    : `${CACHE_KEY_MASTERS_DRAW_PREFIX}${tournamentId}`;
+}
+
+/**
+ * Robust JSON object extraction from free-form text (e.g. grounded model responses).
+ *
+ * Grounded models often wrap the JSON in explanation text and citation footnotes.
+ * This function uses balanced-brace counting to locate the outermost JSON object,
+ * tolerating surrounding prose. Safer than indexOf('{') + lastIndexOf('}') because
+ * it correctly handles nested objects and brace characters in surrounding text.
+ */
+function extractJsonObject(text: string): Record<string, unknown> | null {
+  if (!text) return null;
+  // Strip markdown code fences, then try a direct parse first.
+  const stripped = text.replace(/```(?:json)?\s*/gi, '').replace(/```\s*/g, '');
+  try { return JSON.parse(stripped.trim()) as Record<string, unknown>; } catch {}
+  // Balanced-brace scan for the outermost JSON object in the original text.
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === '\\') { i++; continue; } // skip escaped character
+      if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        try { return JSON.parse(text.substring(start, i + 1)) as Record<string, unknown>; } catch {}
+        start = -1; // reset and try the next candidate object
+      }
+    }
+  }
+  return null;
 }
 
 export interface TournamentData {
@@ -529,40 +642,40 @@ function normalizeMastersDetails(
 
 /**
  * Fetch comprehensive details for an ATP Masters 1000 tournament using the Gemini AI.
- * Uses a shorter 15-minute cache when the tournament starts within 7 days so that
- * newly-released draw data is picked up quickly.
+ *
+ * Cache TTL is phase-driven: 24h pre-draw → 10 min draw-released → 3 min live → 24h completed.
+ * Stale 'predicted' cache entries are skipped during draw-released and live phases so that
+ * freshly-released official data is always fetched. As a last resort, if all AI tiers fail
+ * for a tournament where hardcoded official data is available, that data is returned instead.
  */
 export async function fetchMastersTournamentDetails(
   tournamentId: string,
   tournamentName: string,
 ): Promise<MastersTournamentDetails> {
   const cacheKey = `${CACHE_KEY_MASTERS_PREFIX}${tournamentId}`;
+  const currentYear = Number(TODAY_STR.slice(0, 4));
 
-  // Use a shorter cache when the tournament is imminent so fresh draw data is picked up.
   const staticTournament = getMastersTournamentById(tournamentId);
-  const daysToStart = staticTournament?.approxStart ? daysUntil(staticTournament.approxStart) : 999;
-  const cacheExpiry = daysToStart <= 7 ? LIVE_DATA_CACHE_EXPIRY_SHORT : LIVE_DATA_CACHE_EXPIRY;
+  const phase = getTournamentPhase(staticTournament?.approxStart, staticTournament?.approxEnd);
+  const cacheExpiry = phaseCacheTtl(phase);
 
   // Check user-scoped cache first.
   const cached = readAuthCacheIfFresh<MastersTournamentDetails>(cacheKey, cacheExpiry);
   if (cached) {
-    // If the cached entry says 'predicted' but the tournament is now within 7 days,
-    // it may be stale — skip the cache and re-fetch with the updated prompt.
-    if (cached.seedingsStatus === 'predicted' && daysToStart <= 7) {
+    // Skip predicted cache during draw-released/live so fresh official data is fetched.
+    if (cached.seedingsStatus === 'predicted' && (phase === 'draw-released' || phase === 'live')) {
       // fall through to re-fetch
     } else {
       return cached;
     }
   }
 
+  const daysToStart = staticTournament?.approxStart ? daysUntil(staticTournament.approxStart) : 999;
   const drawReleaseContext = buildDrawImminenceNote(staticTournament?.approxStart, daysToStart);
+  const urlHints = buildTournamentUrlHints(tournamentId, currentYear);
 
-  const madridUrl = tournamentId === 'madrid'
-    ? `\nOfficial draw sources to search:\n- https://www.atptour.com/en/tournaments/madrid/1536/draws\n- https://www.atptour.com/en/scores/current/madrid/1536/draws`
-    : '';
-
-  const prompt = `${drawReleaseContext} Find the most accurate and up-to-date information about the 2026 ATP Masters 1000 men's singles tournament: "${tournamentName}".${madridUrl}
-
+  const prompt = `${drawReleaseContext} Find the most accurate and up-to-date information about the ${currentYear} ATP Masters 1000 men's singles tournament: "${tournamentName}".
+${urlHints ? urlHints + '\n' : ''}
 Return a JSON object with these fields:
 - "id": "${tournamentId}"
 - "name": full official tournament name including year (e.g. "2026 Mutua Madrid Open")
@@ -611,19 +724,15 @@ Do not include any markdown formatting. Return only the JSON object.`;
 
   let data: MastersTournamentDetails | null = null;
 
-  // Tier 1: Grounded Search (most accurate real-time data)
+  // Tier 1: Grounded Search (most accurate real-time data).
+  // Uses extractJsonObject for robust extraction — the grounded model wraps JSON in prose.
   try {
     const response = await ai.models.generateContent({
       model: GROUNDING_MODEL,
       contents: prompt,
       config: { tools: [{ googleSearch: {} }] },
     });
-    const text = response.text || '';
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    if (start !== -1 && end !== -1 && end > start) {
-      data = JSON.parse(text.substring(start, end + 1));
-    }
+    data = extractJsonObject(response.text || '') as unknown as MastersTournamentDetails | null;
   } catch (e) {
     console.warn('Masters Tier 1 (Grounded) error:', e);
   }
@@ -664,6 +773,30 @@ Do not include any markdown formatting. Return only the JSON object.`;
   }
 
   const normalizedData = normalizeMastersDetails(data, tournamentId, tournamentName);
+
+  // Last resort: if all AI tiers returned 'predicted' during draw-released/live, fall back to
+  // trusted hardcoded official data so the bracket isn't populated with stale seeds.
+  if (normalizedData.seedingsStatus === 'predicted' && (phase === 'draw-released' || phase === 'live')) {
+    if (tournamentId === 'madrid' && currentYear === 2026) {
+      const hardcoded: MastersTournamentDetails = {
+        id: 'madrid',
+        name: '2026 Mutua Madrid Open',
+        startDate: '2026-04-22',
+        endDate: '2026-05-03',
+        location: 'Madrid, Spain',
+        venue: 'Caja Mágica',
+        surface: 'Clay',
+        drawSize: 96,
+        prizeMoney: '€7,849,040',
+        seedings: getMadrid2026Seedings(),
+        seedingsStatus: 'official',
+        notes: 'Defending champion: Casper Ruud. Withdrawals: Carlos Alcaraz (wrist), Novak Djokovic (shoulder), Taylor Fritz (knee), Frances Tiafoe, Jack Draper (knee).',
+      };
+      writeAuthCacheWithTimestamp(cacheKey, hardcoded);
+      return hardcoded;
+    }
+  }
+
   writeAuthCacheWithTimestamp(cacheKey, normalizedData);
   return normalizedData;
 }
@@ -704,34 +837,40 @@ export async function fetchMastersDrawPlayers(
  *   - The AI may return up to 96 (or 128) draw entries; normalizeMastersOfficialDrawSlots
  *     will compact them into exactly 64 sequential slots.
  *
- * Returns null when official draw data cannot be extracted (AI returns "predicted").
+ * During draw-released and live phases the drawStatus gate is relaxed: if the AI labels
+ * the response "predicted" but supplies ≥32 real player names, it is accepted as official.
+ *
+ * Returns null when no usable draw data can be extracted and no fallback is available.
  */
 export async function fetchMastersOfficialDrawPlayers(
   tournamentId: string,
   tournamentName: string,
 ): Promise<Array<{ name: string; seed?: number; country?: string }> | null> {
-  const cacheKey = `${CACHE_KEY_MASTERS_DRAW_PREFIX}${tournamentId}`;
-
-  // Use a shorter cache near tournament start so freshly-released draws are picked up.
+  const currentYear = Number(TODAY_STR.slice(0, 4));
   const staticMeta = getMastersTournamentById(tournamentId);
-  const daysToStart = staticMeta?.approxStart ? daysUntil(staticMeta.approxStart) : 999;
-  const drawCacheExpiry = daysToStart <= 7 ? LIVE_DATA_CACHE_EXPIRY_SHORT : LIVE_DATA_CACHE_EXPIRY;
+  const phase = getTournamentPhase(staticMeta?.approxStart, staticMeta?.approxEnd);
+
+  // Versioned cache key includes year-month to auto-invalidate across tournament editions.
+  const cacheKey = drawCacheKey(tournamentId, staticMeta?.approxStart);
+  const drawCacheExpiry = phaseCacheTtl(phase);
 
   const cached = readAuthCacheIfFresh<MastersOfficialDrawResponse>(cacheKey, drawCacheExpiry);
   if (cached?.drawStatus === 'official') {
-    // Skip stale 'predicted' cache fallthrough — re-fetch if tournament is imminent
-    const cachedSlots = normalizeMastersOfficialDrawSlots(cached.drawPlayers);
-    if (cachedSlots.length === 64) {
-      return cachedSlots.map((p) => ({
-        name: p.name,
-        seed: p.seed,
-        country: p.country,
-      }));
+    // Skip predicted cache during draw-released/live — always re-fetch official data.
+    if (phase !== 'draw-released' && phase !== 'live') {
+      const cachedSlots = normalizeMastersOfficialDrawSlots(cached.drawPlayers);
+      if (cachedSlots.length === 64) {
+        return cachedSlots.map((p) => ({
+          name: p.name,
+          seed: p.seed,
+          country: p.country,
+        }));
+      }
     }
   }
 
   const approxStart = staticMeta?.approxStart;
-  const currentYear = Number(TODAY_STR.slice(0, 4));
+  const daysToStart = approxStart ? daysUntil(approxStart) : 999;
   const parsedYear = approxStart && /^\d{4}-\d{2}-\d{2}$/.test(approxStart)
     ? Number(approxStart.slice(0, 4))
     : currentYear;
@@ -740,25 +879,26 @@ export async function fetchMastersOfficialDrawPlayers(
     : currentYear;
 
   const drawImminentNote = buildDrawImminenceNote(approxStart, daysToStart);
+  const urlHints = buildTournamentUrlHints(tournamentId, year);
 
-  const madridHint = tournamentId === 'madrid'
-    ? `Official draw sources for ${year} Mutua Madrid Open (search these first):
-- https://www.atptour.com/en/tournaments/madrid/1536/draws
-- https://www.atptour.com/en/scores/current/madrid/1536/draws
-- https://www.protennislive.com/posting/${year}/1536/mds.pdf
-
-MADRID FORMAT NOTE: Madrid is a 96-player draw where the top 32 seeds have first-round byes. Map it to 64 bracket slots as follows:
+  // 96-player draw format hint for tournaments that use it (Madrid, Rome).
+  const is96PlayerDraw = tournamentId === 'madrid' || tournamentId === 'rome';
+  const drawFormatNote = is96PlayerDraw
+    ? `FORMAT NOTE: This is a 96-player draw where the top 32 seeds have first-round byes. Map it to 64 bracket slots:
 - Slot 1: Seed 1 (first-round bye — plays the winner of the adjacent first-round match)
 - Slot 2: "Winner: [Player A] vs [Player B]" — the first-round match that Seed 1 will face in Round 2
-- Slot 3: Next seeded player or lucky loser
-- Slot 4: "Winner: [Player C] vs [Player D]" — their Round 1 opponents
-- … continue pairing seeded/bye players with their first-round challenger through slot 64.
-If both players in a bracket slot are named (no bye), list both players; do not use the "Winner:" format.`
+- Continue pairing each seeded/bye player with their first-round challenger through slot 64.
+If both players in a bracket slot are named (no bye), list both; do not use the "Winner:" format.`
     : '';
 
-  const prompt = `${drawImminentNote} Find the official ATP men's singles main-draw bracket for "${tournamentName}" (${year}) and transform it into the app's 64-slot representation.
+  const phaseInstruction = (phase === 'draw-released' || phase === 'live')
+    ? `CRITICAL: Today is ${TODAY_STR}. The draw has been published — set "drawStatus" to "official". Do NOT return "predicted" if you find draw information from any source published in the last 14 days.`
+    : '';
 
-${madridHint}
+  const prompt = `${drawImminentNote}${phaseInstruction ? ' ' + phaseInstruction : ''} Find the official ATP men's singles main-draw bracket for "${tournamentName}" (${year}) and transform it into the app's 64-slot representation.
+
+${urlHints}
+${drawFormatNote}
 
 Rules:
 - If an official draw is published (even if released very recently), set "drawStatus" to "official".
@@ -766,7 +906,7 @@ Rules:
 - For "official", return exactly 64 "drawPlayers" items ordered from slot 1 (top of bracket) to slot 64 (bottom).
 - Each slot object must include:
   - "slot": integer 1..64
-  - "name": player's full name, OR use the exact format "Winner: Player A vs Player B" for a slot that will be filled by the winner of a first-round match. Use official draw information from the past 14 days.
+  - "name": player's full name, OR use the exact format "Winner: Player A vs Player B" for a slot that will be filled by the winner of a first-round match.
   - "seed": integer tournament seed when known (1-32), else null
   - "country": ISO 3166-1 alpha-3 3-letter code when known, else null
 - Keep slot ordering aligned with the official bracket (top-to-bottom).
@@ -802,18 +942,14 @@ Output JSON object shape:
 
   let data: MastersOfficialDrawResponse | null = null;
 
+  // Tier 1: Grounded Search — uses extractJsonObject for robust extraction from prose-wrapped responses.
   try {
     const response = await ai.models.generateContent({
       model: GROUNDING_MODEL,
       contents: prompt,
       config: { tools: [{ googleSearch: {} }] },
     });
-    const text = response.text || '';
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    if (start !== -1 && end !== -1 && end > start) {
-      data = JSON.parse(text.substring(start, end + 1));
-    }
+    data = extractJsonObject(response.text || '') as unknown as MastersOfficialDrawResponse | null;
   } catch (e) {
     console.warn('Masters draw Tier 1 (Grounded) error:', e);
   }
@@ -851,12 +987,53 @@ Output JSON object shape:
     }
   }
 
+  // Relaxed drawStatus gate: during draw-released/live phases accept a "predicted" response
+  // if it contains ≥32 real player names (not just Qualifier/TBD/bye/wildcard placeholders).
+  // The AI often finds the correct draw but mislabels it "predicted" out of caution.
+  const isPlaceholderName = (name: string): boolean =>
+    /^(qualifier|tbd|lucky loser|bye|q\d|ll\b)/i.test(name) || /^winner:/i.test(name);
+
+  if (data && data.drawStatus !== 'official' && Array.isArray(data.drawPlayers)) {
+    if (phase === 'draw-released' || phase === 'live') {
+      const realNames = data.drawPlayers.filter(
+        (p) => p.name && !isPlaceholderName(p.name),
+      ).length;
+      if (realNames >= 32) {
+        data = { ...data, drawStatus: 'official' };
+      }
+    }
+  }
+
   if (!data || data.drawStatus !== 'official') {
+    // Last resort for known tournaments with locally-available official data.
+    if (tournamentId === 'madrid' && currentYear === 2026) {
+      console.info('Masters draw: AI failed for madrid 2026 — using hardcoded official draw.');
+      const drawSlots = getMadrid2026OfficialDrawSlots();
+      const fallbackData: MastersOfficialDrawResponse = {
+        drawStatus: 'official',
+        notes: 'Official 2026 Mutua Madrid Open draw (hardcoded fallback from protennislive.com/posting/2026/1536/mds.pdf).',
+        drawPlayers: drawSlots.map((p, i) => ({ slot: i + 1, name: p.name, seed: p.seed, country: p.country })),
+      };
+      writeAuthCacheWithTimestamp(cacheKey, fallbackData);
+      return drawSlots;
+    }
     return null;
   }
 
   const normalizedSlots = normalizeMastersOfficialDrawSlots(data.drawPlayers);
   if (normalizedSlots.length !== 64) {
+    // Even normalization failed — try hardcoded last resort before giving up.
+    if (tournamentId === 'madrid' && currentYear === 2026) {
+      console.info('Masters draw: normalization failed for madrid 2026 — using hardcoded official draw.');
+      const drawSlots = getMadrid2026OfficialDrawSlots();
+      const fallbackData: MastersOfficialDrawResponse = {
+        drawStatus: 'official',
+        notes: 'Official 2026 Mutua Madrid Open draw (hardcoded fallback).',
+        drawPlayers: drawSlots.map((p, i) => ({ slot: i + 1, name: p.name, seed: p.seed, country: p.country })),
+      };
+      writeAuthCacheWithTimestamp(cacheKey, fallbackData);
+      return drawSlots;
+    }
     return null;
   }
 
@@ -872,4 +1049,112 @@ Output JSON object shape:
     seed: p.seed,
     country: p.country,
   }));
+}
+
+// ── Live tournament results ────────────────────────────────────────────────────
+
+/** A single completed match result from a live tournament. */
+export interface LiveMatchResult {
+  /** Round number (1=First Round, 2=Second Round, …, 6=Final for Masters). */
+  round: number;
+  /** Full name of the winning player, matching the draw exactly where possible. */
+  winnerName: string;
+  /** Full name of the losing player. */
+  loserName: string;
+}
+
+/**
+ * Fetch completed match results for an ATP Masters 1000 tournament that is currently live.
+ *
+ * Uses a 3-minute cache during live play. Returns an empty array when the tournament
+ * hasn't started yet, all tiers fail, or no completed matches are found.
+ */
+export async function fetchMastersTournamentResults(
+  tournamentId: string,
+  tournamentName: string,
+  year: number,
+): Promise<LiveMatchResult[]> {
+  const cacheKey = `tennis_live_results_v1_${tournamentId}_${year}`;
+  const cached = readAuthCacheIfFresh<LiveMatchResult[]>(cacheKey, LIVE_DATA_CACHE_EXPIRY_LIVE);
+  if (cached && Array.isArray(cached) && cached.length > 0) return cached;
+
+  const urls = TOURNAMENT_DRAW_URLS[tournamentId];
+  const urlHints = urls
+    ? `Live scores and results:\n1. https://www.atptour.com/en/scores/current/${urls.atpPath}/results\n2. https://en.wikipedia.org/wiki/${year}_${urls.wikiTitle}_%E2%80%93_Men%27s_singles`
+    : '';
+
+  const prompt = `Today is ${TODAY_STR}. The ${year} ${tournamentName} ATP Masters 1000 tournament is currently in progress.
+${urlHints}
+
+Search for completed match results from this tournament. Return ONLY matches that have already been played — do NOT predict or guess unplayed matches.
+
+For each completed match provide:
+- "round": 1=First Round, 2=Second Round, 3=Third Round, 4=Quarterfinals, 5=Semifinals, 6=Final
+- "winnerName": full name of the winning player exactly as listed in the official draw
+- "loserName": full name of the losing player
+
+Return JSON:
+{
+  "currentRound": number,
+  "completedResults": [{ "round": number, "winnerName": string, "loserName": string }]
+}
+
+If no matches have been played yet, return { "currentRound": 1, "completedResults": [] }.
+Return only JSON, no markdown.`;
+
+  const resultSchema = {
+    type: Type.OBJECT,
+    properties: {
+      round: { type: Type.INTEGER },
+      winnerName: { type: Type.STRING },
+      loserName: { type: Type.STRING },
+    },
+    required: ['round', 'winnerName', 'loserName'],
+  };
+
+  const schema = {
+    type: Type.OBJECT,
+    properties: {
+      currentRound: { type: Type.INTEGER },
+      completedResults: { type: Type.ARRAY, items: resultSchema },
+    },
+    required: ['currentRound', 'completedResults'],
+  };
+
+  let data: { currentRound: number; completedResults: LiveMatchResult[] } | null = null;
+
+  // Tier 1: Grounded Search for live results
+  try {
+    const response = await ai.models.generateContent({
+      model: GROUNDING_MODEL,
+      contents: prompt,
+      config: { tools: [{ googleSearch: {} }] },
+    });
+    const extracted = extractJsonObject(response.text || '');
+    if (extracted && Array.isArray((extracted as Record<string, unknown>).completedResults)) {
+      data = extracted as unknown as typeof data;
+    }
+  } catch (e) {
+    console.warn('Live results Tier 1 (Grounded) error:', e);
+  }
+
+  // Tier 2: Fallback model with structured output
+  if (!data) {
+    try {
+      const response = await ai.models.generateContent({
+        model: FALLBACK_MODEL,
+        contents: prompt,
+        config: { responseMimeType: 'application/json', responseSchema: schema },
+      });
+      data = JSON.parse(response.text || 'null');
+    } catch (e) {
+      console.warn('Live results Tier 2 (Fallback) error:', e);
+    }
+  }
+
+  const results: LiveMatchResult[] = data?.completedResults ?? [];
+  if (results.length > 0) {
+    writeAuthCacheWithTimestamp(cacheKey, results);
+  }
+  return results;
 }
