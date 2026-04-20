@@ -542,6 +542,12 @@ export default function App() {
 
       setLoading(true);
       try {
+        if (selectedTournament === 'madrid' || selectedTournament === MADRID_2025_TEST_POOL_OPTION_ID) {
+          setMatches(generateTestMadridBracket());
+          setZoom(0.7);
+          return;
+        }
+
         const tournament = tournaments.find(t => t.id === selectedTournament);
         const isMasters = tournament?.type === 'masters';
 
@@ -592,7 +598,7 @@ export default function App() {
   };
 
   const generateOfficialDraw = async (tournamentId: string, tournamentName: string): Promise<Match[]> => {
-    if (tournamentId === MADRID_2025_TEST_POOL_OPTION_ID) {
+    if (tournamentId === 'madrid' || tournamentId === MADRID_2025_TEST_POOL_OPTION_ID) {
       return generateTestMadridBracket();
     }
     const isMasters = MASTERS_TOURNAMENTS.some(t => t.id === tournamentId);

@@ -278,9 +278,9 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
                     </div>
                   </div>
 
-                  {/* AI data notice */}
+                  {/* Data source notice */}
                   <p className="mx-5 mt-3 text-[10px] text-white/20 text-center leading-relaxed">
-                    Data sourced via AI using real-time search. Verify details at atptour.com.
+                    Seeding details are sourced via live AI search. Official ATP draw data is used when available in tournament brackets.
                   </p>
                 </div>
               )}
