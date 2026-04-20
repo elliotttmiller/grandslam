@@ -2,6 +2,7 @@
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { authGetItem, authSetItem } from '@/lib/auth-storage';
 import { getMastersTournamentById } from '@/lib/masters-tournaments';
+import { getMadrid2026OfficialDrawSlots, getMadrid2026Seedings } from '@/lib/madrid-2026-data';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -538,6 +539,27 @@ export async function fetchMastersTournamentDetails(
 ): Promise<MastersTournamentDetails> {
   const cacheKey = `${CACHE_KEY_MASTERS_PREFIX}${tournamentId}`;
 
+  // ── Hardcoded official seedings for 2026 Madrid (bypasses AI + stale cache) ──
+  const currentYear = Number(TODAY_STR.slice(0, 4));
+  if (tournamentId === 'madrid' && currentYear === 2026) {
+    const hardcoded: MastersTournamentDetails = {
+      id: 'madrid',
+      name: '2026 Mutua Madrid Open',
+      startDate: '2026-04-22',
+      endDate: '2026-05-03',
+      location: 'Madrid, Spain',
+      venue: 'Caja Mágica',
+      surface: 'Clay',
+      drawSize: 96,
+      prizeMoney: '€7,849,040',
+      seedings: getMadrid2026Seedings(),
+      seedingsStatus: 'official',
+      notes: 'Defending champion: Casper Ruud. Withdrawals: Carlos Alcaraz (wrist), Novak Djokovic (shoulder), Taylor Fritz (knee), Frances Tiafoe, Jack Draper (knee).',
+    };
+    writeAuthCacheWithTimestamp(cacheKey, hardcoded);
+    return hardcoded;
+  }
+
   // Use a shorter cache when the tournament is imminent so fresh draw data is picked up.
   const staticTournament = getMastersTournamentById(tournamentId);
   const daysToStart = staticTournament?.approxStart ? daysUntil(staticTournament.approxStart) : 999;
@@ -710,6 +732,20 @@ export async function fetchMastersOfficialDrawPlayers(
   tournamentId: string,
   tournamentName: string,
 ): Promise<Array<{ name: string; seed?: number; country?: string }> | null> {
+  // ── Hardcoded official draw for 2026 Madrid (bypasses AI + stale cache) ───
+  const currentYear = Number(TODAY_STR.slice(0, 4));
+  if (tournamentId === 'madrid' && currentYear === 2026) {
+    const drawSlots = getMadrid2026OfficialDrawSlots();
+    const cacheKey2026 = `${CACHE_KEY_MASTERS_DRAW_PREFIX}${tournamentId}`;
+    const cacheData: MastersOfficialDrawResponse = {
+      drawStatus: 'official',
+      notes: 'Official 2026 Mutua Madrid Open draw (hardcoded from protennislive.com/posting/2026/1536/mds.pdf).',
+      drawPlayers: drawSlots.map((p, i) => ({ slot: i + 1, name: p.name, seed: p.seed, country: p.country })),
+    };
+    writeAuthCacheWithTimestamp(cacheKey2026, cacheData);
+    return drawSlots;
+  }
+
   const cacheKey = `${CACHE_KEY_MASTERS_DRAW_PREFIX}${tournamentId}`;
 
   // Use a shorter cache near tournament start so freshly-released draws are picked up.
@@ -731,7 +767,6 @@ export async function fetchMastersOfficialDrawPlayers(
   }
 
   const approxStart = staticMeta?.approxStart;
-  const currentYear = Number(TODAY_STR.slice(0, 4));
   const parsedYear = approxStart && /^\d{4}-\d{2}-\d{2}$/.test(approxStart)
     ? Number(approxStart.slice(0, 4))
     : currentYear;
