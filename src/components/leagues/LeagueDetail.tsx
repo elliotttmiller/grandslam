@@ -125,15 +125,39 @@ export function LeagueDetail({
       if (!pool) {
         const officialMatches = await onGenerateOfficialDraw(tournamentId, tournamentName);
         const poolName = `${league.name} — ${tournamentName}`;
-        pool = createPool(poolName, tournamentId, tournamentName, officialMatches, userId);
+        // Create locally but do not persist until server confirms
+        pool = createPool(poolName, tournamentId, tournamentName, officialMatches, userId, false);
         pool.leagueId = league.id;
+
+        // Try to create on the server first. If server create fails, do NOT persist locally.
+        let createdPool = null;
+        try {
+          createdPool = await syncCreatePool(pool);
+        } catch (err) {
+          console.error('Failed to create pool on server:', err);
+          window.alert('Could not create the tournament pool on the server. Check your connection and sign-in status.');
+          return;
+        }
+
+        if (!createdPool) {
+          window.alert('Could not create the tournament pool on the server. Please try again.');
+          return;
+        }
+
+        // Server create succeeded — persist locally and link in the league.
         savePool(pool);
         poolId = pool.id;
 
-        // Persist pool link in the league
+        // Persist pool link in the league and sync that link to the server.
         setLeaguePool(league.id, tournamentId, poolId);
-        await syncCreatePool(pool);
-        await syncSetLeaguePool(league.id, tournamentId, poolId);
+        try {
+          await syncSetLeaguePool(league.id, tournamentId, poolId);
+        } catch (err) {
+          console.error('Failed to sync league -> pool link to server:', err);
+          // It's non-fatal for the UI — leave local link and notify user.
+          window.alert('Saved pool locally, but failed to link it to the league on the server. Please try again later.');
+        }
+
         refreshLeague();
       }
 
@@ -144,7 +168,7 @@ export function LeagueDetail({
         return;
       }
 
-      // Add a blank entry for the user
+      // Add a blank entry for the user — push to server first, then update local cache
       const entryId = `${userId.slice(0, 8)}-${Date.now()}`;
       const displayName = authUser.displayName ?? authUser.email ?? 'Member';
       const newEntry = {
@@ -155,8 +179,17 @@ export function LeagueDetail({
         matches: pool.officialMatches.map(m => ({ ...m, winnerId: null as string | null })),
         isSubmitted: false,
       };
+
+      try {
+        await syncAddEntry(pool.id, newEntry);
+      } catch (err) {
+        console.error('Failed to add entry to pool on server:', err);
+        window.alert('Unable to join the pool right now. Please try again.');
+        return;
+      }
+
+      // Server accepted the entry — persist locally.
       addPoolEntry(pool.id, newEntry);
-      await syncAddEntry(pool.id, newEntry);
 
       onNavigate({ page: 'pool-entry', poolId: pool.id, entryId });
     } finally {
