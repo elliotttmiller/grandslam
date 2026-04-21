@@ -26,6 +26,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { getDb } from '@/lib/firebase';
+import { getAuth } from '@/lib/firebase';
 import type { League, LeagueMember } from '@/lib/league-types';
 
 // Helper: Recursively remove undefined values from objects/arrays
@@ -61,6 +62,12 @@ function toLeague(data: Record<string, unknown>): League {
 
 export async function syncGetLeague(id: string): Promise<League | null> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting league fetch: user is not signed in with a full account.');
+      // Mirror Firestore permission behavior for callers
+      throw { code: 'permission-denied', message: 'Not signed in with a full account' };
+    }
     const snap = await getDoc(doc(getDb(), 'leagues', id));
     if (!snap.exists()) return null;
     return toLeague(snap.data() as Record<string, unknown>);
@@ -88,6 +95,11 @@ export async function syncGetPublicLeagues(year?: number): Promise<League[]> {
 /** Fetch all leagues where userId appears in the memberIds array. */
 export async function syncGetUserLeagues(userId: string): Promise<League[]> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting user leagues fetch: user is not signed in with a full account.');
+      return [];
+    }
     const col = collection(getDb(), 'leagues');
     // memberIds is a flat string[] — Firestore array-contains works correctly with scalar values.
     const q = query(col, where('memberIds', 'array-contains', userId));
@@ -105,6 +117,11 @@ export async function syncGetUserLeagues(userId: string): Promise<League[]> {
 
 export async function syncCreateLeague(league: League): Promise<League | null> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting league create: user is not signed in with a full account.');
+      return null;
+    }
     const ref = doc(getDb(), 'leagues', league.id);
     const existing = await getDoc(ref);
     if (existing.exists()) return toLeague(existing.data() as Record<string, unknown>);
@@ -125,6 +142,11 @@ export async function syncCreateLeague(league: League): Promise<League | null> {
  */
 export async function syncSaveLeague(league: League): Promise<boolean> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting league save: user is not signed in with a full account.');
+      return false;
+    }
     const leagueData = removeUndefined(league);
     const ref = doc(getDb(), 'leagues', league.id);
     await setDoc(ref, { ...leagueData, updatedAt: serverTimestamp() });
@@ -139,6 +161,11 @@ export async function syncSaveLeague(league: League): Promise<boolean> {
 /** Delete a league document by ID. */
 export async function syncDeleteLeague(leagueId: string): Promise<boolean> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting league delete: user is not signed in with a full account.');
+      return false;
+    }
     await deleteDoc(doc(getDb(), 'leagues', leagueId));
     return true;
   } catch (error) {
@@ -156,6 +183,11 @@ export async function syncAddLeagueMember(
   member: LeagueMember,
 ): Promise<boolean> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting add league member: user is not signed in with a full account.');
+      return false;
+    }
     const memberData = removeUndefined(member);
     await updateDoc(doc(getDb(), 'leagues', leagueId), {
       members: arrayUnion(memberData),
@@ -174,6 +206,11 @@ export async function syncRemoveLeagueMember(
   userId: string,
 ): Promise<boolean> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting remove league member: user is not signed in with a full account.');
+      return false;
+    }
     const ref = doc(getDb(), 'leagues', leagueId);
     await runTransaction(getDb(), async (tx) => {
       const snap = await tx.get(ref);
@@ -201,6 +238,11 @@ export async function syncSetLeaguePool(
   poolId: string,
 ): Promise<boolean> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting set league pool: user is not signed in with a full account.');
+      return false;
+    }
     await updateDoc(doc(getDb(), 'leagues', leagueId), {
       [`tournamentPoolIds.${tournamentId}`]: poolId,
       updatedAt: serverTimestamp(),

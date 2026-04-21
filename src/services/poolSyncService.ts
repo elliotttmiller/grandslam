@@ -26,6 +26,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { getDb } from '@/lib/firebase';
+import { getAuth } from '@/lib/firebase';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 import type { Match } from '@/lib/bracket-utils';
 
@@ -55,6 +56,11 @@ function removeUndefined<T>(obj: T): T {
  * On success, converts Firestore Timestamp objects to ISO string format. */
 export async function syncGetPool(id: string): Promise<Pool | null> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting pool fetch: user is not signed in with a full account.');
+      throw { code: 'permission-denied', message: 'Not signed in with a full account' };
+    }
     const snap = await getDoc(doc(getDb(), 'pools', id));
     if (!snap.exists()) return null;
     const data = snap.data();
@@ -80,6 +86,11 @@ export async function syncGetPool(id: string): Promise<Pool | null> {
 /** Fetch pools where the user is a participant or creator. */
 export async function syncGetUserPools(userId: string): Promise<Pool[]> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting user pools fetch: user is not signed in with a full account.');
+      return [];
+    }
     const col = collection(getDb(), 'pools');
     const [participantSnaps, createdSnaps] = await Promise.all([
       getDocs(query(col, where('participantIds', 'array-contains', userId))),
@@ -116,6 +127,11 @@ export async function syncGetUserPools(userId: string): Promise<Pool[]> {
  */
 export async function syncCreatePool(pool: Pool): Promise<Pool | null> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting pool create: user is not signed in with a full account.');
+      return null;
+    }
     const ref = doc(getDb(), 'pools', pool.id);
     const existing = await getDoc(ref);
     if (existing.exists()) return existing.data() as Pool;
@@ -158,6 +174,11 @@ export async function syncCreatePool(pool: Pool): Promise<Pool | null> {
  */
 export async function syncSavePool(pool: Pool): Promise<boolean> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting pool save: user is not signed in with a full account.');
+      return false;
+    }
     const poolData = removeUndefined(pool);
     const participantIds = [
       ...new Set(
@@ -181,6 +202,11 @@ export async function syncSavePool(pool: Pool): Promise<boolean> {
 /** Delete a pool document by ID. */
 export async function syncDeletePool(poolId: string): Promise<boolean> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting pool delete: user is not signed in with a full account.');
+      return false;
+    }
     await deleteDoc(doc(getDb(), 'pools', poolId));
     return true;
   } catch (error) {
@@ -203,6 +229,11 @@ export async function syncAddEntry(
   entry: PoolEntry,
 ): Promise<boolean> {
   try {
+    const currentUser = getAuth().currentUser;
+    if (!currentUser || currentUser.isAnonymous) {
+      console.error('Aborting add pool entry: user is not signed in with a full account.');
+      return false;
+    }
     // Remove undefined fields before writing to Firestore (Firestore rejects undefined)
     const entryData = removeUndefined(entry);
     
