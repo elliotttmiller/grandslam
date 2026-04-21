@@ -19,8 +19,8 @@ import { AuthModal } from './components/AuthModal';
 import { AccountMenu } from './components/AccountMenu';
 import { Dashboard } from './components/Dashboard';
 import { cn, parseDateSafe } from './lib/utils';
-import { createPool, addEntry, getPool, getPools, savePool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH, POOLS_STORAGE_KEY } from './lib/pool-storage';
-import { saveLeague } from './lib/league-storage';
+import { createPool, addEntry, getPool, getPools, savePool, deletePool, updateEntry, submitEntry, importPool, importEntry, generateId, POOL_CODE_LENGTH, POOLS_STORAGE_KEY } from './lib/pool-storage';
+import { getLeagues, deleteLeague, saveLeague } from './lib/league-storage';
 import { setAuthStorageUserId, getCurrentAuthUserId, collectAndClearScopedData, authGetItem, authSetItem, authRemoveItem } from './lib/auth-storage';
 import { syncCreatePool, syncAddEntry, syncGetPool, syncGetUserPools, syncUpdateEntry } from './services/poolSyncService';
 import { syncGetUserLeagues } from './services/leagueSyncService';
@@ -325,6 +325,28 @@ export default function App() {
           if (cancelled) return;
           for (const pool of leaguePools) {
             if (pool) savePool(pool);
+          }
+          // Cleanup: server-wins rehydration
+          try {
+            const serverLeagueIds = new Set(userLeagues.map(l => l.id));
+            const localLeagues = getLeagues();
+            for (const local of localLeagues) {
+              if (!serverLeagueIds.has(local.id)) {
+                // remove local-only leagues after successful rehydration
+                deleteLeague(local.id);
+              }
+            }
+
+            const serverPoolIds = new Set(userPools.map(p => p.id));
+            const localPools = getPools();
+            for (const localPool of localPools) {
+              if (!serverPoolIds.has(localPool.id)) {
+                // remove local-only pools after successful rehydration
+                deletePool(localPool.id);
+              }
+            }
+          } catch (cleanupErr) {
+            console.warn('Rehydration cleanup failed:', cleanupErr);
           }
         }
       } catch (error) {
