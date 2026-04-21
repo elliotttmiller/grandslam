@@ -401,7 +401,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90]"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-90"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -413,7 +413,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 340 }}
         transition={{ type: 'spring', stiffness: 280, damping: 28 }}
-        className="fixed top-0 right-0 h-full w-full max-w-sm bg-zinc-950 border-l border-white/[0.08] shadow-2xl z-[91] flex flex-col overflow-hidden"
+        className="fixed top-0 right-0 h-full w-full max-w-sm bg-zinc-950 border-l border-white/8 shadow-2xl z-91 flex flex-col overflow-hidden"
         role="dialog"
         aria-modal="true"
         aria-label="Tournament Simulator"
@@ -617,7 +617,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
                       resultsThrough === round
                         ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10'
                         : round <= resultsThrough
-                        ? 'border-white/10 text-white/40 bg-white/[0.03] hover:border-white/20 hover:text-white/60'
+                        ? 'border-white/10 text-white/40 bg-white/3 hover:border-white/20 hover:text-white/60'
                         : 'border-white/10 text-white/55 hover:border-emerald-500/30 hover:text-emerald-300 hover:bg-emerald-500/5',
                     )}
                     aria-label={`Jump to ${label}`}
@@ -653,8 +653,8 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
                 </p>
               ) : (
                 <>
-                  <div className="rounded-2xl border border-white/[0.06] overflow-hidden">
-                    <div className="divide-y divide-white/[0.04]">
+                  <div className="rounded-2xl border border-white/6 overflow-hidden">
+                    <div className="divide-y divide-white/4">
                       {rankedEntries.map(({ entry, score }, idx) => (
                         <div key={entry.id} className="flex items-center gap-3 px-4 py-3">
                           <span className="text-xs font-black w-5 shrink-0 tabular-nums text-center">
@@ -685,7 +685,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
                       ))}
                     </div>
                     {resultsThrough > 0 && (
-                      <div className="px-4 py-2.5 border-t border-white/[0.04] bg-white/[0.015]">
+                      <div className="px-4 py-2.5 border-t border-white/4 bg-white/1.5">
                         <p className="text-[10px] text-white/25">
                           R1=1pt · R2=2 · R3=4 · QF=8 · SF=16 · Final=32 · upset bonuses applied
                         </p>
@@ -850,7 +850,7 @@ export function SimulatorPanel({ authUser, onNavigate, onPoolChanged, onClose }:
           </div>
 
         {/* ── Footer ── */}
-        <div className="px-5 py-3 border-t border-white/[0.05] shrink-0">
+        <div className="px-5 py-3 border-t border-white/5 shrink-0">
           <p className="text-[10px] text-white/20 text-center">
             Syncs to Firestore in real time · real 2025 Madrid results applied
           </p>
@@ -893,7 +893,7 @@ function StepSection({ number, label, done, disabled, badge, icon, children }: S
           </span>
         )}
       </div>
-      <div className="bg-white/[0.025] border border-white/[0.06] rounded-2xl p-4">
+      <div className="bg-white/2.5 border border-white/6 rounded-2xl p-4">
         {children}
       </div>
     </section>
@@ -914,7 +914,7 @@ export function SimulatorButton({ onClick, hasPool }: SimulatorButtonProps) {
       whileHover={{ scale: 1.04 }}
       whileTap={{ scale: 0.97 }}
       className={cn(
-        'fixed bottom-6 right-5 z-[80] flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-2xl border transition-colors',
+        'fixed bottom-6 right-5 z-80 flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-2xl border transition-colors',
         'bg-zinc-900/95 backdrop-blur-sm text-amber-400 border-amber-500/30 hover:border-amber-500/55 hover:bg-zinc-800/95',
       )}
       aria-label="Open tournament simulator"

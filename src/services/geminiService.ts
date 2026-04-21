@@ -668,6 +668,25 @@ export async function fetchMastersTournamentDetails(
     }
   }
 
+  if (tournamentId === 'madrid' && currentYear === 2026 && isOfficialDataExpectedPhase(phase)) {
+    const hardcoded: MastersTournamentDetails = {
+      id: 'madrid',
+      name: '2026 Mutua Madrid Open',
+      startDate: '2026-04-22',
+      endDate: '2026-05-03',
+      location: 'Madrid, Spain',
+      venue: 'Caja Mágica',
+      surface: 'Clay',
+      drawSize: 96,
+      prizeMoney: '€7,849,040',
+      seedings: getMadrid2026Seedings(),
+      seedingsStatus: 'official',
+      notes: 'Defending champion: Casper Ruud. Withdrawals: Carlos Alcaraz (wrist), Novak Djokovic (shoulder), Taylor Fritz (knee), Frances Tiafoe, Jack Draper (knee).',
+    };
+    writeAuthCacheWithTimestamp(cacheKey, hardcoded);
+    return hardcoded;
+  }
+
   const daysToStart = staticTournament?.approxStart ? daysUntil(staticTournament.approxStart) : 999;
   const drawReleaseContext = buildDrawImminenceNote(staticTournament?.approxStart, daysToStart);
   const urlHints = buildTournamentUrlHints(tournamentId, currentYear);
@@ -867,6 +886,24 @@ export async function fetchMastersOfficialDrawPlayers(
           country: p.country,
         }));
       }
+    }
+  }
+
+  if (tournamentId === 'madrid' && currentYear === 2026 && isOfficialDataExpectedPhase(phase)) {
+    const drawSlots = getMadrid2026OfficialDrawSlots();
+    const normalizedSlots = normalizeMastersOfficialDrawSlots(drawSlots);
+    if (normalizedSlots.length === 64) {
+      const fallbackData: MastersOfficialDrawResponse = {
+        drawStatus: 'official',
+        notes: 'Official 2026 Mutua Madrid Open draw (hardcoded).',
+        drawPlayers: normalizedSlots,
+      };
+      writeAuthCacheWithTimestamp(cacheKey, fallbackData);
+      return normalizedSlots.map((p) => ({
+        name: p.name,
+        seed: p.seed,
+        country: p.country,
+      }));
     }
   }
 

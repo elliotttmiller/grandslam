@@ -380,6 +380,32 @@ export function advancePlayer(matches: Match[], matchId: string, winnerId: strin
 }
 
 /**
+ * Advance players automatically for first-round matches where one side is a BYE.
+ * Finds round-1 matches with 'BYE' (case-insensitive) on one side and advances
+ * the other player, propagating winners into subsequent rounds using advancePlayer.
+ */
+export function applyByesToBracket(matches: Match[]): Match[] {
+  let updated = matches.map(m => ({ ...m, player1: m.player1 ? { ...m.player1 } : null, player2: m.player2 ? { ...m.player2 } : null }));
+
+  const round1 = updated.filter(m => m.round === 1);
+  for (const match of round1) {
+    const p1Name = match.player1?.name?.toLowerCase?.() ?? '';
+    const p2Name = match.player2?.name?.toLowerCase?.() ?? '';
+
+    const p1IsBye = p1Name === 'bye' || p1Name.startsWith('bye-');
+    const p2IsBye = p2Name === 'bye' || p2Name.startsWith('bye-');
+
+    if (p1IsBye && match.player2) {
+      updated = advancePlayer(updated, match.id, match.player2.id);
+    } else if (p2IsBye && match.player1) {
+      updated = advancePlayer(updated, match.id, match.player1.id);
+    }
+  }
+
+  return updated;
+}
+
+/**
  * Apply known live match results to a bracket by calling advancePlayer for each
  * completed match. Results are processed in round order so that later-round winners
  * are correctly propagated into their subsequent match slots.

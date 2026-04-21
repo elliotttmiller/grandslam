@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useBracketCanvas } from './hooks/useBracketCanvas';
 import { fetchTournamentPlayers, fetchTournamentsWithDates, fetchMastersDrawPlayers, fetchMastersOfficialDrawPlayers, fetchMastersTournamentResults, getTournamentPhase, TournamentData, CACHE_KEY_TOURNAMENTS, CACHE_KEY_MASTERS_PREFIX, CACHE_KEY_MASTERS_DRAW_PREFIX } from './services/geminiService';
-import { generateBracket, generateMastersBracket, buildBracketFromDraw, advancePlayer, applyLiveResults, Match, Player, getRoundName, getRoundFullName } from './lib/bracket-utils';
+import { generateBracket, generateMastersBracket, buildBracketFromDraw, advancePlayer, applyLiveResults, applyByesToBracket, Match, Player, getRoundName, getRoundFullName } from './lib/bracket-utils';
 import { BracketTree } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
@@ -565,6 +565,8 @@ export default function App() {
               country: p.country,
             }));
             initialMatches = buildBracketFromDraw(drawPlayers);
+            // Apply BYE auto-advances for any generated bracket that contains BYE placeholders
+            initialMatches = applyByesToBracket(initialMatches);
           } else {
             if (officialRequired) {
               throw new Error(`Official draw unavailable for ${tournament!.name} (${phase} phase).`);
@@ -577,6 +579,8 @@ export default function App() {
               country: p.country,
             }));
             initialMatches = generateMastersBracket(players);
+            // Ensure BYE auto-advance is applied in case any BYE placeholders exist
+            initialMatches = applyByesToBracket(initialMatches);
           }
 
           // For live tournaments, fetch and apply known results so the bracket reflects
@@ -648,7 +652,8 @@ export default function App() {
           seed: p.seed,
           country: p.country,
         }));
-        return buildBracketFromDraw(drawPlayers);
+        const b = buildBracketFromDraw(drawPlayers);
+        return applyByesToBracket(b);
       }
       if (officialRequired) {
         throw new Error(`Official draw unavailable for ${tournamentName} (${phase} phase).`);
@@ -660,7 +665,8 @@ export default function App() {
         seed: p.seed,
         country: p.country,
       }));
-      return generateMastersBracket(players);
+      const b = generateMastersBracket(players);
+      return applyByesToBracket(b);
     }
     // Grand Slam: 128-player bracket
     const aiPlayers = await fetchTournamentPlayers(tournamentName);
@@ -1269,7 +1275,7 @@ export default function App() {
                       placeholder="Search tournaments…"
                       value={mastersSearchQuery}
                       onChange={e => setMastersSearchQuery(e.target.value)}
-                      className="w-full bg-white/[0.05] border border-white/[0.09] rounded-xl pl-8.5 pr-3 py-2 text-[12px] text-white/80 placeholder-white/25 focus:outline-none focus:ring-1 focus:ring-amber-500/40 focus:border-amber-500/30 transition-all"
+                      className="w-full bg-white/5 border border-white/9 rounded-xl pl-8.5 pr-3 py-2 text-[12px] text-white/80 placeholder-white/25 focus:outline-none focus:ring-1 focus:ring-amber-500/40 focus:border-amber-500/30 transition-all"
                       aria-label="Search all tournaments"
                     />
                   </div>
@@ -1383,7 +1389,7 @@ export default function App() {
                             </span>
                           </div>
                           {start && end && (
-                            <div className="flex items-center gap-1.5 pl-[22px] text-white/30">
+                            <div className="flex items-center gap-1.5 pl-5.5 text-white/30">
                               <Calendar className="h-3 w-3 shrink-0" aria-hidden="true" />
                               <span className="text-[11px] truncate">
                                 {start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
@@ -1842,7 +1848,7 @@ export default function App() {
                       const m2 = activeRoundMatches[pairIndex * 2 + 1];
                       if (!m1) return null;
                       return (
-                        <div key={`r1-group-${pairIndex}`} className="flex flex-col gap-1.5 rounded-2xl border border-border/15 bg-white/[0.02] p-2.5">
+                        <div key={`r1-group-${pairIndex}`} className="flex flex-col gap-1.5 rounded-2xl border border-border/15 bg-white/2 p-2.5">
                           <MatchPickCard
                             match={m1}
                             matchIndex={pairIndex * 2}

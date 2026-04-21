@@ -27,6 +27,9 @@ const p = (id: string, name: string, seed?: number, country?: string): Player =>
 const w = (id: string, a: string, b: string): Player =>
   p(id, `Winner: ${a} vs ${b}`);
 
+// Qualifier placeholders are numbered to match the official Madrid 2026 draw structure.
+// This makes the hardcoded bracket easier to validate against the published bracket.
+
 // ─── Seeds (32) ──────────────────────────────────────────────────────────────
 
 const s1  = p('m26s1',  'Jannik Sinner',               1,  'ITA');
@@ -68,20 +71,20 @@ const s32 = p('m26s32', 'Gabriel Diallo',              32,  'CAN');
 // Q = qualifier (qualifying draw completed 2026-04-20/21; actual names mapped where known).
 
 // Section A
-const w1a = w('m26w1a', 'Q', 'Q');                                               // Sinner's R1 opponent
-const w2a = w('m26w2a', 'Q', 'Federico Cinà');                                   // Diallo's R1 opponent
+const w1a = w('m26w1a', 'Q1', 'Q2');                                            // Sinner's R1 opponent
+const w2a = w('m26w2a', 'Q3', 'Federico Cinà');                                   // Diallo's R1 opponent
 const w3a = w('m26w3a', 'Tomáš Macháč', 'Francisco Comesaña');                   // Norrie's R1 opponent
 const w4a = w('m26w4a', 'Roberto Bautista Agut', 'Thiago Agustín Tirante');      // Paul's R1 opponent
 
 // Section B
 const w1b = w('m26w1b', 'Zhang Zhizhen', 'Vít Kopřiva');                         // Rublev's R1 opponent
-const w2b = w('m26w2b', 'Lorenzo Sonego', 'Q');                                  // Rinderknech's R1 opponent
+const w2b = w('m26w2b', 'Lorenzo Sonego', 'Q4');                                 // Rinderknech's R1 opponent
 const w3b = w('m26w3b', 'Zizou Bergs', 'Marin Čilić');                           // Fonseca's R1 opponent
 const w4b = w('m26w4b', 'Rafael Jódar', 'Jesper de Jong');                       // de Minaur's R1 opponent
 
 // Section C
 const w1c = w('m26w1c', 'Raphaël Collignon', 'Matteo Berrettini');               // Shelton's R1 opponent
-const w2c = w('m26w2c', 'Q', 'Sebastian Ofner');                                 // Etcheverry's R1 opponent
+const w2c = w('m26w2c', 'Q5', 'Sebastian Ofner');                                // Etcheverry's R1 opponent
 const w3c = w('m26w3c', 'Ignacio Buse', 'Adrian Mannarino');                     // Fils's R1 opponent
 const w4c = w('m26w4c', 'Jenson Brooksby', 'Emilio Nava');                       // Vacherot's R1 opponent
 
@@ -89,11 +92,11 @@ const w4c = w('m26w4c', 'Jenson Brooksby', 'Emilio Nava');                      
 const w1d = w('m26w1d', 'Alejandro Tabilo', 'Valentin Royer');                   // Lehečka's R1 opponent
 const w2d = w('m26w2d', 'Alexandre Müller', 'Jan-Lennard Struff');               // Michelsen's R1 opponent
 const w3d = w('m26w3d', 'Damir Džumhur', 'Mattia Bellucci');                     // Griekspoor's R1 opponent
-const w4d = w('m26w4d', 'Q', 'Hubert Hurkacz');                                  // Musetti's R1 opponent
+const w4d = w('m26w4d', 'Q6', 'Hubert Hurkacz');                                  // Musetti's R1 opponent
 
 // Section E
-const w1e = w('m26w1e', 'Q', 'Stefanos Tsitsipas');                              // Bublik's R1 opponent
-const w2e = w('m26w2e', 'Q', 'Q');                                               // Moutet's R1 opponent
+const w1e = w('m26w1e', 'Q7', 'Stefanos Tsitsipas');                              // Bublik's R1 opponent
+const w2e = w('m26w2e', 'Q8', 'Q9');                                              // Moutet's R1 opponent
 const w3e = w('m26w3e', 'Pablo Carreño Busta', 'Márton Fucsovics');              // Davidovich Fokina's R1 opponent
 const w4e = w('m26w4e', 'Jaume Munar', 'Alexander Shevchenko');                  // Ruud's R1 opponent
 
@@ -101,17 +104,17 @@ const w4e = w('m26w4e', 'Jaume Munar', 'Alexander Shevchenko');                 
 const w1f = w('m26w1f', 'Yannick Hanfmann', 'Marcos Giron');                     // Cerúndolo's R1 opponent
 const w2f = w('m26w2f', 'Daniel Altmaier', 'Juan Manuel Cerúndolo');             // Darderi's R1 opponent
 const w3f = w('m26w3f', 'Botic van de Zandschulp', 'Alexander Blockx');          // Nakashima's R1 opponent
-const w4f = w('m26w4f', 'Q', 'Sebastián Báez');                                  // Auger-Aliassime's R1 opponent
+const w4f = w('m26w4f', 'Q10', 'Sebastián Báez');                                 // Auger-Aliassime's R1 opponent
 
 // Section G
 const w1g = w('m26w1g', 'Fábián Marozsán', 'Ethan Quinn');                       // Medvedev's R1 opponent
-const w2g = w('m26w2g', 'Q', 'Reilly Opelka');                                   // Shapovalov's R1 opponent
-const w3g = w('m26w3g', 'Q', 'Grigor Dimitrov');                                 // Tien's R1 opponent
+const w2g = w('m26w2g', 'Q11', 'Reilly Opelka');                                 // Shapovalov's R1 opponent
+const w3g = w('m26w3g', 'Q12', 'Grigor Dimitrov');                                // Tien's R1 opponent
 const w4g = w('m26w4g', 'Camilo Ugo Carabelli', 'Gaël Monfils');                 // Cobolli's R1 opponent
 
 // Section H
 const w1h = w('m26w1h', 'Martín Landaluce', 'Adam Walton');                      // Khachanov's R1 opponent
-const w2h = w('m26w2h', 'Alexei Popyrin', 'Q');                                  // Menšík's R1 opponent
+const w2h = w('m26w2h', 'Alexei Popyrin', 'Q13');                                 // Menšík's R1 opponent
 const w3h = w('m26w3h', 'Térence Atmane', 'Miomir Kecmanović');                  // Humbert's R1 opponent
 const w4h = w('m26w4h', 'Nuno Borges', 'Mariano Navone');                        // Zverev's R1 opponent
 
