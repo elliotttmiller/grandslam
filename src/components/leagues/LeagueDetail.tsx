@@ -14,6 +14,7 @@ import {
   removeMember,
   deleteLeague,
 } from '@/lib/league-storage';
+import { getAuth } from '@/lib/firebase';
 import {
   subscribeToLeague,
   syncAddLeagueMember,
@@ -177,9 +178,29 @@ export function LeagueDetail({
 
   const handleDelete = async () => {
     if (!league) return;
-    const deletedRemotely = await syncDeleteLeague(league.id);
-    if (!deletedRemotely) {
-      console.error(`League delete aborted: Firestore delete failed for ${league.id}.`);
+    try {
+      // Log current auth state to help diagnose permission issues
+      try {
+        const user = getAuth().currentUser;
+        console.debug('Attempting league delete', { leagueId: league.id, currentUserUid: user?.uid ?? null, providerData: user?.providerData });
+      } catch (e) {
+        console.debug('Attempting league delete (could not read auth state)', { leagueId: league.id });
+      }
+
+      const deletedRemotely = await syncDeleteLeague(league.id);
+      if (!deletedRemotely) {
+        console.error(`League delete aborted: Firestore delete failed for ${league.id}.`);
+        try {
+          const user = getAuth().currentUser;
+          console.error('Delete failed — current auth state:', { uid: user?.uid ?? null, providerData: user?.providerData });
+        } catch (e) {
+          /* ignore */
+        }
+        window.alert('Could not delete this league right now. Please try again.');
+        return;
+      }
+    } catch (err) {
+      console.error('Unexpected error while deleting league:', err);
       window.alert('Could not delete this league right now. Please try again.');
       return;
     }

@@ -72,7 +72,12 @@ export async function syncGetLeague(id: string): Promise<League | null> {
     if (!snap.exists()) return null;
     return toLeague(snap.data() as Record<string, unknown>);
   } catch (error) {
-    console.error('League fetch error:', error);
+    try {
+      const user = getAuth().currentUser;
+      console.error('League fetch error:', error, { currentUserUid: user?.uid ?? null, providerData: user?.providerData });
+    } catch (e) {
+      console.error('League fetch error:', error);
+    }
     throw error;
   }
 }

@@ -17,6 +17,7 @@ import {
   syncGetLeague,
   syncAddLeagueMember,
 } from '@/services/leagueSyncService';
+import { getAuth } from '@/lib/firebase';
 import type { League } from '@/lib/league-types';
 import type { AppView } from '@/App';
 import type { User } from 'firebase/auth';
@@ -73,6 +74,14 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
     setCreateError('');
     setIsCreating(true);
     try {
+      // Debug: log current Firebase auth state to help diagnose permission issues
+      try {
+        const user = getAuth().currentUser;
+        console.debug('Creating league - current auth state', { uid: user?.uid ?? null, isAnonymous: user?.isAnonymous ?? null, providerData: user?.providerData });
+      } catch (e) {
+        console.debug('Creating league - could not read auth state');
+      }
+
       const displayName = authUser.displayName ?? authUser.email ?? 'Unknown';
       const league = createLeague(
         createName.trim(),

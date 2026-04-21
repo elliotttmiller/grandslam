@@ -71,12 +71,17 @@ export async function syncGetPool(id: string): Promise<Pool | null> {
       updatedAt: data['updatedAt']?.toDate?.()?.toISOString() ?? data['updatedAt'],
     };
   } catch (error) {
-    const err = error as any;
-    const errorCode = err?.code ?? 'unknown';
-    if (errorCode === 'permission-denied') {
-      console.error('Pool fetch blocked by Firestore security rules. Auth may not be ready.');
-    } else if (errorCode === 'unavailable') {
-      console.error('Firebase service unavailable when fetching pool.');
+    try {
+      const err = error as any;
+      const errorCode = err?.code ?? 'unknown';
+      const user = getAuth().currentUser;
+      if (errorCode === 'permission-denied') {
+        console.error('Pool fetch blocked by Firestore security rules. Auth may not be ready.', { currentUserUid: user?.uid ?? null, providerData: user?.providerData });
+      } else if (errorCode === 'unavailable') {
+        console.error('Firebase service unavailable when fetching pool.', { currentUserUid: user?.uid ?? null });
+      }
+    } catch (e) {
+      console.error('Pool fetch error:', error);
     }
     // Re-throw so callers can distinguish between "not found" (null) and "error" (throw)
     throw error;
