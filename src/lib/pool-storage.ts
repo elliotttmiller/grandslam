@@ -66,7 +66,8 @@ export function createPool(
   tournamentId: string,
   tournamentName: string,
   officialMatches: Match[],
-  createdBy?: string
+  createdBy?: string,
+  persist = true,
 ): Pool {
   const participantIds = createdBy ? [createdBy] : [];
   const pool: Pool = {
@@ -80,7 +81,9 @@ export function createPool(
     participantIds,
     ...(createdBy ? { createdBy } : {}),
   };
-  savePool(pool);
+  if (persist) {
+    savePool(pool);
+  }
   return pool;
 }
 

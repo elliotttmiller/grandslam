@@ -40,6 +40,7 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
   const [createDescription, setCreateDescription] = useState('');
   const [createYear, setCreateYear] = useState(CURRENT_YEAR);
   const [createPrivate, setCreatePrivate] = useState(false);
+  const [createError, setCreateError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
   // Join form state
@@ -69,6 +70,7 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
 
   const handleCreateSubmit = async () => {
     if (!createName.trim() || !requireAuth()) return;
+    setCreateError('');
     setIsCreating(true);
     try {
       const displayName = authUser.displayName ?? authUser.email ?? 'Unknown';
@@ -79,9 +81,15 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
         createPrivate,
         authUser.uid,
         displayName,
+        false,
       );
       // Best-effort Firestore sync
-      await syncCreateLeague(league);
+      const syncedLeague = await syncCreateLeague(league);
+      if (!syncedLeague) {
+        setCreateError('League created locally but failed to save to the server. Check your connection and sign-in status.');
+        return;
+      }
+      saveLeague(league);
       setShowCreate(false);
       setCreateName('');
       setCreateDescription('');
@@ -241,13 +249,13 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
       {/* Create Modal */}
       <AnimatePresence>
         {showCreate && (
-          <Modal title="Create League" onClose={() => setShowCreate(false)}>
+          <Modal title="Create League" onClose={() => { setShowCreate(false); setCreateError(''); }}>
             <div className="space-y-4">
               <Field label="League Name" required>
                 <input
                   type="text"
                   value={createName}
-                  onChange={e => setCreateName(e.target.value)}
+                  onChange={e => { setCreateName(e.target.value); setCreateError(''); }}
                   placeholder="e.g. Champions Circle 2026"
                   className={inputCls}
                   maxLength={60}
@@ -297,6 +305,10 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
                   </button>
                 </Field>
               </div>
+
+              {createError && (
+                <p className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{createError}</p>
+              )}
 
               <Button
                 className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0 mt-2"

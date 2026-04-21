@@ -715,7 +715,7 @@ export default function App() {
     bracketName: string,
     tournamentId: string,
     tournamentName: string
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const officialMatches = await generateOfficialDraw(tournamentId, tournamentName);
     // Persist user name so subsequent joins pre-fill the field
     setUserName(userName);
@@ -723,7 +723,7 @@ export default function App() {
     // Use Firebase UID for cross-device ownership — authUser is always present
     // here because pool creation is gated behind authentication.
     const userId = authUser?.uid ?? getUserId();
-    const pool = createPool(poolName, tournamentId, tournamentName, officialMatches, userId);
+    const pool = createPool(poolName, tournamentId, tournamentName, officialMatches, userId, false);
     const newEntry = {
       id: entryId,
       userId,
@@ -732,14 +732,17 @@ export default function App() {
       matches: officialMatches.map(m => ({ ...m, winnerId: null })),
       isSubmitted: false,
     };
-    addEntry(pool.id, newEntry);
+    let poolCreated = false;
 
     // Push pool and initial entry to the sync server (best-effort).
     if (authChecked && authUser && !authUser.isAnonymous) {
       const synced = await syncCreatePool(pool);
       if (synced) {
+        poolCreated = true;
         await syncAddEntry(pool.id, newEntry);
         setPoolSyncFailed(false);
+        savePool(pool);
+        addEntry(pool.id, newEntry);
       } else {
         setPoolSyncFailed(true);
         console.warn('Pool sync failed — pool is accessible locally but may not be joinable from other devices.');
@@ -747,8 +750,12 @@ export default function App() {
     } else {
       setPoolSyncFailed(true);
     }
+    if (!poolCreated) {
+      return false;
+    }
 
     setAppView({ page: 'pool', poolId: pool.id });
+    return true;
   };
 
   const handleReset = () => {    if (selectedTournament) {

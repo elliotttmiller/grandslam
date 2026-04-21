@@ -51,6 +51,7 @@ export function createLeague(
   isPrivate: boolean,
   createdBy: string,
   createdByName: string,
+  persist = true,
 ): League {
   const league: League = {
     id: generateLeagueCode(),
@@ -65,10 +66,11 @@ export function createLeague(
     memberIds: [createdBy],
     tournamentPoolIds: {},
   };
-  saveLeague(league);
+  if (persist) {
+    saveLeague(league);
+  }
   return league;
 }
-
 export function addMember(leagueId: string, member: LeagueMember): boolean {
   const league = getLeague(leagueId);
   if (!league) return false;

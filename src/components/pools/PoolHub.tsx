@@ -26,7 +26,7 @@ interface PoolHubProps {
     bracketName: string,
     tournamentId: string,
     tournamentName: string
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   /** Pre-populate the join modal with this pool code (from `?join=CODE` URL param). */
   initialJoinCode?: string;
   /** Called once the join modal has been shown for the initial code, so the parent can clear its state. */
@@ -47,6 +47,7 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
   const [createUserName, setCreateUserName] = useState('');
   const [createBracketName, setCreateBracketName] = useState('');
   const [createTournamentId, setCreateTournamentId] = useState('');
+  const [createError, setCreateError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
   // Join pool form state
@@ -116,15 +117,20 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
     if (!tournament) return;
 
     localStorage.setItem('gs_user_name', createUserName.trim());
+    setCreateError('');
     setIsCreating(true);
     try {
-      await onCreatePool(
+      const created = await onCreatePool(
         createPoolName.trim(),
         createUserName.trim(),
         createBracketName.trim() || `${createUserName.trim()}'s Bracket`,
         tournament.id,
         tournament.name
       );
+      if (!created) {
+        setCreateError('Unable to create pool. Please try again.');
+        return;
+      }
       setShowCreate(false);
       refreshPools();
     } finally {
@@ -187,8 +193,16 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
         isSubmitted: false,
       };
 
-      // Push to server first (best-effort), then update local cache
-      await syncAddEntry(pool.id, newEntry);
+      // Push to server first (best-effort), then update local cache.
+      try {
+        await syncAddEntry(pool.id, newEntry);
+      } catch (error) {
+        const err = error as any;
+        const syncError = err?.code ?? err?.message ?? String(error);
+        console.error('Failed to add entry to pool:', syncError);
+        setJoinError('Unable to join the pool at this time. Please try again.');
+        return;
+      }
       addEntry(pool.id, newEntry);
 
       setShowJoin(false);
@@ -389,10 +403,10 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
                     transition={{ duration: 0.18 }}
-                    className="min-h-[320px] flex flex-col items-center justify-center text-center gap-4 px-2"
+                    className="min-h-80 flex flex-col items-center justify-center text-center gap-4 px-2"
                   >
                     <div className="relative flex items-center justify-center">
-                      <div className="w-11 h-11 rounded-full border-[3px] border-white/[0.09]" />
+                      <div className="w-11 h-11 rounded-full border-[3px] border-white/9" />
                       <Loader2 className="absolute h-6 w-6 text-emerald-400 animate-spin" />
                     </div>
                     <div className="space-y-1.5">
@@ -490,6 +504,11 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                         The tournament draw will be loaded and shared with all participants. You'll fill out your picks after creating the pool.
                       </p>
                     </div>
+                    {createError && (
+                      <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                        {createError}
+                      </div>
+                    )}
 
                     <div className="flex gap-2 justify-end">
                       <Button variant="ghost" size="sm" onClick={() => setShowCreate(false)} disabled={isCreating}>Cancel</Button>
