@@ -68,7 +68,7 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
   };
 
   const handleCreateSubmit = async () => {
-    if (!createName.trim() || !authUser) return;
+    if (!createName.trim() || !requireAuth()) return;
     setIsCreating(true);
     try {
       const displayName = authUser.displayName ?? authUser.email ?? 'Unknown';
@@ -97,7 +97,7 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
   const handleJoinSubmit = async () => {
     setJoinError('');
     const code = joinCode.trim().toUpperCase().slice(0, LEAGUE_CODE_LENGTH);
-    if (!code || !authUser) return;
+    if (!code || !requireAuth()) return;
 
     setIsJoining(true);
     try {
@@ -111,7 +111,12 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
           if (league) saveLeague(league);
         } catch (err) {
           console.error('League fetch error:', err);
-          setJoinError('Could not reach the server. Check your connection.');
+          const errorCode = (err as { code?: string })?.code;
+          if (errorCode === 'permission-denied') {
+            setJoinError('Sign in with a full account to join leagues created by other users.');
+          } else {
+            setJoinError('Could not reach the server. Check your connection.');
+          }
           return;
         }
       }
