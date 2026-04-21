@@ -25,6 +25,8 @@ export interface Pool {
   entries: PoolEntry[];
   /** Persistent device-local user identifier of the pool creator. */
   createdBy?: string;
+  /** Canonical owner field used by Firestore security rules. */
+  ownerId?: string;
   /** ISO timestamp of last server-side modification. */
   updatedAt?: string;
   /** League ID this pool belongs to, if it was auto-created for a league. */

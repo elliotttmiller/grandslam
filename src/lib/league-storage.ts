@@ -59,7 +59,11 @@ export function createLeague(
     description: description || undefined,
     year,
     isPrivate,
+    // Keep the old field (`createdBy`) for backwards compatibility and
+    // also set `ownerId` to match the Firestore security rules which expect
+    // `ownerId` as the canonical owner field.
     createdBy,
+    ownerId: createdBy,
     createdByName,
     createdAt: new Date().toISOString(),
     members: [{ userId: createdBy, userName: createdByName, joinedAt: new Date().toISOString() }],

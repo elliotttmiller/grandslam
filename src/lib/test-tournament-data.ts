@@ -660,7 +660,7 @@ export function setupTestMadridPool(createdByUserId: string | null): string {
     createdAt: new Date().toISOString(),
     officialMatches,
     entries,
-    ...(createdByUserId ? { createdBy: createdByUserId } : {}),
+    ...(createdByUserId ? { createdBy: createdByUserId, ownerId: createdByUserId } : {}),
   };
 
   savePool(pool);
@@ -769,6 +769,8 @@ export function setupTestMadridLeagueRun(createdByUserId: string | null): string
     year: 2025,
     isPrivate: true,
     createdBy: createdByUserId ?? members[0]?.userId ?? 'test-user-1',
+    // Also set ownerId for rules compatibility
+    ownerId: createdByUserId ?? members[0]?.userId ?? 'test-user-1',
     createdByName: createdByUserId ? 'You' : members[0]?.userName ?? 'Test User',
     createdAt: nowIso,
     updatedAt: nowIso,

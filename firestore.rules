@@ -2,31 +2,59 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Pool documents — readable and writable only by users who have created a
-    // named Firebase account (email/password or social provider).  Anonymous
-    // sign-ins are explicitly rejected so that pool data is always tied to a
-    // real, accountable identity.  Raw HTTP requests without a valid Firebase
-    // Auth token are also blocked.
-    match /pools/{poolId} {
-      allow read, write: if request.auth != null
-                         && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    // Helpers
+    function isSignedIn() { return request.auth != null; }
+    // Non-anonymous signed-in user (reject anonymous auth tokens)
+    function isFullUser() {
+      return request.auth != null
+        && !(request.auth.token.firebase != null
+             && request.auth.token.firebase.sign_in_provider == 'anonymous');
     }
 
-    // League documents — same auth constraints as pools.
-    // Any authenticated non-anonymous user can read public leagues and write
-    // to leagues they are a member of or have created.
+    // ------------------------------------------------------------------
+    // Leagues (owner-controlled)
+    // ------------------------------------------------------------------
     match /leagues/{leagueId} {
-      allow read: if request.auth != null
-                  && request.auth.token.firebase.sign_in_provider != 'anonymous';
-      allow create: if request.auth != null
-                    && request.auth.token.firebase.sign_in_provider != 'anonymous'
-                    && request.resource.data.createdBy == request.auth.uid;
-      allow update: if request.auth != null
-                    && request.auth.token.firebase.sign_in_provider != 'anonymous';
-      allow delete: if request.auth != null
-                    && request.auth.token.firebase.sign_in_provider != 'anonymous'
-                    && resource.data.createdBy == request.auth.uid;
+      // Only fully-authenticated (non-anonymous) users may read league data
+      allow read: if isFullUser();
+
+      // Create: incoming document must set ownerId == auth.uid
+      allow create: if isFullUser() && request.resource.data.ownerId == request.auth.uid;
+
+      // Update/Delete: only the owner may update or delete a league
+      allow update, delete: if isFullUser() && resource.data.ownerId == request.auth.uid;
     }
 
+    // ------------------------------------------------------------------
+    // Pools (owner-controlled; participants may append entries)
+    // ------------------------------------------------------------------
+    match /pools/{poolId} {
+      // Only fully-authenticated users may read/write pools
+      allow read: if isFullUser();
+
+      // Create: creator must set ownerId == auth.uid
+      allow create: if isFullUser() && request.resource.data.ownerId == request.auth.uid;
+
+      // Owner can update/delete any pool fields
+      allow update, delete: if isFullUser() && resource.data.ownerId == request.auth.uid;
+
+      // Allow participants to append entries (conservative checks):
+      // - Only the `entries`, `participantIds` and `updatedAt` fields may change
+      // - `entries` must remain a list and its size may only increase
+      // - `participantIds` must remain a list and its size may only increase
+      // This permits clients to append entries while preventing arbitrary
+      // modifications to other pool fields. For stricter guarantees about who
+      // can add which entry (e.g. ensure appended entry.userId == request.auth.uid)
+      // prefer a Cloud Function write path which can validate the payload server-side.
+      allow update: if isFullUser() && (
+        request.resource.data.keys().hasOnly(['entries', 'participantIds', 'updatedAt'])
+        && request.resource.data.entries is list
+        && resource.data.entries is list
+        && request.resource.data.entries.size() >= resource.data.entries.size()
+        && request.resource.data.participantIds is list
+        && resource.data.participantIds is list
+        && request.resource.data.participantIds.size() >= resource.data.participantIds.size()
+      );
+    }
   }
 }

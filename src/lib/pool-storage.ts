@@ -79,7 +79,9 @@ export function createPool(
     officialMatches,
     entries: [],
     participantIds,
-    ...(createdBy ? { createdBy } : {}),
+    // Write both `createdBy` and `ownerId` on new pools so security rules
+    // that check `ownerId` work without changing all client call sites.
+    ...(createdBy ? { createdBy, ownerId: createdBy } : {}),
   };
   if (persist) {
     savePool(pool);

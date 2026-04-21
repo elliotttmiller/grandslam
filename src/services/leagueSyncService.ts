@@ -106,10 +106,16 @@ export async function syncGetUserLeagues(userId: string): Promise<League[]> {
       return [];
     }
     const col = collection(getDb(), 'leagues');
-    // memberIds is a flat string[] — Firestore array-contains works correctly with scalar values.
-    const q = query(col, where('memberIds', 'array-contains', userId));
-    const snaps = await getDocs(q);
-    return snaps.docs.map(d => toLeague(d.data() as Record<string, unknown>));
+    // Query both memberIds and ownerId (some docs may use ownerId instead of createdBy)
+    const [memberSnaps, ownerSnaps] = await Promise.all([
+      getDocs(query(col, where('memberIds', 'array-contains', userId))),
+      getDocs(query(col, where('ownerId', '==', userId))),
+    ]);
+    const byId = new Map<string, any>();
+    for (const snap of [...memberSnaps.docs, ...ownerSnaps.docs]) {
+      byId.set(snap.id, toLeague(snap.data() as Record<string, unknown>));
+    }
+    return Array.from(byId.values());
   } catch (error) {
     console.error('Failed to fetch user leagues:', error);
     return [];
@@ -140,7 +146,8 @@ export async function syncCreateLeague(league: League): Promise<League | null> {
     // Ensure createdBy in the write payload matches the authenticated user —
     // Firestore rules require request.resource.data.createdBy == request.auth.uid.
     const userUid = currentUser.uid;
-    const dataToWrite = { ...leagueData, createdBy: userUid, updatedAt: serverTimestamp() };
+  // Write both `createdBy` (existing field) and `ownerId` (matches rules)
+  const dataToWrite = { ...leagueData, createdBy: userUid, ownerId: userUid, updatedAt: serverTimestamp() };
     await setDoc(ref, dataToWrite);
     return league;
   } catch (error) {
@@ -167,9 +174,14 @@ export async function syncSaveLeague(league: League): Promise<boolean> {
     } catch (tokenErr) {
       console.warn('Could not refresh ID token before saving league:', tokenErr);
     }
-    const leagueData = removeUndefined(league);
-    const ref = doc(getDb(), 'leagues', league.id);
-    await setDoc(ref, { ...leagueData, updatedAt: serverTimestamp() });
+  const leagueData = removeUndefined(league);
+  const ref = doc(getDb(), 'leagues', league.id);
+  // Preserve any existing ownerId on the league if present, otherwise set to
+  // the authenticated user (defensive). This avoids accidentally changing
+  // ownership when the simulator resets a league.
+  const userUid = currentUser.uid;
+  const ownerId = (league as any).ownerId ?? (league as any).createdBy ?? userUid;
+  await setDoc(ref, { ...leagueData, ownerId, updatedAt: serverTimestamp() });
     return true;
   } catch (error) {
     const err = error as { code?: string; message?: string };

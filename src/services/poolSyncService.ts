@@ -97,13 +97,14 @@ export async function syncGetUserPools(userId: string): Promise<Pool[]> {
       return [];
     }
     const col = collection(getDb(), 'pools');
-    const [participantSnaps, createdSnaps] = await Promise.all([
+    const [participantSnaps, createdSnaps, ownerSnaps] = await Promise.all([
       getDocs(query(col, where('participantIds', 'array-contains', userId))),
       getDocs(query(col, where('createdBy', '==', userId))),
+      getDocs(query(col, where('ownerId', '==', userId))),
     ]);
 
     const byId = new Map<string, Pool>();
-    for (const snap of [...participantSnaps.docs, ...createdSnaps.docs]) {
+    for (const snap of [...participantSnaps.docs, ...createdSnaps.docs, ...ownerSnaps.docs]) {
       const data = snap.data();
       byId.set(snap.id, {
         ...(data as Pool),
@@ -154,7 +155,17 @@ export async function syncCreatePool(pool: Pool): Promise<Pool | null> {
       ),
     ];
 
-    await setDoc(ref, { ...poolData, participantIds, updatedAt: serverTimestamp() });
+    // Ensure ID token is fresh so security rules evaluate the correct auth state
+    try {
+      await currentUser.getIdToken(true);
+    } catch (tokenErr) {
+      console.warn('Could not refresh ID token before creating pool:', tokenErr);
+    }
+
+    // Ensure ownerId is present for rules compatibility. Prefer any existing
+    // ownerId/createdBy on the pool data, otherwise set to the current user.
+    const ownerId = (poolData as any).ownerId ?? (poolData as any).createdBy ?? currentUser.uid;
+    await setDoc(ref, { ...poolData, participantIds, ownerId, updatedAt: serverTimestamp() });
     return pool;
   } catch (error) {
     const err = error as any;
@@ -184,7 +195,7 @@ export async function syncSavePool(pool: Pool): Promise<boolean> {
       console.error('Aborting pool save: user is not signed in with a full account.');
       return false;
     }
-    const poolData = removeUndefined(pool);
+  const poolData = removeUndefined(pool);
     const participantIds = [
       ...new Set(
         [
@@ -195,7 +206,13 @@ export async function syncSavePool(pool: Pool): Promise<boolean> {
       ),
     ];
     const ref = doc(getDb(), 'pools', pool.id);
-    await setDoc(ref, { ...poolData, participantIds, updatedAt: serverTimestamp() });
+    try {
+      await currentUser.getIdToken(true);
+    } catch (tokenErr) {
+      console.warn('Could not refresh ID token before saving pool:', tokenErr);
+    }
+    const ownerId = (poolData as any).ownerId ?? (poolData as any).createdBy ?? currentUser.uid;
+    await setDoc(ref, { ...poolData, participantIds, ownerId, updatedAt: serverTimestamp() });
     return true;
   } catch (error) {
     const err = error as { code?: string; message?: string };

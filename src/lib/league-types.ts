@@ -19,6 +19,8 @@ export interface League {
   isPrivate: boolean;
   /** Firebase UID of the user who created the league. */
   createdBy: string;
+  /** Canonical owner field used by Firestore security rules. */
+  ownerId?: string;
   /** Display name of the creator (denormalised for UI convenience). */
   createdByName: string;
   createdAt: string; // ISO timestamp
