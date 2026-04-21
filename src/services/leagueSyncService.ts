@@ -127,11 +127,21 @@ export async function syncCreateLeague(league: League): Promise<League | null> {
       console.error('Aborting league create: user is not signed in with a full account.');
       return null;
     }
+    // Ensure the ID token is fresh so security rules see the correct provider info
+    try {
+      await currentUser.getIdToken(true);
+    } catch (tokenErr) {
+      console.warn('Could not refresh ID token before creating league:', tokenErr);
+    }
     const ref = doc(getDb(), 'leagues', league.id);
     const existing = await getDoc(ref);
     if (existing.exists()) return toLeague(existing.data() as Record<string, unknown>);
-    const leagueData = removeUndefined(league);
-    await setDoc(ref, { ...leagueData, updatedAt: serverTimestamp() });
+  const leagueData = removeUndefined(league);
+    // Ensure createdBy in the write payload matches the authenticated user —
+    // Firestore rules require request.resource.data.createdBy == request.auth.uid.
+    const userUid = currentUser.uid;
+    const dataToWrite = { ...leagueData, createdBy: userUid, updatedAt: serverTimestamp() };
+    await setDoc(ref, dataToWrite);
     return league;
   } catch (error) {
     const err = error as { code?: string; message?: string };
@@ -152,6 +162,11 @@ export async function syncSaveLeague(league: League): Promise<boolean> {
       console.error('Aborting league save: user is not signed in with a full account.');
       return false;
     }
+    try {
+      await currentUser.getIdToken(true);
+    } catch (tokenErr) {
+      console.warn('Could not refresh ID token before saving league:', tokenErr);
+    }
     const leagueData = removeUndefined(league);
     const ref = doc(getDb(), 'leagues', league.id);
     await setDoc(ref, { ...leagueData, updatedAt: serverTimestamp() });
@@ -170,6 +185,11 @@ export async function syncDeleteLeague(leagueId: string): Promise<boolean> {
     if (!currentUser || currentUser.isAnonymous) {
       console.error('Aborting league delete: user is not signed in with a full account.');
       return false;
+    }
+    try {
+      await currentUser.getIdToken(true);
+    } catch (tokenErr) {
+      console.warn('Could not refresh ID token before deleting league:', tokenErr);
     }
     await deleteDoc(doc(getDb(), 'leagues', leagueId));
     return true;
@@ -193,6 +213,11 @@ export async function syncAddLeagueMember(
       console.error('Aborting add league member: user is not signed in with a full account.');
       return false;
     }
+    try {
+      await currentUser.getIdToken(true);
+    } catch (tokenErr) {
+      console.warn('Could not refresh ID token before adding league member:', tokenErr);
+    }
     const memberData = removeUndefined(member);
     await updateDoc(doc(getDb(), 'leagues', leagueId), {
       members: arrayUnion(memberData),
@@ -215,6 +240,11 @@ export async function syncRemoveLeagueMember(
     if (!currentUser || currentUser.isAnonymous) {
       console.error('Aborting remove league member: user is not signed in with a full account.');
       return false;
+    }
+    try {
+      await currentUser.getIdToken(true);
+    } catch (tokenErr) {
+      console.warn('Could not refresh ID token before removing league member:', tokenErr);
     }
     const ref = doc(getDb(), 'leagues', leagueId);
     await runTransaction(getDb(), async (tx) => {
@@ -247,6 +277,11 @@ export async function syncSetLeaguePool(
     if (!currentUser || currentUser.isAnonymous) {
       console.error('Aborting set league pool: user is not signed in with a full account.');
       return false;
+    }
+    try {
+      await currentUser.getIdToken(true);
+    } catch (tokenErr) {
+      console.warn('Could not refresh ID token before setting league pool:', tokenErr);
     }
     await updateDoc(doc(getDb(), 'leagues', leagueId), {
       [`tournamentPoolIds.${tournamentId}`]: poolId,
