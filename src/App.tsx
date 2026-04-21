@@ -168,6 +168,10 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalDefaultMode, setAuthModalDefaultMode] = useState<'sign-in' | 'sign-up'>('sign-in');
+  // Tracks whether a Firestore rehydration is in progress after sign-in/page-load.
+  const [isRehydrating, setIsRehydrating] = useState(false);
+  // Incremented after each rehydration cycle so PoolHub/LeagueHub re-mount with fresh data.
+  const [rehydrationVersion, setRehydrationVersion] = useState(0);
 
   useEffect(() => {
     const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -293,6 +297,7 @@ export default function App() {
     if (!authChecked || !authUser || authUser.isAnonymous) return;
 
     let cancelled = false;
+    setIsRehydrating(true);
     (async () => {
       try {
         const uid = authUser.uid;
@@ -324,6 +329,11 @@ export default function App() {
         }
       } catch (error) {
         console.error('Failed to rehydrate user data from Firestore:', error);
+      } finally {
+        if (!cancelled) {
+          setIsRehydrating(false);
+          setRehydrationVersion(v => v + 1);
+        }
       }
     })();
 
@@ -567,7 +577,7 @@ export default function App() {
           // Masters 1000: use official draw once released; only predict before draw release.
           const officialDrawPlayers = await fetchMastersOfficialDrawPlayers(tournament!.id, tournament!.name);
           let initialMatches: Match[];
-          if (officialDrawPlayers && officialDrawPlayers.length === 64) {
+          if (officialDrawPlayers && officialDrawPlayers.length >= 64) {
             const drawPlayers: Player[] = officialDrawPlayers.map((p, i) => ({
               id: `p${i + 1}`,
               name: p.name,
@@ -660,7 +670,7 @@ export default function App() {
       const officialRequired = phase !== 'pre-draw';
       // Masters 1000: use official draw once released; only predict before draw release.
       const officialDrawPlayers = await fetchMastersOfficialDrawPlayers(tournamentId, tournamentName);
-      if (officialDrawPlayers && officialDrawPlayers.length === 64) {
+      if (officialDrawPlayers && officialDrawPlayers.length >= 64) {
         const drawPlayers: Player[] = officialDrawPlayers.map((p, i) => ({
           id: `p${i + 1}`,
           name: p.name,
@@ -862,10 +872,14 @@ export default function App() {
 
   const currentTournament = tournaments.find(t => t.id === selectedTournament);
 
-  // Total rounds in the current bracket (7 for Grand Slams, 6 for Masters 1000)
+  // Total rounds in the current bracket — derived from the actual matches so that
+  // non-standard bracket sizes (e.g. the Madrid 128-player 7-round bracket) are
+  // handled correctly without hardcoding per tournament type.
   const totalRounds = useMemo(
-    () => currentTournament?.type === 'masters' ? 6 : 7,
-    [currentTournament?.type],
+    () => matches.length > 0
+      ? matches.reduce((max, m) => Math.max(max, m.round), 0)
+      : currentTournament?.type === 'masters' ? 6 : 7,
+    [matches, currentTournament?.type],
   );
 
   // Scoring for the current bracket
@@ -1015,31 +1029,19 @@ export default function App() {
       <header className="safe-top fixed top-0 left-0 right-0 border-b border-white/6 bg-card/80 backdrop-blur-3xl z-30 shadow-lg">
         <div className="flex items-center h-16 px-3 gap-2 max-w-7xl mx-auto">
 
-          {/* Left: menu button */}
+          {/* Left: always-visible menu button */}
           <div className="flex items-center shrink-0">
-            {canNavigateBack ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-white/60 hover:text-white hover:bg-white/8 h-9 w-9 rounded-xl"
-                onClick={handleBackNavigation}
-                aria-label="Go back"
-              >
-                <ArrowLeft className="h-4.5 w-4.5" aria-hidden="true" />
-              </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-white/60 hover:text-white hover:bg-white/8 h-9 w-9 rounded-xl"
-                onClick={() => setIsSidebarOpen(true)}
-                aria-label="Open navigation menu"
-                aria-expanded={isSidebarOpen}
-                aria-haspopup="dialog"
-              >
-                <Menu className="h-4.5 w-4.5" aria-hidden="true" />
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white/60 hover:text-white hover:bg-white/8 h-9 w-9 rounded-xl"
+              onClick={() => setIsSidebarOpen(true)}
+              aria-label="Open navigation menu"
+              aria-expanded={isSidebarOpen}
+              aria-haspopup="dialog"
+            >
+              <Menu className="h-4.5 w-4.5" aria-hidden="true" />
+            </Button>
           </div>
 
           {/* Center: app logo */}
@@ -1440,7 +1442,21 @@ export default function App() {
       </AnimatePresence>
 
       {/* Main Content - View Router */}
-      <div className="fixed top-(--header-height) left-0 right-0 bottom-0 overflow-hidden">
+      <div className="fixed top-(--header-height) left-0 right-0 bottom-0 flex flex-col overflow-hidden">
+        {/* Back navigation strip — shown below the fixed header whenever there is history to go back to */}
+        {canNavigateBack && (
+          <div className="flex-none px-2 pt-2 pb-1">
+            <button
+              onClick={handleBackNavigation}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold text-white/50 hover:text-white/80 hover:bg-white/6 transition-all"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+              Back
+            </button>
+          </div>
+        )}
+        <div className="flex-1 relative overflow-hidden">
         <AnimatePresence mode="wait" initial={false}>
           {appView.page === 'dashboard' && (
             <motion.div
@@ -1468,7 +1484,7 @@ export default function App() {
               className="absolute inset-0 flex flex-col"
             >
               <PoolHub
-                key={`${authUser?.uid ?? 'guest'}-${devPoolVersion}`}
+                key={`${authUser?.uid ?? 'guest'}-${devPoolVersion}-${rehydrationVersion}`}
                 onNavigate={setAppView}
                 tournaments={tournaments}
                 onCreatePool={handleCreatePool}
@@ -1481,7 +1497,17 @@ export default function App() {
           )}
           {appView.page === 'pool' && (() => {
             const pool = getPool(appView.poolId);
-            if (!pool) return <div className="p-8 text-muted-foreground text-sm">Pool not found.</div>;
+            if (!pool) {
+              if (isRehydrating) {
+                return (
+                  <div className="flex items-center justify-center h-full gap-2 text-sm text-white/40">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                    Loading your pool…
+                  </div>
+                );
+              }
+              return <div className="p-8 text-muted-foreground text-sm">Pool not found.</div>;
+            }
             return (
               <motion.div
                 key={appView.poolId}
@@ -1509,7 +1535,17 @@ export default function App() {
           {appView.page === 'pool-entry' && (() => {
             const pool = getPool(appView.poolId);
             const entry = pool?.entries.find(e => e.id === appView.entryId);
-            if (!pool || !entry) return <div className="p-8 text-muted-foreground text-sm">Entry not found.</div>;
+            if (!pool || !entry) {
+              if (isRehydrating) {
+                return (
+                  <div className="flex items-center justify-center h-full gap-2 text-sm text-white/40">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                    Loading…
+                  </div>
+                );
+              }
+              return <div className="p-8 text-muted-foreground text-sm">Entry not found.</div>;
+            }
             return (
               <motion.div
                 key={appView.entryId}
@@ -1556,6 +1592,7 @@ export default function App() {
               className="absolute inset-0 flex flex-col"
             >
               <LeagueHub
+                key={`leagues-${authUser?.uid ?? 'guest'}-${rehydrationVersion}`}
                 onNavigate={setAppView}
                 authUser={authUser}
                 onRequireAuth={handleRequireAuth}
@@ -1572,6 +1609,7 @@ export default function App() {
               className="absolute inset-0 flex flex-col"
             >
               <MyLeagues
+                key={`my-leagues-${authUser?.uid ?? 'guest'}-${rehydrationVersion}`}
                 onNavigate={setAppView}
                 authUser={authUser}
               />
@@ -1986,6 +2024,7 @@ export default function App() {
             </motion.main>
           )}
         </AnimatePresence>
+        </div>
       </div>
 
       {/* Developer panel — only visible in Vite dev mode or when ?dev=1 is in the URL */}

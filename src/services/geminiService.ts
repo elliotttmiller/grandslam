@@ -583,6 +583,11 @@ function normalizeMastersOfficialDrawSlots(drawPlayers: unknown): MastersOfficia
   // Require at least 32 real entries to be considered a usable draw
   if (unique.length < 32) return [];
 
+  // If we have a full 128-slot draw (e.g. Madrid 96-player with BYEs), return all 128 slots.
+  if (unique.length >= 128) {
+    return unique.slice(0, 128).map((p, i) => ({ ...p, slot: i + 1 }));
+  }
+
   // If all 64 slots (1-64) are present and sequential, return as-is
   if (unique.length >= 64) {
     const first64 = unique.slice(0, 64);
@@ -1060,7 +1065,7 @@ Output JSON object shape:
       writeAuthCacheWithTimestamp(cacheKey, fallbackData);
       return drawSlots;
     }
-    if (cachedOfficialSlots?.length === 64) {
+    if (cachedOfficialSlots?.length >= 64) {
       return cachedOfficialSlots.map((p) => ({
         name: p.name,
         seed: p.seed,
@@ -1071,7 +1076,7 @@ Output JSON object shape:
   }
 
   const normalizedSlots = normalizeMastersOfficialDrawSlots(data.drawPlayers);
-  if (normalizedSlots.length !== 64) {
+  if (normalizedSlots.length < 64) {
     // Even normalization failed — try hardcoded last resort before giving up.
     if (tournamentId === 'madrid' && currentYear === 2026) {
       console.info('Masters draw: normalization failed for madrid 2026 — using hardcoded official draw.');
@@ -1084,7 +1089,7 @@ Output JSON object shape:
       writeAuthCacheWithTimestamp(cacheKey, fallbackData);
       return drawSlots;
     }
-    if (cachedOfficialSlots?.length === 64) {
+    if (cachedOfficialSlots?.length >= 64) {
       return cachedOfficialSlots.map((p) => ({
         name: p.name,
         seed: p.seed,
