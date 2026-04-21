@@ -91,8 +91,9 @@
     </style>
     
     <!-- Service Worker Registration -->
-    <script>
-      if ('serviceWorker' in navigator && import.meta.env.PROD) {
+    <script type="module">
+      // Use a module script so `import.meta.env` is available after Vite build
+      if ('serviceWorker' in navigator && import.meta.env?.PROD) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/grandslam/sw.js').catch(() => {
             // Service worker registration failed - app will still work in normal mode

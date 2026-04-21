@@ -25,6 +25,21 @@ const GROUNDING_MODEL = "gemini-2.5-flash";
 const PRIMARY_MODEL = "gemini-3.1-flash-lite-preview";
 const FALLBACK_MODEL = "gemini-2.5-flash";
 const MAX_MASTERS_SEEDS = 32;
+let aiAvailable = true;
+
+function handleAiError(err: unknown) {
+  try {
+    const e = err as any;
+    const msg = e?.message ?? '';
+    const code = e?.code ?? (e?.error?.code) ?? '';
+    if (String(code).includes('RESOURCE_EXHAUSTED') || /prepayment credits are depleted/i.test(msg)) {
+      aiAvailable = false;
+      console.error('AI quota exhausted — disabling AI calls for this session.');
+    }
+  } catch (e) {
+    // ignore
+  }
+}
 
 export const CACHE_KEY_TOURNAMENTS = 'tennis_tournaments_cache_v5';
 const CACHE_KEY_PLAYERS_PREFIX = 'tennis_players_cache_v5_';
@@ -257,20 +272,24 @@ export async function fetchTournamentsWithDates() {
 
   let data: TournamentData[] = [];
 
-  // Tier 1: Grounded Search
-  try {
-    const response = await ai.models.generateContent({
-      model: GROUNDING_MODEL,
-      contents: prompt,
-      config: { tools: [{ googleSearch: {} }] },
-    });
-    data = extractJsonArray(response.text || "");
-  } catch (e) {
-    console.warn("Tier 1 (Grounded) error:", e);
+  // If AI quota is known exhausted, skip model calls and fall back immediately
+  if (aiAvailable) {
+    // Tier 1: Grounded Search
+    try {
+      const response = await ai.models.generateContent({
+        model: GROUNDING_MODEL,
+        contents: prompt,
+        config: { tools: [{ googleSearch: {} }] },
+      });
+      data = extractJsonArray(response.text || "");
+    } catch (e) {
+      handleAiError(e);
+      console.warn("Tier 1 (Grounded) error:", e);
+    }
   }
 
   // Tier 2: Primary Model (Structured)
-  if (!data || data.length === 0) {
+  if ((!data || data.length === 0) && aiAvailable) {
     try {
       const response = await ai.models.generateContent({
         model: PRIMARY_MODEL,
@@ -283,12 +302,13 @@ export async function fetchTournamentsWithDates() {
       });
       data = JSON.parse(response.text || "[]");
     } catch (e) {
+      handleAiError(e);
       console.warn("Tier 2 (Primary) error:", e);
     }
   }
 
   // Tier 3: Fallback Model (Structured)
-  if (!data || data.length === 0) {
+  if ((!data || data.length === 0) && aiAvailable) {
     try {
       const response = await ai.models.generateContent({
         model: FALLBACK_MODEL,
@@ -300,6 +320,7 @@ export async function fetchTournamentsWithDates() {
       });
       data = JSON.parse(response.text || "[]");
     } catch (e) {
+      handleAiError(e);
       console.warn("Tier 3 (Fallback) error:", e);
     }
   }
@@ -366,62 +387,67 @@ export async function fetchTournamentPlayers(tournamentName: string) {
 
   let data: any[] = [];
 
-  // Tier 1: Grounded Search
-  try {
-    const response = await ai.models.generateContent({
-      model: GROUNDING_MODEL,
-      contents: prompt,
-      config: { tools: [{ googleSearch: {} }] },
-    });
-    data = extractJsonArray(response.text || "");
-    if (data && data.length === 32) {
-      localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
-      return data;
+  if (aiAvailable) {
+    // Tier 1: Grounded Search
+    try {
+      const response = await ai.models.generateContent({
+        model: GROUNDING_MODEL,
+        contents: prompt,
+        config: { tools: [{ googleSearch: {} }] },
+      });
+      data = extractJsonArray(response.text || "");
+      if (data && data.length === 32) {
+        localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+        return data;
+      }
+      console.warn(`Tier 1 (Grounded) failed: returned ${data?.length} players instead of 32.`);
+    } catch (e) {
+      handleAiError(e);
+      console.warn("Tier 1 (Grounded) error:", e);
     }
-    console.warn(`Tier 1 (Grounded) failed: returned ${data?.length} players instead of 32.`);
-  } catch (e) {
-    console.warn("Tier 1 (Grounded) error:", e);
-  }
 
-  // Tier 2: Primary Model (Structured)
-  try {
-    const response = await ai.models.generateContent({
-      model: PRIMARY_MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: schema,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
-      },
-    });
-    data = JSON.parse(response.text || "[]");
-    if (data && data.length === 32) {
-      localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
-      return data;
+    // Tier 2: Primary Model (Structured)
+    try {
+      const response = await ai.models.generateContent({
+        model: PRIMARY_MODEL,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: schema,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
+        },
+      });
+      data = JSON.parse(response.text || "[]");
+      if (data && data.length === 32) {
+        localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+        return data;
+      }
+      console.warn(`Tier 2 (Primary) failed: returned ${data?.length} players instead of 32.`);
+    } catch (e) {
+      handleAiError(e);
+      console.warn("Tier 2 (Primary) error:", e);
     }
-    console.warn(`Tier 2 (Primary) failed: returned ${data?.length} players instead of 32.`);
-  } catch (e) {
-    console.warn("Tier 2 (Primary) error:", e);
-  }
 
-  // Tier 3: Fallback Model (Structured)
-  try {
-    const response = await ai.models.generateContent({
-      model: FALLBACK_MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: schema,
-      },
-    });
-    data = JSON.parse(response.text || "[]");
-    if (data && data.length === 32) {
-      localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
-      return data;
+    // Tier 3: Fallback Model (Structured)
+    try {
+      const response = await ai.models.generateContent({
+        model: FALLBACK_MODEL,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: schema,
+        },
+      });
+      data = JSON.parse(response.text || "[]");
+      if (data && data.length === 32) {
+        localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+        return data;
+      }
+      console.warn(`Tier 3 (Fallback) failed: returned ${data?.length} players instead of 32.`);
+    } catch (e) {
+      handleAiError(e);
+      console.warn("Tier 3 (Fallback) error:", e);
     }
-    console.warn(`Tier 3 (Fallback) failed: returned ${data?.length} players instead of 32.`);
-  } catch (e) {
-    console.warn("Tier 3 (Fallback) error:", e);
   }
   
   console.warn("All AI models failed to generate exactly 32 players. Using fallback player list.");
