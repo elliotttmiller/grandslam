@@ -657,6 +657,8 @@ export async function fetchMastersTournamentDetails(
   const phase = getTournamentPhase(staticTournament?.approxStart, staticTournament?.approxEnd);
   const cacheExpiry = phaseCacheTtl(phase);
 
+  const isMadrid2026 = tournamentId === 'madrid' && currentYear === 2026;
+
   // Check user-scoped cache first.
   const cached = readAuthCacheIfFresh<MastersTournamentDetails>(cacheKey, cacheExpiry);
   if (cached) {
@@ -668,7 +670,7 @@ export async function fetchMastersTournamentDetails(
     }
   }
 
-  if (tournamentId === 'madrid' && currentYear === 2026 && isOfficialDataExpectedPhase(phase)) {
+  if (isMadrid2026) {
     const hardcoded: MastersTournamentDetails = {
       id: 'madrid',
       name: '2026 Mutua Madrid Open',
@@ -870,6 +872,26 @@ export async function fetchMastersOfficialDrawPlayers(
   // Versioned cache key includes year-month to auto-invalidate across tournament editions.
   const cacheKey = drawCacheKey(tournamentId, staticMeta?.approxStart);
   const drawCacheExpiry = phaseCacheTtl(phase);
+
+  const isMadrid2026 = tournamentId === 'madrid' && currentYear === 2026;
+
+  if (isMadrid2026) {
+    const drawSlots = getMadrid2026OfficialDrawSlots();
+    const normalizedSlots = normalizeMastersOfficialDrawSlots(drawSlots);
+    if (normalizedSlots.length === 64) {
+      const hardcodedData: MastersOfficialDrawResponse = {
+        drawStatus: 'official',
+        notes: 'Official 2026 Mutua Madrid Open draw (hardcoded).',
+        drawPlayers: normalizedSlots,
+      };
+      writeAuthCacheWithTimestamp(cacheKey, hardcodedData);
+      return normalizedSlots.map((p) => ({
+        name: p.name,
+        seed: p.seed,
+        country: p.country,
+      }));
+    }
+  }
 
   const cached = readAuthCacheIfFresh<MastersOfficialDrawResponse>(cacheKey, drawCacheExpiry);
   let cachedOfficialSlots: MastersOfficialDrawSlot[] | null = null;

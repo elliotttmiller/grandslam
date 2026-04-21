@@ -39,6 +39,7 @@ import {
   MADRID_TEST_POOL_ID,
   generateTestMadridBracket,
 } from './lib/test-tournament-data';
+import { getMadrid2026Draw } from './lib/madrid-2026-data';
 import type { Pool } from './lib/pool-types';
 
 import type { User } from 'firebase/auth';
@@ -539,11 +540,20 @@ export default function App() {
         setMatches(JSON.parse(saved));
         return;
       }
-
-        setLoading(true);
+      setLoading(true);
+      let initialMatches: Match[];
       try {
         if (selectedTournament === MADRID_2025_TEST_POOL_OPTION_ID) {
           setMatches(generateTestMadridBracket());
+          setZoom(0.7);
+          return;
+        }
+
+        if (selectedTournament === 'madrid') {
+          const drawPlayers = getMadrid2026Draw();
+          initialMatches = buildBracketFromDraw(drawPlayers);
+          initialMatches = applyByesToBracket(initialMatches);
+          setMatches(initialMatches);
           setZoom(0.7);
           return;
         }
@@ -637,6 +647,11 @@ export default function App() {
   const generateOfficialDraw = async (tournamentId: string, tournamentName: string): Promise<Match[]> => {
     if (tournamentId === MADRID_2025_TEST_POOL_OPTION_ID) {
       return generateTestMadridBracket();
+    }
+
+    if (tournamentId === 'madrid') {
+      const drawPlayers = getMadrid2026Draw();
+      return applyByesToBracket(buildBracketFromDraw(drawPlayers));
     }
     const isMasters = MASTERS_TOURNAMENTS.some(t => t.id === tournamentId);
     if (isMasters) {
