@@ -1875,6 +1875,7 @@ export default function App() {
                     matchId={finalMatch.id} 
                     matches={matches} 
                     onSelectWinner={handleSelectWinner} 
+                    allowChangingPicks={activeRound === 0}
                   />
                 </div>
               </div>

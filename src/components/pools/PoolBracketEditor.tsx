@@ -325,6 +325,7 @@ export function PoolBracketEditor({
                       matches={matches}
                       onSelectWinner={handleSelectWinner}
                       readOnly={isEffectivelyReadOnly}
+                      allowChangingPicks={activeRound === 0}
                       officialWinnersByMatchId={officialWinnersByMatchId}
                     />
                   </div>
@@ -374,6 +375,8 @@ export function PoolBracketEditor({
                     matchIndex={idx}
                     onSelectWinner={handleSelectWinner}
                     readOnly={isEffectivelyReadOnly}
+                    // allow changing picks only in the full-draw view (activeRound === 0)
+                    allowChangingPicks={activeRound === 0}
                     officialWinnerId={officialWinnersByMatchId?.[match.id]}
                   />
                 ))}

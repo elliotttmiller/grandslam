@@ -10,28 +10,33 @@ interface MatchPickCardProps {
   matchIndex: number;
   onSelectWinner: (matchId: string, winnerId: string) => void;
   readOnly?: boolean;
+  /** When false, users cannot change an existing pick (used to lock picks outside full-draw view) */
+  allowChangingPicks?: boolean;
   officialWinnerId?: string | null;
 }
 
 export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
-  ({ match, matchIndex, onSelectWinner, readOnly = false, officialWinnerId }, ref) => {
+  ({ match, matchIndex, onSelectWinner, readOnly = false, allowChangingPicks = true, officialWinnerId }, ref) => {
   const { player1, player2, winnerId } = match;
   const hasPlayers = !!(player1 && player2);
-  const canPick = !readOnly && hasPlayers && !winnerId;
+  // BYE detection — don't allow picking matches that contain a BYE
+  const playerIsBye = (p: Player | null) => !!p && ((p.name ?? '').toLowerCase?.() === 'bye' || (p.name ?? '').toLowerCase?.().startsWith('bye-') || p.id?.startsWith?.('bye-'));
+  const isByeMatch = playerIsBye(player1) || playerIsBye(player2);
+  const canPick = !readOnly && hasPlayers && !winnerId && allowChangingPicks !== false && !isByeMatch;
   const hasOfficialResult = officialWinnerId !== undefined && officialWinnerId !== null;
   const isCorrectPick = !!winnerId && hasOfficialResult && winnerId === officialWinnerId;
   const isIncorrectPick = !!winnerId && hasOfficialResult && winnerId !== officialWinnerId;
 
   const winner = winnerId ? (player1?.id === winnerId ? player1 : player2) : null;
   const loser = winner ? (player1?.id === winner.id ? player2 : player1) : null;
-  const earnedBase = winner ? getBasePoints(match.round) : 0;
-  const earnedUpset = winner ? getUpsetBonus(winner.seed, loser?.seed, match.round) : 0;
+  const earnedBase = (!isByeMatch && winner) ? getBasePoints(match.round) : 0;
+  const earnedUpset = (!isByeMatch && winner) ? getUpsetBonus(winner.seed, loser?.seed, match.round) : 0;
 
   const renderPlayer = (player: Player | null, isTop: boolean) => {
     const isWinner = player ? winnerId === player.id : false;
     const isLoser = player ? (!!winnerId && winnerId !== player.id) : false;
-    const isQualifier = !player || player.name.startsWith('Qualifier') || player.name === 'TBD';
-    const isPickable = canPick && !!player && !isQualifier;
+  const isQualifier = !player || player.name.startsWith('Qualifier') || player.name === 'TBD';
+  const isPickable = canPick && !!player && !isQualifier;
     const isWinnerIncorrect = isWinner && hasOfficialResult && player?.id !== officialWinnerId;
 
     return (
@@ -39,10 +44,13 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
         className={cn(
           'flex items-center gap-3 px-4 py-3.75 transition-all select-none min-h-14',
           isTop ? 'border-b border-border/15' : '',
+          // If this is an official result, keep green/red. If it's a user pick (no official result), show white highlight.
           isWinner
-            ? isWinnerIncorrect
-              ? 'bg-red-500/[0.14]'
-              : 'bg-emerald-500/[0.14]'
+            ? hasOfficialResult
+              ? isWinnerIncorrect
+                ? 'bg-red-500/[0.14]'
+                : 'bg-emerald-500/[0.14]'
+              : 'bg-white'
             : '',
           isLoser ? 'opacity-30' : '',
           isPickable ? 'cursor-pointer hover:bg-white/5 active:bg-white/9' : 'cursor-default',
@@ -71,13 +79,9 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
         <div className="flex-1 min-w-0">
           <p className={cn(
             'text-[15px] leading-snug font-medium truncate',
-            isWinner ? (
-              isWinnerIncorrect
-                ? 'text-red-300 font-semibold'
-                : 'text-emerald-300 font-semibold'
-            )
-              : isQualifier ? 'text-muted-foreground/45 italic text-[13px]'
-                : 'text-foreground/90',
+            isWinner
+              ? (isWinnerIncorrect ? 'text-red-300 font-semibold' : 'text-emerald-300 font-semibold')
+              : isQualifier ? 'text-muted-foreground/45 italic text-[13px]' : 'text-foreground/90',
           )}>
             {player ? player.name : 'TBD'}
           </p>
@@ -137,7 +141,8 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
       {renderPlayer(player2, false)}
 
       {/* Points earned footer */}
-      {winner && (
+      {/* Points footer: do not show points for BYE auto-advances */}
+      {winner && !isByeMatch && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}

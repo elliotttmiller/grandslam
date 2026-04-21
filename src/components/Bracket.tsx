@@ -12,6 +12,8 @@ interface MatchCardProps {
   onSelectWinner: (matchId: string, winnerId: string) => void;
   showScore?: boolean;
   readOnly?: boolean;
+  /** When false, users cannot change an existing pick (used to lock picks outside full-draw view) */
+  allowChangingPicks?: boolean;
   officialWinnerId?: string | null;
 }
 
@@ -20,6 +22,7 @@ export function MatchCard({
   onSelectWinner,
   showScore = true,
   readOnly = false,
+  allowChangingPicks = true,
   officialWinnerId,
 }: MatchCardProps) {
   // Track when the winner was just set to trigger animations
@@ -48,8 +51,12 @@ export function MatchCard({
     ? (match.player1?.id === match.winnerId ? match.player2 : match.player1)
     : null;
 
-  const earnedBase = winner ? getBasePoints(match.round) : 0;
-  const earnedUpset = winner ? getUpsetBonus(winner.seed, loser?.seed, match.round) : 0;
+  // If this match contains a BYE (auto-advance), it should not be pickable and should not award points
+  const playerIsBye = (p: Player | null) => !!p && ((p.name ?? '').toLowerCase?.() === 'bye' || (p.name ?? '').toLowerCase?.().startsWith('bye-') || p.id?.startsWith?.('bye-'));
+  const isByeMatch = playerIsBye(match.player1) || playerIsBye(match.player2);
+
+  const earnedBase = (!isByeMatch && winner) ? getBasePoints(match.round) : 0;
+  const earnedUpset = (!isByeMatch && winner) ? getUpsetBonus(winner.seed, loser?.seed, match.round) : 0;
   const isUpset = earnedUpset > 0;
   const hasOfficialResult = officialWinnerId !== undefined && officialWinnerId !== null;
   const isCorrectPick = !!match.winnerId && hasOfficialResult && match.winnerId === officialWinnerId;
@@ -58,7 +65,7 @@ export function MatchCard({
   const renderPlayer = (player: Player | null, isTop: boolean) => {
     const isWinner = match.winnerId === player?.id;
     const isLoser = match.winnerId && match.winnerId !== player?.id;
-    const canSelect = !readOnly && match.player1 && match.player2 && !match.winnerId;
+    const canSelect = !readOnly && allowChangingPicks !== false && match.player1 && match.player2 && !match.winnerId && !isByeMatch;
     const isQualifier = player?.name?.startsWith(QUALIFIER_PREFIX) || player?.name === TBD_NAME;
     const isWinnerIncorrect = isWinner && hasOfficialResult && player?.id !== officialWinnerId;
 
@@ -67,10 +74,13 @@ export function MatchCard({
         className={cn(
           "flex items-center justify-between px-3 py-3 text-[13px] select-none min-h-11",
           isTop ? "border-b border-border/30" : "",
+          // Winner styling — official results use green/red, user picks (no official result yet) use white selection
           isWinner
-            ? isWinnerIncorrect
-              ? "bg-red-500/12 font-semibold text-red-300"
-              : "bg-emerald-500/12 font-semibold text-emerald-300"
+            ? hasOfficialResult
+              ? isWinnerIncorrect
+                ? "bg-red-500/12 font-semibold text-red-300"
+                : "bg-emerald-500/12 font-semibold text-emerald-300"
+              : "bg-white font-semibold text-foreground"
             : "",
           isLoser ? "opacity-30" : "",
           canSelect ? "cursor-pointer" : "cursor-default",
@@ -108,7 +118,7 @@ export function MatchCard({
                 : "text-emerald-300"
               : ""
           )}>
-            {player ? player.name : 'TBD'}
+              {player ? player.name : 'TBD'}
           </span>
         </div>
         {isWinner && (
@@ -211,6 +221,7 @@ interface BracketTreeProps {
   onSelectWinner: (matchId: string, winnerId: string) => void;
   showScore?: boolean;
   readOnly?: boolean;
+  allowChangingPicks?: boolean;
   officialWinnersByMatchId?: Record<string, string | null>;
 }
 
@@ -220,6 +231,7 @@ export function BracketTree({
   onSelectWinner,
   showScore = true,
   readOnly = false,
+  allowChangingPicks = true,
   officialWinnersByMatchId,
 }: BracketTreeProps) {
   const match = matches.find(m => m.id === matchId);
@@ -237,6 +249,7 @@ export function BracketTree({
             onSelectWinner={onSelectWinner}
             showScore={showScore}
             readOnly={readOnly}
+            allowChangingPicks={allowChangingPicks}
             officialWinnersByMatchId={officialWinnersByMatchId}
           />
           <BracketTree
@@ -245,6 +258,7 @@ export function BracketTree({
             onSelectWinner={onSelectWinner}
             showScore={showScore}
             readOnly={readOnly}
+            allowChangingPicks={allowChangingPicks}
             officialWinnersByMatchId={officialWinnersByMatchId}
           />
         </div>
@@ -256,6 +270,7 @@ export function BracketTree({
           onSelectWinner={onSelectWinner}
           showScore={showScore}
           readOnly={readOnly}
+          allowChangingPicks={allowChangingPicks}
           officialWinnerId={officialWinnersByMatchId?.[match.id]}
         />
       </div>
