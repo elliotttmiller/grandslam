@@ -404,7 +404,7 @@ export function LeagueDetail({
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 max-w-4xl mx-auto w-full px-4 py-6">
+      <div className="flex-1 max-w-4xl mx-auto w-full px-4 pt-6 pb-24">
         <AnimatePresence mode="wait">
           {activeTab === 'hub' && (
             <motion.div
@@ -872,11 +872,11 @@ function PoolsTab({ league, leagueTournaments, userId, joiningPool, onJoinPool, 
         return (
           <div
             key={t.id}
-            className="bg-card/40 border border-white/6 rounded-xl px-4 py-3 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center"
+            className="bg-card/40 border border-white/8 rounded-2xl px-4 py-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center hover:border-white/14 transition-colors"
           >
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                <span className="font-semibold text-sm truncate">{t.name}</span>
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <span className="font-semibold text-[15px] leading-snug truncate">{t.name}</span>
                 {isLive && (
                   <span className="text-[9px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded-full border border-emerald-500/25">
                     Live
@@ -887,8 +887,13 @@ function PoolsTab({ league, leagueTournaments, userId, joiningPool, onJoinPool, 
                     Past
                   </span>
                 )}
+                {isUpcoming && !isLive && !isPast && (
+                  <span className="text-[9px] font-bold text-sky-400/70 bg-sky-500/10 px-1.5 py-0.5 rounded-full border border-sky-500/20">
+                    Upcoming
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-muted-foreground/50">
+              <p className="text-[12px] text-muted-foreground/60">
                 {start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                 {' – '}
                 {end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -901,7 +906,7 @@ function PoolsTab({ league, leagueTournaments, userId, joiningPool, onJoinPool, 
                 <Button
                   size="sm"
                   variant="outline"
-                  className="rounded-xl shrink-0 w-full sm:w-auto justify-center"
+                  className="rounded-xl shrink-0 w-full sm:w-auto justify-center text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/8 hover:border-emerald-500/40"
                   onClick={() => {
                     // Open the pool detail modal (if provided) so users can view/manage
                     // the pool inline. Fallback to navigating directly to the entry editor.

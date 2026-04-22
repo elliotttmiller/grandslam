@@ -384,7 +384,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
         </div>
       </div>
 
-      <div className="flex-1 px-5 py-5">
+      <div className="flex-1 px-5 pt-5 pb-24">
         <div className="max-w-4xl mx-auto flex flex-col gap-5">
 
           {/* Stats strip */}

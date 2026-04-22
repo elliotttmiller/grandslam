@@ -14,7 +14,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { FlaskConical, ChevronDown, ChevronUp, Play, RotateCcw, Trophy, Trash2 } from 'lucide-react';
+import { FlaskConical, ChevronDown, RotateCcw, Trophy, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
@@ -106,15 +106,32 @@ export function DevPanel({ authUser, onNavigate, onPoolChanged }: DevPanelProps)
     : 0;
 
   return (
-    <div className="fixed bottom-4 left-4 z-80 w-72">
-      <div className="bg-zinc-950/95 border border-amber-500/30 rounded-2xl shadow-2xl backdrop-blur-sm overflow-hidden">
+    <div className="fixed bottom-4 left-4 z-80">
+      {!isOpen ? (
+        /* ── Collapsed: compact pill button ── */
+        <button
+          onClick={() => setIsOpen(true)}
+          className="flex items-center gap-2 bg-zinc-950/95 border border-amber-500/30 rounded-xl shadow-lg backdrop-blur-sm px-3 py-2 hover:bg-white/[0.04] transition-colors"
+          aria-label="Open dev panel"
+          aria-expanded={false}
+          aria-haspopup="true"
+        >
+          <FlaskConical className="h-4 w-4 text-amber-400 shrink-0" aria-hidden="true" />
+          <span className="text-[11px] font-black uppercase tracking-widest text-amber-400">Dev</span>
+          {pool && (
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" aria-label="Pool active" />
+          )}
+        </button>
+      ) : (
+        /* ── Expanded: full panel ── */
+        <div className="w-72 max-w-[92vw] bg-zinc-950/95 border border-amber-500/30 rounded-2xl shadow-2xl backdrop-blur-sm overflow-hidden">
 
         {/* ── Header (toggle) ── */}
         <button
-          onClick={() => setIsOpen(v => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/4 transition-colors"
-          aria-label={isOpen ? 'Collapse dev panel' : 'Expand dev panel'}
-          aria-expanded={isOpen}
+          onClick={() => setIsOpen(false)}
+          className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.04] transition-colors"
+          aria-label="Collapse dev panel"
+          aria-expanded={true}
         >
           <div className="flex items-center gap-2">
             <FlaskConical className="h-4 w-4 text-amber-400" aria-hidden="true" />
@@ -127,15 +144,11 @@ export function DevPanel({ authUser, onNavigate, onPoolChanged }: DevPanelProps)
               </span>
             )}
           </div>
-          {isOpen
-            ? <ChevronDown className="h-4 w-4 text-amber-400/60" aria-hidden="true" />
-            : <ChevronUp   className="h-4 w-4 text-amber-400/60" aria-hidden="true" />
-          }
+          <ChevronDown className="h-4 w-4 text-amber-400/60" aria-hidden="true" />
         </button>
 
         {/* ── Body ── */}
-        {isOpen && (
-          <div className="px-4 pb-4 space-y-4 border-t border-white/6">
+        <div className="px-4 pb-4 space-y-4 border-t border-white/6">
 
             {/* Status message */}
             {status && (
@@ -255,8 +268,8 @@ export function DevPanel({ authUser, onNavigate, onPoolChanged }: DevPanelProps)
             </Button>
 
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

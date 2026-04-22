@@ -247,7 +247,7 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
         </div>
       </div>
 
-      <div className="flex-1 px-5 py-5">
+      <div className="flex-1 px-5 pt-5 pb-24">
         <div className="max-w-4xl mx-auto">
           {/* Sign-in required banner */}
           {!isAuthed && (
