@@ -22,7 +22,7 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
   // BYE detection — don't allow picking matches that contain a BYE
   const playerIsBye = (p: Player | null) => !!p && ((p.name ?? '').toLowerCase?.() === 'bye' || (p.name ?? '').toLowerCase?.().startsWith('bye-') || p.id?.startsWith?.('bye-'));
   const isByeMatch = playerIsBye(player1) || playerIsBye(player2);
-  const canPick = !readOnly && hasPlayers && !winnerId && allowChangingPicks !== false && !isByeMatch;
+  const canPick = !readOnly && hasPlayers && allowChangingPicks !== false && !isByeMatch;
   const hasOfficialResult = officialWinnerId !== undefined && officialWinnerId !== null;
   const isCorrectPick = !!winnerId && hasOfficialResult && winnerId === officialWinnerId;
   const isIncorrectPick = !!winnerId && hasOfficialResult && winnerId !== officialWinnerId;
@@ -31,12 +31,13 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
   const loser = winner ? (player1?.id === winner.id ? player2 : player1) : null;
   const earnedBase = (!isByeMatch && winner) ? getBasePoints(match.round) : 0;
   const earnedUpset = (!isByeMatch && winner) ? getUpsetBonus(winner.seed, loser?.seed, match.round) : 0;
+  const isUserPick = !!winnerId && !hasOfficialResult;
 
   const renderPlayer = (player: Player | null, isTop: boolean) => {
     const isWinner = player ? winnerId === player.id : false;
     const isLoser = player ? (!!winnerId && winnerId !== player.id) : false;
-  const isQualifier = !player || player.name.startsWith('Qualifier') || player.name === 'TBD';
-  const isPickable = canPick && !!player && !isQualifier;
+    const isQualifier = !player || player.name.startsWith('Qualifier') || player.name === 'TBD';
+    const isPickable = canPick && !!player && !isQualifier;
     const isWinnerIncorrect = isWinner && hasOfficialResult && player?.id !== officialWinnerId;
 
     return (
@@ -50,12 +51,13 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
               ? isWinnerIncorrect
                 ? 'bg-red-500/[0.14]'
                 : 'bg-emerald-500/[0.14]'
-              : 'bg-white'
+              : 'bg-card/80'
             : '',
+          isWinner && !hasOfficialResult ? 'ring-1 ring-white/15 shadow-[0_0_0_8px_rgba(255,255,255,0.12)]' : '',
           isLoser ? 'opacity-30' : '',
           isPickable ? 'cursor-pointer hover:bg-white/5 active:bg-white/9' : 'cursor-default',
         )}
-        whileTap={isPickable ? { scale: 0.985 } : {}}
+        whileTap={isPickable ? { scale: 0.985, y: 1 } : {}}
         onClick={() => { if (isPickable) onSelectWinner(match.id, player!.id); }}
         role={isPickable ? 'button' : undefined}
         tabIndex={isPickable ? 0 : undefined}
@@ -69,7 +71,9 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
           isWinner
             ? isWinnerIncorrect
               ? 'text-red-400/80'
-              : 'text-emerald-400/80'
+              : hasOfficialResult
+                ? 'text-emerald-400/80'
+                : 'text-foreground/90'
             : 'text-muted-foreground/35',
         )}>
           {player?.seed ?? '—'}
@@ -80,7 +84,11 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
           <p className={cn(
             'text-[15px] leading-snug font-medium truncate',
             isWinner
-              ? (isWinnerIncorrect ? 'text-red-300 font-semibold' : 'text-emerald-300 font-semibold')
+              ? (isWinnerIncorrect
+                ? 'text-red-300 font-semibold'
+                : hasOfficialResult
+                  ? 'text-emerald-300 font-semibold'
+                  : 'text-foreground font-semibold')
               : isQualifier ? 'text-muted-foreground/45 italic text-[13px]' : 'text-foreground/90',
           )}>
             {player ? player.name : 'TBD'}
@@ -98,12 +106,14 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
             transition={{ type: 'spring', stiffness: 500, damping: 20 }}
             className={cn(
               'shrink-0 h-7 w-7 rounded-full border flex items-center justify-center',
-              isWinnerIncorrect
-                ? 'bg-red-500/20 border-red-500/30'
-                : 'bg-emerald-500/20 border-emerald-500/30',
+                  isWinnerIncorrect
+                    ? 'bg-red-500/20 border-red-500/30'
+                    : hasOfficialResult
+                      ? 'bg-emerald-500/20 border-emerald-500/30'
+                      : 'bg-white/10 border-white/20',
             )}
           >
-            <Check className={cn('h-4 w-4', isWinnerIncorrect ? 'text-red-400' : 'text-emerald-400')} aria-hidden="true" />
+                <Check className={cn('h-4 w-4', isWinnerIncorrect ? 'text-red-400' : hasOfficialResult ? 'text-emerald-400' : 'text-white')} aria-hidden="true" />
           </motion.div>
         ) : isPickable ? (
           <div className="shrink-0 h-7 w-7 rounded-full border border-border/25 flex items-center justify-center opacity-40" aria-hidden="true">
@@ -124,10 +134,13 @@ export const MatchPickCard = forwardRef<HTMLDivElement, MatchPickCardProps>(
         winnerId
           ? isIncorrectPick
             ? 'bg-card/50 border-red-500/20'
-            : 'bg-card/50 border-emerald-500/20'
+            : hasOfficialResult
+              ? 'bg-card/50 border-emerald-500/20'
+              : 'bg-card/80 border-border/50 shadow-sm'
           : hasPlayers
             ? 'bg-card/80 border-border/50 shadow-sm'
             : 'bg-card/30 border-border/15 opacity-50',
+        winnerId && !hasOfficialResult && !isByeMatch ? 'border-white/10 shadow-[0_0_0_12px_rgba(255,255,255,0.08)] shadow-white/10' : '',
       )}
     >
       {renderPlayer(player1, true)}

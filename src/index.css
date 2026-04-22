@@ -209,6 +209,33 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Glow/pulse ring used for user picks */
+.glow-ring {
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6), 0 0 0 4px rgba(255,255,255,0.02) inset;
+  position: relative;
+}
+.glow-ring::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  box-shadow: 0 6px 28px rgba(255,255,255,0.03);
+  opacity: 0;
+  transition: opacity 220ms ease-out, transform 220ms ease-out;
+}
+.glow-ring:hover::after { opacity: 1; transform: translateY(-2px); }
+
+.pulse-ring {
+  box-shadow: 0 0 0 0 rgba(34,197,94,0.35);
+  animation: pulseRing 1.6s infinite;
+}
+
+@keyframes pulseRing {
+  0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.35); }
+  70% { box-shadow: 0 0 0 10px rgba(34,197,94,0.02); }
+  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+}
+
 /* Input base styling */
 input[type="text"],
 input[type="number"],
