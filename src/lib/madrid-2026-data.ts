@@ -21,6 +21,7 @@
  * Notable: Carlos Alcaraz (ATP #2), Novak Djokovic (ATP #4), Taylor Fritz (ATP #7),
  * Frances Tiafoe (ATP #19), and Jack Draper (seed 24) all withdrew before the draw.
  * Alex Michelsen (ATP #37) received the bye vacated by Draper.
+ * Raphaël Collignon withdrew after the draw and was replaced by Qualifier Dino Prizmić.
  */
 
 import type { Player } from './bracket-utils';
@@ -49,14 +50,14 @@ const Q   = (id: string, label: string): Player => p(id, label);
 //   QF3: Section E (slots 64–79) vs Section F (slots 80–95) → Bublik/Ruud vs Cerúndolo/FAA
 //   QF4: Section G (slots 96–111) vs Section H (slots 112–127) → Medvedev/Cobolli vs Khachanov/Zverev
 
-export const MADRID_2026_DRAW: Player[] = [
+export const MADRID_2026_DRAW: Player[] =[
   // ── Section A (slots 0–15): Sinner / Diallo / Norrie / Paul ─────────────────
   // ATP Match 1
   p('m26s1',  'Jannik Sinner',          1,  'ITA'), BYE('m26bye1'),
   // ATP Match 2
-  Q('m26q1',  'Qualifier 1'),           Q('m26q2', 'Qualifier 2'),
+  p('m26bonzi', 'Benjamin Bonzi',       undefined, 'FRA'), p('m26droguet', 'Titouan Droguet', undefined, 'FRA'),
   // ATP Match 3
-  Q('m26q3',  'Qualifier 3'),           p('m26cina',    'Federico Cinà',       undefined, 'ITA'),
+  p('m26moller', 'Elmer Møller',        undefined, 'DEN'), p('m26cina',    'Federico Cinà',       undefined, 'ITA'),
   // ATP Match 4
   p('m26s32', 'Gabriel Diallo',         32, 'CAN'), BYE('m26bye4'),
   // ATP Match 5
@@ -74,7 +75,7 @@ export const MADRID_2026_DRAW: Player[] = [
   // ATP Match 10
   p('m26zhang',  'Zhang Zhizhen',       undefined, 'CHN'), p('m26kopriva',  'Vít Kopřiva',      undefined, 'CZE'),
   // ATP Match 11
-  p('m26sonego', 'Lorenzo Sonego',      undefined, 'ITA'), Q('m26q4', 'Qualifier 4'),
+  p('m26sonego', 'Lorenzo Sonego',      undefined, 'ITA'), p('m26lajovic', 'Dušan Lajović', undefined, 'SRB'),
   // ATP Match 12
   p('m26s22', 'Arthur Rinderknech',     22, 'FRA'), BYE('m26bye12'),
   // ATP Match 13
@@ -89,10 +90,10 @@ export const MADRID_2026_DRAW: Player[] = [
   // ── Section C (slots 32–47): Shelton / Etcheverry / Fils / Vacherot ──────────
   // ATP Match 17
   p('m26s4',  'Ben Shelton',            4,  'USA'), BYE('m26bye17'),
-  // ATP Match 18
-  p('m26collignon', 'Raphaël Collignon', undefined, 'BEL'), p('m26berrettini', 'Matteo Berrettini', undefined, 'ITA'),
+  // ATP Match 18 - Dino Prizmić replaced Raphaël Collignon
+  p('m26prizmic', 'Dino Prizmić',       undefined, 'CRO'), p('m26berrettini', 'Matteo Berrettini', undefined, 'ITA'),
   // ATP Match 19
-  Q('m26q5',  'Qualifier 5'),           p('m26ofner',    'Sebastian Ofner',    undefined, 'AUT'),
+  p('m26basilashvili', 'Nikoloz Basilashvili', undefined, 'GEO'), p('m26ofner', 'Sebastian Ofner', undefined, 'AUT'),
   // ATP Match 20
   p('m26s25', 'Tomás Martín Etcheverry', 25, 'ARG'), BYE('m26bye20'),
   // ATP Match 21
@@ -118,7 +119,7 @@ export const MADRID_2026_DRAW: Player[] = [
   // ATP Match 30
   p('m26dzumhur', 'Damir Džumhur',      undefined, 'BIH'), p('m26bellucci', 'Mattia Bellucci',  undefined, 'ITA'),
   // ATP Match 31
-  Q('m26q6',  'Qualifier 6'),           p('m26hurkacz',  'Hubert Hurkacz',     undefined, 'POL'),
+  p('m26faria', 'Jaime Faria',          undefined, 'POR'), p('m26hurkacz',  'Hubert Hurkacz',     undefined, 'POL'),
   // ATP Match 32
   p('m26s6',  'Lorenzo Musetti',        6,  'ITA'), BYE('m26bye32'),
 
@@ -126,9 +127,9 @@ export const MADRID_2026_DRAW: Player[] = [
   // ATP Match 33
   p('m26s8',  'Alexander Bublik',       8,  'KAZ'), BYE('m26bye33'),
   // ATP Match 34
-  Q('m26q7',  'Qualifier 7'),           p('m26tsitsipas', 'Stefanos Tsitsipas', undefined, 'GRE'),
+  p('m26kypson', 'Patrick Kypson',      undefined, 'USA'), p('m26tsitsipas', 'Stefanos Tsitsipas', undefined, 'GRE'),
   // ATP Match 35
-  Q('m26q8',  'Qualifier 8'),           Q('m26q9', 'Qualifier 9'),
+  p('m26trungelliti', 'Marco Trungelliti', undefined, 'ARG'), p('m26merida', 'Daniel Mérida', undefined, 'ESP'),
   // ATP Match 36
   p('m26s26', 'Corentin Moutet',        26, 'FRA'), BYE('m26bye36'),
   // ATP Match 37
@@ -154,7 +155,7 @@ export const MADRID_2026_DRAW: Player[] = [
   // ATP Match 46
   p('m26vandezandschulp', 'Botic van de Zandschulp', undefined, 'NED'), p('m26blockx', 'Alexander Blockx', undefined, 'BEL'),
   // ATP Match 47
-  Q('m26q10', 'Qualifier 10'),          p('m26baez',     'Sebastián Báez',     undefined, 'ARG'),
+  p('m26gaubas', 'Vilius Gaubas',       undefined, 'LTU'), p('m26baez',     'Sebastián Báez',     undefined, 'ARG'),
   // ATP Match 48
   p('m26s3',  'Félix Auger-Aliassime',  3,  'CAN'), BYE('m26bye48'),
 
@@ -164,13 +165,13 @@ export const MADRID_2026_DRAW: Player[] = [
   // ATP Match 50
   p('m26marozsan', 'Fábián Marozsán',   undefined, 'HUN'), p('m26quinn',    'Ethan Quinn',       undefined, 'USA'),
   // ATP Match 51
-  Q('m26q11', 'Qualifier 11'),          p('m26opelka',   'Reilly Opelka',     undefined, 'USA'),
+  p('m26budkovkjaer', 'Nicolai Budkov Kjaer', undefined, 'NOR'), p('m26opelka',   'Reilly Opelka',     undefined, 'USA'),
   // ATP Match 52
   p('m26s31', 'Denis Shapovalov',       31, 'CAN'), BYE('m26bye52'),
   // ATP Match 53
   p('m26s17', 'Learner Tien',           17, 'USA'), BYE('m26bye53'),
   // ATP Match 54
-  Q('m26q12', 'Qualifier 12'),          p('m26dimitrov', 'Grigor Dimitrov',    undefined, 'BUL'),
+  p('m26vallejo', 'Adolfo Vallejo',     undefined, 'PAR'), p('m26dimitrov', 'Grigor Dimitrov',    undefined, 'BUL'),
   // ATP Match 55
   p('m26ugocb',  'Camilo Ugo Carabelli', undefined, 'ARG'), p('m26monfils',  'Gaël Monfils',     undefined, 'FRA'),
   // ATP Match 56
@@ -182,7 +183,7 @@ export const MADRID_2026_DRAW: Player[] = [
   // ATP Match 58
   p('m26landaluce', 'Martín Landaluce', undefined, 'ESP'), p('m26walton',   'Adam Walton',       undefined, 'AUS'),
   // ATP Match 59
-  p('m26popyrin',   'Alexei Popyrin',   undefined, 'AUS'), Q('m26q13', 'Qualifier 13'),
+  p('m26popyrin',   'Alexei Popyrin',   undefined, 'AUS'), p('m26damm', 'Martin Damm', undefined, 'USA'),
   // ATP Match 60
   p('m26s23', 'Jakub Menšík',           23, 'CZE'), BYE('m26bye60'),
   // ATP Match 61
@@ -201,7 +202,7 @@ export const MADRID_2026_DRAW: Player[] = [
  * Frances Tiafoe (ATP #19), and Jack Draper (ATP #26) all withdrew pre-draw.
  * Seedings were resequenced accordingly.
  */
-export const MADRID_2026_SEEDS = [
+export const MADRID_2026_SEEDS =[
   { seed:  1, name: 'Jannik Sinner',               country: 'ITA', ranking:  1 },
   { seed:  2, name: 'Alexander Zverev',             country: 'GER', ranking:  3 },
   { seed:  3, name: 'Félix Auger-Aliassime',        country: 'CAN', ranking:  5 },
