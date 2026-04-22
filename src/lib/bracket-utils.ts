@@ -56,6 +56,17 @@ export function getRoundFullName(round: number, totalRounds: number): string {
   return ROUND_FULL_NAMES[round] ?? `Round ${round}`;
 }
 
+/** Returns true when a bracket player slot represents an auto-advance BYE. */
+export function isByePlayer(player: Player | null): boolean {
+  if (!player) return false;
+  const name = player.name?.toLowerCase?.() ?? '';
+  return name === 'bye' || name.startsWith('bye-') || player.id.startsWith('bye-');
+}
+
+export function isByeMatch(match: Match): boolean {
+  return isByePlayer(match.player1) || isByePlayer(match.player2);
+}
+
 export const BASE_POINTS: Record<number, number> = {
   1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32, 7: 64
 };

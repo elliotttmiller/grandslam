@@ -17,7 +17,7 @@ import {
   syncDeletePool,
   syncUpdateOfficialMatches,
 } from '@/services/poolSyncService';
-import { advancePlayer, getRoundName } from '@/lib/bracket-utils';
+import { advancePlayer, getRoundName, isByeMatch } from '@/lib/bracket-utils';
 import { getUserId } from '@/lib/user-identity';
 import { tournamentColor } from '@/lib/tournament-colors';
 import { MatchCard } from '@/components/Bracket';
@@ -119,13 +119,13 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
 
   // Total bracket matches in this pool (Grand Slam = 127, Masters = 63)
   const totalBracketMatches = useMemo(
-    () => poolData.officialMatches.filter(m => m.player1 && m.player2).length,
+    () => poolData.officialMatches.filter(m => m.player1 && m.player2 && !isByeMatch(m)).length,
     [poolData.officialMatches],
   );
 
   // Official results entered so far (matches with a decided winner)
   const enteredResultsCount = useMemo(
-    () => poolData.officialMatches.filter(m => m.winnerId).length,
+    () => poolData.officialMatches.filter(m => m.player1 && m.player2 && !isByeMatch(m) && m.winnerId).length,
     [poolData.officialMatches],
   );
 

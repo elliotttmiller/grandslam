@@ -6,14 +6,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { BracketTree, MatchCard } from '@/components/Bracket';
-import { advancePlayer, getRoundName, getRoundFullName } from '@/lib/bracket-utils';
+import { advancePlayer, getRoundName, getRoundFullName, isByeMatch } from '@/lib/bracket-utils';
 import { calculateBracketScore } from '@/lib/scoring';
 import { useBracketCanvas } from '@/hooks/useBracketCanvas';
 import type { Match } from '@/lib/bracket-utils';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 
-const GRAND_SLAM_MATCHES = 127;
-const MASTERS_MATCHES = 63;
 
 interface PoolBracketEditorProps {
   pool: Pool;
@@ -47,7 +45,11 @@ export function PoolBracketEditor({
     () => matches.length > 0 ? Math.max(...matches.map((m: Match) => m.round)) : 7,
     [matches],
   );
-  const totalBracketMatches = totalRounds === 6 ? MASTERS_MATCHES : GRAND_SLAM_MATCHES;
+  const totalMatches = useMemo(
+    () => matches.filter((m: Match) => m.player1 && m.player2 && !isByeMatch(m)).length,
+    [matches],
+  );
+  const totalBracketMatches = totalMatches;
 
   // 0 = full bracket canvas, 1-N = round-by-round card view
   // Initialise to the first round that still needs picks
@@ -55,7 +57,7 @@ export function PoolBracketEditor({
     const initial = entry.matches;
     const initRounds = initial.length > 0 ? Math.max(...initial.map((m: Match) => m.round)) : 7;
     for (let r = 1; r <= initRounds; r++) {
-      const roundMs = initial.filter((m: Match) => m.round === r && m.player1 && m.player2);
+      const roundMs = initial.filter((m: Match) => m.round === r && m.player1 && m.player2 && !isByeMatch(m));
       if (roundMs.length > 0 && roundMs.some((m: Match) => !m.winnerId)) return r;
       if (roundMs.length > 0) continue; // round complete, check next
     }
@@ -71,13 +73,12 @@ export function PoolBracketEditor({
 
   const score = useMemo(() => calculateBracketScore(matches), [matches]);
   const finalMatch = useMemo(() => matches.find((m: Match) => m.nextMatchId === null), [matches]);
-  const totalMatches = matches.filter((m: Match) => m.player1 && m.player2).length;
 
   // Per-round completion tracking
   const roundCompletion = useMemo(() => {
     const c: Record<number, { total: number; done: number }> = {};
     for (let r = 1; r <= totalRounds; r++) {
-      const rm = matches.filter((m: Match) => m.round === r && m.player1 && m.player2);
+      const rm = matches.filter((m: Match) => m.round === r && m.player1 && m.player2 && !isByeMatch(m));
       c[r] = { total: rm.length, done: rm.filter((m: Match) => m.winnerId).length };
     }
     return c;

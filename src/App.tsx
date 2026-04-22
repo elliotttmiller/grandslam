@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useBracketCanvas } from './hooks/useBracketCanvas';
 import { fetchTournamentPlayers, fetchTournamentsWithDates, fetchMastersDrawPlayers, fetchMastersOfficialDrawPlayers, fetchMastersTournamentResults, getTournamentPhase, TournamentData, CACHE_KEY_TOURNAMENTS, CACHE_KEY_MASTERS_PREFIX, CACHE_KEY_MASTERS_DRAW_PREFIX } from './services/geminiService';
-import { generateBracket, generateMastersBracket, buildBracketFromDraw, advancePlayer, applyLiveResults, applyByesToBracket, Match, Player, getRoundName, getRoundFullName } from './lib/bracket-utils';
+import { generateBracket, generateMastersBracket, buildBracketFromDraw, advancePlayer, applyLiveResults, applyByesToBracket, isByeMatch, Match, Player, getRoundName, getRoundFullName } from './lib/bracket-utils';
 import { BracketTree, MatchCard } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
@@ -1739,7 +1739,7 @@ export default function App() {
                   </>
                 )}
                 <span className="text-white/25 shrink-0">·</span>
-                <span className="text-white/50 tabular-nums shrink-0">{score.picksCompleted}/{matches.filter(m => m.player1 && m.player2).length}</span>
+                <span className="text-white/50 tabular-nums shrink-0">{score.picksCompleted}/{matches.filter(m => m.player1 && m.player2 && !isByeMatch(m)).length}</span>
                 {finalMatch?.winnerId && selectedTournament && (
                   <button
                     onClick={() => {
