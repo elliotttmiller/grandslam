@@ -68,6 +68,7 @@ export function LeagueDetail({
   const [copied, setCopied] = useState(false);
   const [joiningPool, setJoiningPool] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isJoiningLeague, setIsJoiningLeague] = useState(false);
   const [showHubInsightsModal, setShowHubInsightsModal] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [previousRanks, setPreviousRanks] = useState<Record<string, number>>({});
@@ -209,6 +210,40 @@ export function LeagueDetail({
     }
   };
 
+  const handleJoinLeague = async () => {
+    if (!league) return;
+    if (!authUser) {
+      window.alert('Please sign in to join this league.');
+      return;
+    }
+    if (isMember) return;
+    setIsJoiningLeague(true);
+    try {
+      const member = {
+        userId,
+        userName: authUser.displayName ?? authUser.email ?? 'Member',
+        joinedAt: new Date().toISOString(),
+      };
+
+      const added = addMember(league.id, member);
+      if (!added) {
+        window.alert('You are already a member of this league.');
+        return;
+      }
+
+      const success = await syncAddLeagueMember(league.id, member);
+      if (!success) {
+        removeMember(league.id, userId);
+        window.alert('Unable to join this league on the server. Please try again.');
+        return;
+      }
+
+      refreshLeague();
+    } finally {
+      setIsJoiningLeague(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!league) return;
     try {
@@ -328,6 +363,20 @@ export function LeagueDetail({
               )}
               {league.id}
             </button>
+            {!isMember && authUser && (
+              <Button
+                size="sm"
+                className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border-0 w-full sm:w-auto justify-center"
+                onClick={handleJoinLeague}
+                disabled={isJoiningLeague}
+              >
+                {isJoiningLeague ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  'Join League'
+                )}
+              </Button>
+            )}
           </div>
         </div>
 
