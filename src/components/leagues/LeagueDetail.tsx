@@ -556,7 +556,12 @@ function LeaguePoolModal({ poolId, onClose, onNavigate, authUser, onRequireAuth 
   return (
     <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/70 backdrop-blur-[2px] z-50" onClick={onClose} />
-      <motion.div initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }} className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-4xl mx-auto bg-card border border-white/10 rounded-2xl shadow-2xl p-0 overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0, y: 12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 12, scale: 0.98 }}
+  className="fixed inset-4 z-50 max-w-4xl mx-auto bg-card border border-white/10 rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[calc(100vh-2rem)] flex flex-col"
+      >
         <PoolLeaderboard
           pool={pool}
           onNavigate={(v) => {
