@@ -48,7 +48,38 @@ service cloud.firestore {
       // - The `ownerId` field cannot be changed after creation to prevent ownership hijacking.
       //   This is enforced by checking that the ownerId in the incoming request matches the existing ownerId.
       allow update: if isOwner(resource.data)
-        && request.resource.data.ownerId == resource.data.ownerId;
+        && request.resource.data.ownerId == resource.data.ownerId
+      // Allow authenticated league members to join or leave via append/remove-only updates
+      // to the league's `members` and `memberIds` arrays. This permits join/leave behavior
+      // without granting non-owners full update rights.
+      || (
+        isFullUser()
+        && request.resource.data.keys().hasOnly(['members', 'memberIds', 'updatedAt'])
+        && request.resource.data.members is list
+        && resource.data.members is list
+        && request.resource.data.memberIds is list
+        && resource.data.memberIds is list
+        && request.resource.data.members.size() == request.resource.data.memberIds.size()
+        && (
+          // Join: old memberIds are a subset of new memberIds, size grows by 1,
+          // members also grow by 1, and the request includes the authenticated user.
+          (
+            request.resource.data.memberIds.hasAll(resource.data.memberIds)
+            && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
+            && request.resource.data.members.hasAll(resource.data.members)
+            && request.resource.data.memberIds.hasAny([request.auth.uid])
+          )
+          ||
+          // Leave: new memberIds are a subset of old memberIds, size shrinks by 1,
+          // members shrink by 1, and the authenticated user is removed.
+          (
+            resource.data.memberIds.hasAll(request.resource.data.memberIds)
+            && resource.data.memberIds.size() == request.resource.data.memberIds.size() + 1
+            && resource.data.members.hasAll(request.resource.data.members)
+            && !request.resource.data.memberIds.hasAny([request.auth.uid])
+          )
+        )
+      );
 
       // Delete Access: Only the owner can delete the league.
       allow delete: if isOwner(resource.data);
@@ -56,22 +87,22 @@ service cloud.firestore {
       // --- Members Subcollection (Nested under Leagues): Manages league participation ---
       // Security rules do not cascade, so subcollections need explicit rules.
       match /members/{userId} {
-        // Read Access:
-        // - The league owner can read all members of their league.
-        // - A user can read their own membership document to check their status.
-        //   'resource.data.uid == request.auth.uid' checks if the current user is the owner of the member document.
-        //   'get(/databases/$(database)/documents/leagues/$(leagueId)).data.ownerId == request.auth.uid' checks if the current user is the league owner.
+    // Read Access:
+    // - The league owner can read all members of their league.
+    // - A user can read their own membership document to check their status.
+    //   'resource.data.userId == request.auth.uid' checks if the current user is the owner of the member document.
+    //   'get(/databases/$(database)/documents/leagues/$(leagueId)).data.ownerId == request.auth.uid' checks if the current user is the league owner.
         allow read: if isFullUser()
-          && (resource.data.uid == request.auth.uid || get(/databases/$(database)/documents/leagues/$(leagueId)).data.ownerId == request.auth.uid);
+          && (resource.data.userId == request.auth.uid || get(/databases/$(database)/documents/leagues/$(leagueId)).data.ownerId == request.auth.uid);
 
         // Create Access (Joining a League):
         // - Only a full user can create their own member document.
-        // - The `userId` in the path and the `uid` in the document data must match the authenticated user's UID.
+  // - The `userId` in the path and the `userId` in the document data must match the authenticated user's UID.
         // - The `joinCode` provided in the new member document must match the `joinCode` stored in the parent league document.
         //   `get()` is used for cross-document validation.
         allow create: if isFullUser()
           && request.auth.uid == userId // User can only create their own member document (document ID matches auth UID)
-          && request.resource.data.uid == request.auth.uid // The document data must contain their uid
+          && request.resource.data.userId == request.auth.uid // The document data must contain their userId
           && request.resource.data.joinCode == get(/databases/$(database)/documents/leagues/$(leagueId)).data.joinCode;
 
         // Update Access:
