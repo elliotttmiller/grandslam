@@ -7,6 +7,7 @@ import { getPools, getPool, savePool, addEntry, generateId, importPool, POOL_COD
 import { syncGetPool, syncAddEntry } from '@/services/poolSyncService';
 import { getUserId, setUserName } from '@/lib/user-identity';
 import { calculateBracketScore } from '@/lib/scoring';
+import { PoolLeaderboard } from '@/components/pools/PoolLeaderboard';
 import { tournamentColor } from '@/lib/tournament-colors';
 import {
   MADRID_2025_TEST_POOL_OPTION_ID,
@@ -101,6 +102,9 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
   }, [initialJoinCode, isAuthed]);
 
   const refreshPools = () => setPools(getPools());
+
+  // Selected pool shown as a modal overlay from the hub (keeps user in context)
+  const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
 
   /** Guard helper — shows auth modal and returns false when auth is required. */
   const requireAuth = (): boolean => {
@@ -358,7 +362,7 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                       variant="ghost"
                       size="sm"
                       className="shrink-0 rounded-xl text-muted-foreground/70 hover:text-foreground"
-                      onClick={() => onNavigate({ page: 'pool', poolId: pool.id })}
+                      onClick={() => setSelectedPoolId(pool.id)}
                     >
                       View <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
                     </Button>
@@ -611,6 +615,48 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
                   ) : 'Join Pool'}
                 </Button>
               </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Pool Detail modal when opened from the Hub */}
+      <AnimatePresence>
+        {selectedPoolId && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedPoolId(null)}
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 8 }}
+              transition={{ duration: 0.18 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[94vw] max-w-4xl bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-0 overflow-hidden"
+            >
+              {(() => {
+                const pool = getPool(selectedPoolId!);
+                if (!pool) return <div className="p-6">Pool not found.</div>;
+                return (
+                  <PoolLeaderboard
+                    pool={pool}
+                    onNavigate={(v) => {
+                      // Close modal before navigating the app-level view
+                      setSelectedPoolId(null);
+                      onNavigate(v);
+                    }}
+                    onPoolUpdate={() => {
+                      refreshPools();
+                    }}
+                    authUser={authUser}
+                    onRequireAuth={onRequireAuth}
+                  />
+                );
+              })()}
             </motion.div>
           </>
         )}

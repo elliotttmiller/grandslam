@@ -45,9 +45,11 @@ interface PoolLeaderboardProps {
    * reflects the latest round results in real time.
    */
   simulatorVersion?: number;
+  /** When true, hide share UI (pool code, invite links) — used when pool is shown inside a league */
+  hideShare?: boolean;
 }
 
-export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRequireAuth, simulatorVersion }: PoolLeaderboardProps) {
+export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRequireAuth, simulatorVersion, hideShare }: PoolLeaderboardProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState('');
@@ -323,9 +325,11 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
                 )}>
                   {poolData.tournamentName}
                 </span>
-                <span className="text-[12px] text-muted-foreground/60">
-                  Code: <span className="font-mono font-bold text-foreground/80">{poolData.id}</span>
-                </span>
+                {!hideShare && (
+                  <span className="text-[12px] text-muted-foreground/60">
+                    Code: <span className="font-mono font-bold text-foreground/80">{poolData.id}</span>
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex gap-2 flex-wrap shrink-0">
@@ -569,28 +573,30 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
             </div>
           )}
 
-          {/* Invite section */}
-          <div className="border border-border/30 rounded-2xl p-5 bg-card/30">
-            <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 text-muted-foreground/60">Invite Others</h3>
-            <div className="flex items-center gap-4 mb-4 flex-wrap">
-              <div className="font-mono text-2xl font-black tracking-[0.3em] bg-muted/15 px-4 py-2.5 rounded-xl border border-border/25" aria-label={`Pool code: ${poolData.id}`}>
-                {poolData.id}
+          {/* Invite section (hidden when shown inside a league) */}
+          {!hideShare && (
+            <div className="border border-border/30 rounded-2xl p-5 bg-card/30">
+              <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 text-muted-foreground/60">Invite Others</h3>
+              <div className="flex items-center gap-4 mb-4 flex-wrap">
+                <div className="font-mono text-2xl font-black tracking-[0.3em] bg-muted/15 px-4 py-2.5 rounded-xl border border-border/25" aria-label={`Pool code: ${poolData.id}`}>
+                  {poolData.id}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={handleCopyInviteLink}>
+                    {copied === 'invite' ? <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />}
+                    {copied === 'invite' ? 'Copied!' : 'Copy Invite Link'}
+                  </Button>
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={handleCopyPoolSnap}>
+                    {copied === 'snap' ? <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" aria-hidden="true" /> : <ClipboardCheck className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />}
+                    {copied === 'snap' ? 'Copied!' : 'Copy Pool Snapshot'}
+                  </Button>
+                </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <Button variant="outline" size="sm" className="rounded-xl" onClick={handleCopyInviteLink}>
-                  {copied === 'invite' ? <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />}
-                  {copied === 'invite' ? 'Copied!' : 'Copy Invite Link'}
-                </Button>
-                <Button variant="outline" size="sm" className="rounded-xl" onClick={handleCopyPoolSnap}>
-                  {copied === 'snap' ? <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" aria-hidden="true" /> : <ClipboardCheck className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />}
-                  {copied === 'snap' ? 'Copied!' : 'Copy Pool Snapshot'}
-                </Button>
-              </div>
+              <p className="text-[11px] text-muted-foreground/55 leading-relaxed">
+                Share the invite link with participants. Each person fills out their bracket and sends you their entry link. Open the entry link to import it into this pool.
+              </p>
             </div>
-            <p className="text-[11px] text-muted-foreground/55 leading-relaxed">
-              Share the invite link with participants. Each person fills out their bracket and sends you their entry link. Open the entry link to import it into this pool.
-            </p>
-          </div>
+          )}
 
           {/* Pool management */}
           <div className="flex items-center gap-2.5 flex-wrap">

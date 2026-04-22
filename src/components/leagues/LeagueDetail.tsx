@@ -28,6 +28,7 @@ import {
   getPool,
   savePool,
 } from '@/lib/pool-storage';
+import { PoolLeaderboard } from '@/components/pools/PoolLeaderboard';
 import { syncCreatePool, syncAddEntry } from '@/services/poolSyncService';
 import { calculatePoolEntryScore } from '@/lib/scoring';
 import {
@@ -72,6 +73,7 @@ export function LeagueDetail({
   const [showHubInsightsModal, setShowHubInsightsModal] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [previousRanks, setPreviousRanks] = useState<Record<string, number>>({});
+  const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
 
   const userId = authUser?.uid ?? '';
   const isOwner = league?.createdBy === userId;
@@ -446,6 +448,7 @@ export function LeagueDetail({
                 joiningPool={joiningPool}
                 onJoinPool={handleJoinPool}
                 onNavigate={onNavigate}
+                onOpenPool={(poolId: string) => setSelectedPoolId(poolId)}
               />
             </motion.div>
           )}
@@ -524,7 +527,49 @@ export function LeagueDetail({
           </>
         )}
       </AnimatePresence>
+      {/* Pool detail modal opened from this league */}
+      <AnimatePresence>
+        {selectedPoolId && (
+          <LeaguePoolModal
+            poolId={selectedPoolId}
+            onClose={() => setSelectedPoolId(null)}
+            onNavigate={onNavigate}
+            authUser={authUser}
+            onRequireAuth={() => { window.alert('Please sign in to perform this action.'); }}
+          />
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+// Pool detail modal opened from LeagueDetail
+function LeaguePoolModal({ poolId, onClose, onNavigate, authUser, onRequireAuth }: { poolId: string; onClose: () => void; onNavigate: (v: AppView) => void; authUser: User | null; onRequireAuth: () => void; }) {
+  const pool = getPool(poolId);
+  if (!pool) return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/70 backdrop-blur-[2px] z-50" onClick={onClose} />
+      <motion.div initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }} className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-2xl mx-auto bg-card border border-white/10 rounded-2xl shadow-2xl p-5">Pool not found.</motion.div>
+    </>
+  );
+
+  return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/70 backdrop-blur-[2px] z-50" onClick={onClose} />
+      <motion.div initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }} className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-50 max-w-4xl mx-auto bg-card border border-white/10 rounded-2xl shadow-2xl p-0 overflow-hidden">
+        <PoolLeaderboard
+          pool={pool}
+          onNavigate={(v) => {
+            onClose();
+            onNavigate(v);
+          }}
+          onPoolUpdate={() => { /* no-op, parent will refresh on change */ }}
+          authUser={authUser}
+          onRequireAuth={onRequireAuth}
+          hideShare={true}
+        />
+      </motion.div>
+    </>
   );
 }
 
@@ -800,7 +845,7 @@ interface PoolsTabProps {
   onNavigate: (view: AppView) => void;
 }
 
-function PoolsTab({ league, leagueTournaments, userId, joiningPool, onJoinPool, onNavigate }: PoolsTabProps) {
+function PoolsTab({ league, leagueTournaments, userId, joiningPool, onJoinPool, onNavigate, onOpenPool }: PoolsTabProps & { onOpenPool?: (poolId: string) => void }) {
   const now = new Date();
 
   return (
@@ -857,7 +902,15 @@ function PoolsTab({ league, leagueTournaments, userId, joiningPool, onJoinPool, 
                   size="sm"
                   variant="outline"
                   className="rounded-xl shrink-0 w-full sm:w-auto justify-center"
-                  onClick={() => onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: myEntry.id })}
+                  onClick={() => {
+                    // Open the pool detail modal (if provided) so users can view/manage
+                    // the pool inline. Fallback to navigating directly to the entry editor.
+                    if (onOpenPool) {
+                      onOpenPool(pool.id);
+                    } else {
+                      onNavigate({ page: 'pool-entry', poolId: pool.id, entryId: myEntry.id });
+                    }
+                  }}
                 >
                 <ChevronRight className="h-3.5 w-3.5" />
                 View

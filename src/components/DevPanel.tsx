@@ -105,7 +105,7 @@ export function DevPanel({ authUser, onNavigate, onPoolChanged }: DevPanelProps)
     : 0;
 
   return (
-    <div className="fixed bottom-4 left-4 z-[80] w-72">
+    <div className="fixed bottom-4 left-4 z-80 w-72">
       <div className="bg-zinc-950/95 border border-amber-500/30 rounded-2xl shadow-2xl backdrop-blur-sm overflow-hidden">
 
         {/* ── Header (toggle) ── */}
@@ -134,7 +134,7 @@ export function DevPanel({ authUser, onNavigate, onPoolChanged }: DevPanelProps)
 
         {/* ── Body ── */}
         {isOpen && (
-          <div className="px-4 pb-4 space-y-4 border-t border-white/[0.06]">
+          <div className="px-4 pb-4 space-y-4 border-t border-white/6">
 
             {/* Status message */}
             {status && (
