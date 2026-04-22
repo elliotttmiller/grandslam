@@ -119,7 +119,7 @@ export function DevPanel({ authUser, onNavigate, onPoolChanged }: DevPanelProps)
           <FlaskConical className="h-4 w-4 text-amber-400 shrink-0" aria-hidden="true" />
           <span className="text-[11px] font-black uppercase tracking-widest text-amber-400">Dev</span>
           {pool && (
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" aria-label="Pool active" />
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" aria-hidden="true" />
           )}
         </button>
       ) : (

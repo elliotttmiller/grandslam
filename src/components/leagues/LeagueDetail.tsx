@@ -906,7 +906,7 @@ function PoolsTab({ league, leagueTournaments, userId, joiningPool, onJoinPool, 
                 <Button
                   size="sm"
                   variant="outline"
-                  className="rounded-xl shrink-0 w-full sm:w-auto justify-center text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/8 hover:border-emerald-500/40"
+                  className="rounded-xl shrink-0 w-full sm:w-auto justify-center text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/8 hover:border-emerald-500/40"
                   onClick={() => {
                     // Open the pool detail modal (if provided) so users can view/manage
                     // the pool inline. Fallback to navigating directly to the entry editor.
