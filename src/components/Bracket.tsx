@@ -16,6 +16,7 @@ interface MatchCardProps {
   readOnly?: boolean;
   /** When false, users cannot change an existing pick (used to lock picks outside full-draw view) */
   allowChangingPicks?: boolean;
+  compact?: boolean;
   officialWinnerId?: string | null;
 }
 
@@ -25,6 +26,7 @@ export function MatchCard({
   showScore = true,
   readOnly = false,
   allowChangingPicks = true,
+  compact = false,
   officialWinnerId,
 }: MatchCardProps) {
   // Track when the winner was just set to trigger animations
@@ -76,8 +78,9 @@ export function MatchCard({
 
     return (
       <motion.div
-        className={cn(
-          "flex items-center justify-between px-4 py-3 text-sm select-none min-h-12 transition-transform duration-150 ease-out",
+          className={cn(
+            "flex items-center justify-between select-none transition-transform duration-150 ease-out",
+            compact ? 'px-3 py-2.5 text-xs min-h-10.5' : 'px-4 py-3 text-sm min-h-12',
           isTop ? "border-b border-border/30" : "",
           // Winner styling — official results use green/red, user picks should glow only around the edge
           isWinner
@@ -160,7 +163,7 @@ export function MatchCard({
 
       <Card
         className={cn(
-          "w-56 overflow-hidden transition-all duration-200",
+          compact ? 'w-full max-w-full overflow-hidden transition-all duration-200' : 'w-56 overflow-hidden transition-all duration-200',
           // conditional border / accent styles preserved
           match.winnerId
             ? isIncorrectPick
@@ -186,7 +189,10 @@ export function MatchCard({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               transition={{ duration: 0.2 }}
-              className="flex items-center gap-1.5 px-3 py-1.5 border-t border-emerald-500/10 bg-emerald-500/4"
+              className={cn(
+                'flex items-center gap-1.5 border-t border-emerald-500/10 bg-emerald-500/4',
+                compact ? 'px-2 py-1 text-[9px]' : 'px-3 py-1.5 text-[10px]',
+              )}
             >
               <span className="text-[10px] font-bold text-emerald-400">
                 +{earnedBase}{earnedUpset > 0 ? `+${earnedUpset}` : ''} pts
@@ -207,7 +213,10 @@ export function MatchCard({
       </Card>
 
       {/* Round label on hover */}
-      <div className="absolute -top-1.5 left-2 text-[9px] font-bold tracking-tight text-muted-foreground/50 bg-background/90 px-1.5 py-0.5 rounded-md border border-border/30 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+      <div className={cn(
+        'absolute -top-1.5 left-2 text-[9px] font-bold tracking-tight text-muted-foreground/50 bg-background/90 px-1.5 py-0.5 rounded-md border border-border/30 transition-opacity duration-150 pointer-events-none',
+        compact ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+      )}>
         {ROUND_NAMES[match.round] ?? `R${match.round}`}
       </div>
     </motion.div>

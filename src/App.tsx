@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useBracketCanvas } from './hooks/useBracketCanvas';
 import { fetchTournamentPlayers, fetchTournamentsWithDates, fetchMastersDrawPlayers, fetchMastersOfficialDrawPlayers, fetchMastersTournamentResults, getTournamentPhase, TournamentData, CACHE_KEY_TOURNAMENTS, CACHE_KEY_MASTERS_PREFIX, CACHE_KEY_MASTERS_DRAW_PREFIX } from './services/geminiService';
 import { generateBracket, generateMastersBracket, buildBracketFromDraw, advancePlayer, applyLiveResults, applyByesToBracket, Match, Player, getRoundName, getRoundFullName } from './lib/bracket-utils';
-import { BracketTree } from './components/Bracket';
+import { BracketTree, MatchCard } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Button, buttonVariants } from './components/ui/button';
@@ -11,7 +11,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { PoolHub } from './components/pools/PoolHub';
 import { PoolLeaderboard } from './components/pools/PoolLeaderboard';
 import { PoolBracketEditor } from './components/pools/PoolBracketEditor';
-import { MatchPickCard } from './components/pools/MatchPickCard';
 import { LeagueHub } from './components/leagues/LeagueHub';
 import { MyLeagues } from './components/leagues/MyLeagues';
 import { LeagueDetail } from './components/leagues/LeagueDetail';
@@ -32,7 +31,6 @@ import { BracketLoadingSkeleton, RoundListSkeleton } from './components/BracketL
 import { AuthGate } from './components/AuthGate';
 import { MastersTournamentModal } from './components/MastersTournamentModal';
 import { DevPanel } from './components/DevPanel';
-import { SimulatorPanel, SimulatorButton } from './components/SimulatorPanel';
 import { MASTERS_TOURNAMENTS, GRAND_SLAM_STATIC_INFO, surfaceColor, type MastersTournament } from './lib/masters-tournaments';
 import {
   MADRID_2025_TEST_POOL_OPTION_ID,
@@ -1932,11 +1930,11 @@ export default function App() {
                       if (!m1) return null;
                       return (
                         <div key={`r1-group-${pairIndex}`} className="flex flex-col gap-1.5 rounded-2xl border border-border/15 bg-white/2 p-2.5">
-                          <MatchPickCard
+                          <MatchCard
                             match={m1}
-                            matchIndex={pairIndex * 2}
                             onSelectWinner={handleSelectWinner}
                             readOnly={isLocked}
+                            compact
                           />
                           {m2 && (
                             <>
@@ -1945,11 +1943,11 @@ export default function App() {
                                 <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/30">winner advances</span>
                                 <div className="h-px flex-1 bg-border/20" />
                               </div>
-                              <MatchPickCard
+                              <MatchCard
                                 match={m2}
-                                matchIndex={pairIndex * 2 + 1}
                                 onSelectWinner={handleSelectWinner}
                                 readOnly={isLocked}
+                                compact
                               />
                             </>
                           )}
@@ -1958,17 +1956,17 @@ export default function App() {
                     })}
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-3">
-                    {activeRoundMatches.map((match, idx) => (
-                      <MatchPickCard
-                        key={match.id}
-                        match={match}
-                        matchIndex={idx}
-                        onSelectWinner={handleSelectWinner}
-                        readOnly={isLocked}
-                      />
-                    ))}
-                  </div>
+                    <div className="flex flex-col gap-3">
+                      {activeRoundMatches.map((match) => (
+                        <MatchCard
+                          key={match.id}
+                          match={match}
+                          onSelectWinner={handleSelectWinner}
+                          readOnly={isLocked}
+                          compact
+                        />
+                      ))}
+                    </div>
                 )}
               </div>
             </div>
@@ -2057,32 +2055,13 @@ export default function App() {
         </div>
       </div>
 
-      {/* Developer panel — only visible in Vite dev mode or when ?dev=1 is in the URL */}
-      {isDevMode && (
-        <DevPanel
-          authUser={authUser}
-          onNavigate={setAppView}
-          onPoolChanged={handleDevPoolChanged}
-        />
-      )}
-
-      {/* Simulator button — always visible */}
-      {!showSimulator && (
-        <SimulatorButton
-          onClick={() => setShowSimulator(true)}
-          hasPool={simulatorPoolExists}
-        />
-      )}
-
-      {/* Simulator panel */}
-      {showSimulator && (
-        <SimulatorPanel
-          authUser={authUser}
-          onNavigate={setAppView}
-          onPoolChanged={handleDevPoolChanged}
-          onClose={() => setShowSimulator(false)}
-        />
-      )}
+      {/* Unified Dev/Simulator panel — always visible as a small floating icon, expands to full panel */}
+      <DevPanel
+        authUser={authUser}
+        onNavigate={setAppView}
+        onPoolChanged={handleDevPoolChanged}
+        isDevMode={isDevMode}
+      />
     </div>
   );
 }

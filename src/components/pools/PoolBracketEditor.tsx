@@ -5,11 +5,10 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { BracketTree } from '@/components/Bracket';
+import { BracketTree, MatchCard } from '@/components/Bracket';
 import { advancePlayer, getRoundName, getRoundFullName } from '@/lib/bracket-utils';
 import { calculateBracketScore } from '@/lib/scoring';
 import { useBracketCanvas } from '@/hooks/useBracketCanvas';
-import { MatchPickCard } from './MatchPickCard';
 import type { Match } from '@/lib/bracket-utils';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 
@@ -368,17 +367,18 @@ export function PoolBracketEditor({
 
               {/* Match cards */}
               <div className="flex flex-col gap-3">
-                {activeRoundMatches.map((match: Match, idx: number) => (
-                  <MatchPickCard
-                    key={match.id}
-                    match={match}
-                    matchIndex={idx}
-                    onSelectWinner={handleSelectWinner}
-                    readOnly={isEffectivelyReadOnly}
-                    // allow changing picks only in the full-draw view (activeRound === 0)
-                    allowChangingPicks={activeRound === 0}
-                    officialWinnerId={officialWinnersByMatchId?.[match.id]}
-                  />
+                {activeRoundMatches.map((match: Match) => (
+                  <div key={match.id} className="">
+                    <MatchCard
+                      match={match}
+                      onSelectWinner={handleSelectWinner}
+                      showScore={true}
+                      readOnly={isEffectivelyReadOnly}
+                      // allow changing picks only in the full-draw view (activeRound === 0)
+                      allowChangingPicks={activeRound === 0}
+                      officialWinnerId={officialWinnersByMatchId?.[match.id]}
+                    />
+                  </div>
                 ))}
               </div>
 

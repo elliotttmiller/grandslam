@@ -20,7 +20,7 @@ import {
 import { advancePlayer, getRoundName } from '@/lib/bracket-utils';
 import { getUserId } from '@/lib/user-identity';
 import { tournamentColor } from '@/lib/tournament-colors';
-import { MatchPickCard } from './MatchPickCard';
+import { MatchCard } from '@/components/Bracket';
 import type { Match } from '@/lib/bracket-utils';
 import type { Pool, PoolEntry } from '@/lib/pool-types';
 import type { AppView } from '@/App';
@@ -675,17 +675,17 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
                 {/* Match cards */}
                 <div className="flex flex-col gap-2">
                   {editingOfficialMatches
-                    .filter(m => m.round === resultsActiveRound)
-                    .sort((a, b) => a.matchNumber - b.matchNumber)
-                    .map((match, i) => (
-                      <MatchPickCard
-                        key={match.id}
-                        match={match}
-                        matchIndex={i}
-                        onSelectWinner={handleResultWinner}
-                        readOnly={false}
-                      />
-                    ))}
+                      .filter(m => m.round === resultsActiveRound)
+                      .sort((a, b) => a.matchNumber - b.matchNumber)
+                      .map(match => (
+                        <MatchCard
+                          key={match.id}
+                          match={match}
+                          onSelectWinner={handleResultWinner}
+                          readOnly={false}
+                          compact
+                        />
+                      ))}
                 </div>
 
                 <p className="text-[10px] text-blue-400/60 leading-relaxed">
@@ -708,7 +708,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 8 }}
               transition={{ duration: 0.18 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-md bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[98vw] max-w-105 sm:max-w-md bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-4 sm:p-6 flex flex-col gap-4"
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold">Import Entry</h3>
@@ -748,7 +748,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 8 }}
               transition={{ duration: 0.18 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-sm bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-6 flex flex-col gap-4"
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[98vw] max-w-95 sm:max-w-sm bg-card border border-white/10 rounded-2xl shadow-2xl z-50 p-4 sm:p-6 flex flex-col gap-4"
             >
               <h3 className="text-sm font-bold text-red-400">Delete Pool?</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">

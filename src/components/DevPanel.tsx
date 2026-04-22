@@ -37,6 +37,7 @@ interface DevPanelProps {
   onNavigate: (view: AppView) => void;
   /** Called after any pool mutation so the rest of the app can re-sync. */
   onPoolChanged?: () => void;
+  isDevMode?: boolean;
 }
 
 // ─── Round definitions ────────────────────────────────────────────────────────
