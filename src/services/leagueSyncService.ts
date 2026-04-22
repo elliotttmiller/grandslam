@@ -134,26 +134,49 @@ export async function syncCreateLeague(league: League): Promise<League | null> {
       return null;
     }
     // Ensure the ID token is fresh so security rules see the correct provider info
+    let idTokenResult: any = null;
     try {
-      await currentUser.getIdToken(true);
+      idTokenResult = await currentUser.getIdTokenResult(true);
+      console.debug('syncCreateLeague - idTokenResult.claims', idTokenResult.claims);
     } catch (tokenErr) {
       console.warn('Could not refresh ID token before creating league:', tokenErr);
     }
     const ref = doc(getDb(), 'leagues', league.id);
     const existing = await getDoc(ref);
     if (existing.exists()) return toLeague(existing.data() as Record<string, unknown>);
-  const leagueData = removeUndefined(league);
+    const leagueData = removeUndefined(league);
     // Ensure createdBy in the write payload matches the authenticated user —
     // Firestore rules require request.resource.data.createdBy == request.auth.uid.
     const userUid = currentUser.uid;
-  // Write both `createdBy` (existing field) and `ownerId` (matches rules)
-  const dataToWrite = { ...leagueData, createdBy: userUid, ownerId: userUid, updatedAt: serverTimestamp() };
-    await setDoc(ref, dataToWrite);
-    return league;
+    // Write both `createdBy` (existing field) and `ownerId` (matches rules)
+    const dataToWrite = { ...leagueData, createdBy: userUid, ownerId: userUid, updatedAt: serverTimestamp() };
+    // Debug: log final payload so we can confirm required fields are present
+    try {
+      console.debug('syncCreateLeague - writing payload', {
+        leagueId: league.id,
+        name: dataToWrite.name,
+        ownerId: dataToWrite.ownerId,
+        createdBy: dataToWrite.createdBy,
+        joinCode: (dataToWrite as any).joinCode ?? null,
+        isPrivate: dataToWrite.isPrivate ?? null,
+        tokenClaims: idTokenResult?.claims ?? null,
+      });
+    } catch (e) {
+      // ignore debug serialization errors
+    }
+    try {
+      await setDoc(ref, dataToWrite);
+      return league;
+    } catch (writeErr) {
+      // Surface the write error to callers so the UI can display a helpful message
+      console.error('League creation failed at setDoc:', writeErr);
+      throw writeErr;
+    }
   } catch (error) {
     const err = error as { code?: string; message?: string };
-    console.error('League creation failed:', err?.code, err?.message);
-    return null;
+    console.error('League creation failed (outer):', err?.code, err?.message);
+    // Re-throw so callers can decide how to present the error (permission-denied, etc.)
+    throw error;
   }
 }
 

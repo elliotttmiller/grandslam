@@ -93,7 +93,20 @@ export function LeagueHub({ onNavigate, authUser, onRequireAuth }: LeagueHubProp
         false,
       );
       // Best-effort Firestore sync
-      const syncedLeague = await syncCreateLeague(league);
+      let syncedLeague = null;
+      try {
+        syncedLeague = await syncCreateLeague(league);
+      } catch (err) {
+        const code = (err as { code?: string })?.code;
+        const msg = (err as { message?: string })?.message ?? String(err);
+        console.error('League create error (UI):', code, msg);
+        if (code === 'permission-denied') {
+          setCreateError('Permission denied: make sure you are signed in with a full (non-anonymous) account.');
+        } else {
+          setCreateError(`League created locally but failed to save to server: ${msg}`);
+        }
+        return;
+      }
       if (!syncedLeague) {
         setCreateError('League created locally but failed to save to the server. Check your connection and sign-in status.');
         return;
