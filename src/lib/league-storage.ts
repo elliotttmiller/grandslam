@@ -55,6 +55,7 @@ export function createLeague(
 ): League {
   const league: League = {
     id: generateLeagueCode(),
+    joinCode: '',
     name,
     description: description || undefined,
     year,
@@ -70,6 +71,7 @@ export function createLeague(
     memberIds: [createdBy],
     tournamentPoolIds: {},
   };
+  league.joinCode = league.id;
   if (persist) {
     saveLeague(league);
   }

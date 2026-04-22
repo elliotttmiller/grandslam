@@ -12,6 +12,8 @@ export interface League {
   /** 6-char uppercase invite code, doubles as the document ID. */
   id: string;
   name: string;
+  /** Short invite code for league join/share. Matches the league ID. */
+  joinCode: string;
   description?: string;
   /** Calendar year this league covers (e.g. 2026). */
   year: number;

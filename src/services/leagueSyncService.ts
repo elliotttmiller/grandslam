@@ -47,6 +47,7 @@ function removeUndefined<T>(obj: T): T {
 function toLeague(data: Record<string, unknown>): League {
   return {
     ...(data as unknown as League),
+    joinCode: (data['joinCode'] as string | undefined) ?? (data['id'] as string),
     createdAt:
       (data['createdAt'] as { toDate?: () => Date } | undefined)?.toDate?.()?.toISOString() ??
       (data['createdAt'] as string),
