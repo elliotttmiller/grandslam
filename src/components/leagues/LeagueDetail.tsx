@@ -5,6 +5,7 @@ import {
   Copy, Check, ChevronRight, Plus, Loader2, X, Medal, BarChart3, Sparkles, TrendingUp, TrendingDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PoolLeaderboard } from '@/components/pools/PoolLeaderboard';
 import { cn, parseDateSafe } from '@/lib/utils';
 import {
   getLeague,
@@ -28,8 +29,7 @@ import {
   getPool,
   savePool,
 } from '@/lib/pool-storage';
-import { PoolLeaderboard } from '@/components/pools/PoolLeaderboard';
-import { syncCreatePool, syncAddEntry } from '@/services/poolSyncService';
+import { syncCreatePool, syncAddEntry, syncGetPool } from '@/services/poolSyncService';
 import { calculatePoolEntryScore } from '@/lib/scoring';
 import {
   MADRID_2025_TEST_POOL_OPTION_ID,
@@ -123,6 +123,22 @@ export function LeagueDetail({
     try {
       let poolId = league.tournamentPoolIds[tournamentId];
       let pool: Pool | null = poolId ? getPool(poolId) : null;
+
+      if (poolId && !pool) {
+        try {
+          pool = await syncGetPool(poolId);
+          if (pool) {
+            savePool(pool);
+          }
+        } catch (err) {
+          console.error('Failed to load existing league pool from server:', err);
+        }
+
+        if (!pool) {
+          window.alert('This league pool exists, but the app could not load it right now. Please try again later.');
+          return;
+        }
+      }
 
       // Create pool if it doesn't exist yet
       if (!pool) {
