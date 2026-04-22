@@ -2,133 +2,46 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper Functions: Enhance readability and reusability for common checks.
-    // ----------------------------------------------------------------------
-
-    // Checks if the user is authenticated at all.
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Checks if the user is fully authenticated (not anonymous).
-    // This is crucial for distinguishing between temporary anonymous users and full accounts.
-    function isFullUser() {
-      return isSignedIn()
-        && !(request.auth.token.firebase != null
-             && request.auth.token.firebase.sign_in_provider == 'anonymous');
-    }
-
-    // Checks if the requesting user is the owner of the resource.
-    // This is a common authorization pattern for user-owned data.
     function isOwner(resourceData) {
-      return isFullUser() && resourceData.ownerId == request.auth.uid;
+      return isSignedIn() && resourceData.ownerId == request.auth.uid;
     }
 
-    // --- Leagues Collection: Owner-controlled access with join functionality ---
-    // --------------------------------------------------------------------------
     match /leagues/{leagueId} {
-
-      // Read Access: All fully authenticated users can read league data.
-      allow read: if isFullUser();
-
-      // Create Access:
-      // - Only full users can create a league.
-      // - The requesting user must set themselves as the owner.
-      // - Required fields (`name`, `joinCode`, `ownerId`) must be present, correctly typed, and not empty.
-      //   This acts as a runtime schema validator for new documents.
-      allow create: if isFullUser()
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.joinCode is string
-        && request.resource.data.joinCode.size() > 0;
-
-      // Update Access:
-      // - Only the owner can update the league.
-      // - The `ownerId` field cannot be changed after creation to prevent ownership hijacking.
-      //   This is enforced by checking that the ownerId in the incoming request matches the existing ownerId.
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if isOwner(resource.data)
-        && request.resource.data.ownerId == resource.data.ownerId
-      // Allow authenticated users to join a league by appending themselves to
-      // the `members` and `memberIds` arrays. This preserves owner-only update
-      // rights for all other league fields.
-      || (
-        isFullUser()
-        && request.resource.data.keys().hasOnly(['members', 'memberIds', 'updatedAt'])
-        && request.resource.data.members is list
-        && request.resource.data.members is list
-        && resource.data.members is list
-        && request.resource.data.memberIds is list
-        && resource.data.memberIds is list
-        && request.resource.data.members.size() == resource.data.members.size() + 1
-        && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
-        && request.resource.data.memberIds.hasAll(resource.data.memberIds)
-        && request.resource.data.memberIds.hasAny([request.auth.uid])
-        // Create Access (Joining a League):
-        // - Only a full user can create their own member document.
-  // - The `userId` in the path and the `userId` in the document data must match the authenticated user's UID.
-        // - The `joinCode` provided in the new member document must match the `joinCode` stored in the parent league document.
-        //   `get()` is used for cross-document validation.
-        allow create: if isFullUser()
-          && request.auth.uid == userId // User can only create their own member document (document ID matches auth UID)
-          && request.resource.data.userId == request.auth.uid // The document data must contain their userId
-          && request.resource.data.joinCode == get(/databases/$(database)/documents/leagues/$(leagueId)).data.joinCode;
-
-        // Update Access:
-        // - Typically, only the league owner should be able to update member details (e.g., role, status).
-        // - Members cannot update their own details through client-side rules to prevent self-promotion or malicious changes.
-        allow update: if isFullUser()
-          && isOwner(get(/databases/$(database)/documents/leagues/$(leagueId)).data);
-
-        // Delete Access (Leaving a League / Removing a Member):
-        // - A user can delete their own membership record (i.e., leave the league).
-        // - The league owner can also remove any member from their league.
-        allow delete: if isFullUser()
-          && (request.auth.uid == userId || isOwner(get(/databases/$(database)/documents/leagues/$(leagueId)).data));
-      }
+        || (
+          isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'memberIds', 'updatedAt'])
+          && request.resource.data.members is list
+          && resource.data.members is list
+          && request.resource.data.memberIds is list
+          && resource.data.memberIds is list
+          && request.resource.data.members.size() >= resource.data.members.size()
+          && request.resource.data.memberIds.size() >= resource.data.memberIds.size()
+        );
+      allow delete: if isOwner(resource.data);
     }
 
-    // --- Pools Collection: Owner-controlled with participant-specific updates ---
-    // ---------------------------------------------------------------------------
     match /pools/{poolId} {
-
-      // Read Access: All fully authenticated users can read pool data.
-      allow read: if isFullUser();
-
-      // Create Access:
-      // - Only full users can create a pool.
-      // - The requesting user must set themselves as the owner.
-      // - Required fields (e.g., `name`, `ownerId`) must be present and correctly typed.
-      allow create: if isFullUser()
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0;
-
-      // Update Access:
-      // This rule handles two distinct update scenarios:
-      // 1. Owner Updates: The owner can update any field in the pool.
-      // 2. Participant Updates: Non-owners (participants) can only modify specific fields
-      //    (`entries`, `participantIds`, `updatedAt`) under strict conditions:
-      //    - Only these fields can be present in the update payload (`hasOnly`).
-      //    - `entries` and `participantIds` must remain lists, and their size can only increase
-      //      (allowing append-only behavior).
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if isOwner(resource.data)
-        && request.resource.data.ownerId == resource.data.ownerId
-      // Allow authenticated users to join a league by appending themselves to
-      // the `members` and `memberIds` arrays. This preserves owner-only update
-      // rights for all other league fields.
-      || (
-        isFullUser()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'memberIds', 'updatedAt'])
-        && request.resource.data.members is list
-        && resource.data.members is list
-        && request.resource.data.memberIds is list
-        && resource.data.memberIds is list
-        && request.resource.data.members.size() == resource.data.members.size() + 1
-        && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
-        && request.resource.data.memberIds.hasAll(resource.data.memberIds)
-        && request.resource.data.memberIds.hasAny([request.auth.uid])
-      );
+        || (
+          isSignedIn()
+          && request.resource.data.keys().hasOnly(['entries', 'participantIds', 'updatedAt'])
+          && request.resource.data.entries is list
+          && resource.data.entries is list
+          && request.resource.data.entries.size() >= resource.data.entries.size()
+          && request.resource.data.participantIds is list
+          && resource.data.participantIds is list
+          && request.resource.data.participantIds.size() >= resource.data.participantIds.size()
+        );
+      allow delete: if isOwner(resource.data);
     }
   }
 }
