@@ -95,7 +95,11 @@ export async function syncUpsertTournamentState(
 export function subscribeToTournamentState(
   tournamentId: string,
   onUpdate: (state: TournamentState | null) => void,
+  canReadTournamentState: boolean,
 ): () => void {
+  if (!canReadTournamentState) {
+    return () => {}; // don't subscribe until the user is properly authenticated
+  }
   const ref = doc(getDb(), 'tournaments', tournamentId);
   const unsubscribe = onSnapshot(ref, (snap) => {
     if (!snap.exists()) {

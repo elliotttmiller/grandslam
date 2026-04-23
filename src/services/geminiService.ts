@@ -163,7 +163,7 @@ const TOURNAMENT_DRAW_URLS: Record<string, TournamentDrawUrls> = {
 };
 
 /** Builds a numbered list of prioritised draw sources for inclusion in AI prompts. */
-function buildTournamentUrlHints(tournamentId: string, year: number): string {
+export function buildTournamentUrlHints(tournamentId: string, year: number): string {
   const urls = TOURNAMENT_DRAW_URLS[tournamentId];
   if (!urls) return '';
   return `Official draw sources (search in this order):
@@ -188,7 +188,7 @@ function drawCacheKey(tournamentId: string, approxStart: string | undefined): st
  * tolerating surrounding prose. Safer than indexOf('{') + lastIndexOf('}') because
  * it correctly handles nested objects and brace characters in surrounding text.
  */
-function extractJsonObject(text: string): Record<string, unknown> | null {
+export function extractJsonObject(text: string): Record<string, unknown> | null {
   if (!text) return null;
   // Strip markdown code fences, then try a direct parse first.
   const stripped = text.replace(/```(?:json)?\s*/gi, '').replace(/```\s*/g, '');

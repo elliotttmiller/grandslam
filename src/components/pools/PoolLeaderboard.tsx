@@ -98,14 +98,18 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
 
   useEffect(() => {
     if (!poolData?.tournamentId) return;
-    const unsubscribe = subscribeToTournamentState(poolData.tournamentId, (state) => {
-      setTournamentState(state);
-      if (!state?.officialMatches?.length) return;
-      if (JSON.stringify(state.officialMatches) === JSON.stringify(poolData.officialMatches)) return;
-      setPoolData(prev => ({ ...prev, officialMatches: state.officialMatches }));
-    });
+    const unsubscribe = subscribeToTournamentState(
+      poolData.tournamentId,
+      (state) => {
+        setTournamentState(state);
+        if (!state?.officialMatches?.length) return;
+        if (JSON.stringify(state.officialMatches) === JSON.stringify(poolData.officialMatches)) return;
+        setPoolData(prev => ({ ...prev, officialMatches: state.officialMatches }));
+      },
+      !!authUser && !authUser.isAnonymous,
+    );
     return unsubscribe;
-  }, [poolData?.tournamentId]);
+  }, [poolData?.tournamentId, authUser]);
 
   // Re-read pool data from localStorage whenever the simulator applies a new
   // round of results (simulatorVersion increments via onPoolChanged).
