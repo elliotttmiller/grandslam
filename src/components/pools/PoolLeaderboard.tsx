@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Share2, Copy, Users, Trophy, Lock,
   ChevronRight, Check, X, Plus, Trash2, ClipboardCheck, Radio, ClipboardList, Loader2, LogIn,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import { cn } from '@/lib/utils';
 import { calculatePoolEntryScore } from '@/lib/scoring';
 import {
@@ -17,7 +19,7 @@ import {
   syncDeletePool,
   syncUpdateOfficialMatches,
 } from '@/services/poolSyncService';
-import { refreshMastersPoolMatches } from '@/services/livePoolUpdates';
+import { requestTournamentRefresh } from '@/services/tournamentSyncService';
 import { subscribeToTournamentState, type TournamentState } from '@/services/tournamentSyncService';
 import { advancePlayer, getRoundName, isByeMatch } from '@/lib/bracket-utils';
 import { getUserId } from '@/lib/user-identity';
@@ -68,6 +70,8 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
   const [editingOfficialMatches, setEditingOfficialMatches] = useState<Match[] | null>(null);
   const [resultsActiveRound, setResultsActiveRound] = useState(1);
   const [savingResults, setSavingResults] = useState(false);
+  const [refreshingTournament, setRefreshingTournament] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   // Keep a stable ref to onPoolUpdate so the SSE callback doesn't need it
   // as a dependency (avoids re-subscribing on every parent render).
@@ -131,26 +135,25 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
     return false;
   }, [isAuthed, authUser, currentUserId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function refreshLiveMatches() {
-      if (!poolData?.tournamentId || !poolData?.tournamentName) return;
-      const updatedMatches = await refreshMastersPoolMatches(poolData.tournamentId, poolData.tournamentName);
-      if (!updatedMatches) return;
-      if (JSON.stringify(updatedMatches) === JSON.stringify(poolData.officialMatches)) return;
-      if (cancelled) return;
-      updateOfficialMatches(poolData.id, updatedMatches);
-      setPoolData(prev => ({ ...prev, officialMatches: updatedMatches }));
-      if (cancelled) return;
-      onPoolUpdate?.();
-      const canSync = authUser && !authUser.isAnonymous && (poolData.createdBy === authUser.uid || poolData.ownerId === authUser.uid);
-      if (canSync) {
-        await syncUpdateOfficialMatches(poolData.id, updatedMatches);
-      }
+  const handleRequestTournamentRefresh = async () => {
+    if (!authUser || authUser.isAnonymous) {
+      onRequireAuth();
+      return;
     }
-    refreshLiveMatches();
-    return () => { cancelled = true; };
-  }, [poolData.id, poolData.tournamentId, poolData.tournamentName, poolData.officialMatches, authUser, onPoolUpdate]);
+    setRefreshError(null);
+    setRefreshingTournament(true);
+    try {
+      const success = await requestTournamentRefresh(poolData.tournamentId, poolData.tournamentName);
+      if (!success) {
+        setRefreshError('Could not request tournament refresh. Please try again.');
+      }
+    } catch (error) {
+      console.error('Tournament refresh request failed:', error);
+      setRefreshError('Could not request tournament refresh. Please try again.');
+    } finally {
+      setRefreshingTournament(false);
+    }
+  };
 
   // Total bracket matches in this pool (Grand Slam = 127, Masters = 63)
   const totalBracketMatches = useMemo(
@@ -380,12 +383,24 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
                   Results
                 </Button>
               )}
+              {poolData.tournamentId === 'madrid' && (
+                <RefreshButton
+                  className="text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                  onClick={handleRequestTournamentRefresh}
+                  disabled={refreshingTournament}
+                  loading={refreshingTournament}
+                  title="Request tournament refresh"
+                />
+              )}
               <Button variant="outline" size="sm" className="rounded-xl shrink-0" onClick={handleCopyInviteLink}>
                 {copied === 'invite' ? <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> : <Share2 className="h-3.5 w-3.5 mr-1.5" />}
                 {copied === 'invite' ? 'Copied!' : 'Share / Invite'}
               </Button>
             </div>
           </div>
+          {refreshError && (
+            <div className="mt-3 text-sm text-red-300">{refreshError}</div>
+          )}
 
           {/* Stats bar */}
           <div className="flex items-center gap-5 mt-4 flex-wrap">

@@ -10,6 +10,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "refresh:madrid": "tsx scripts/refresh-madrid.ts",
+    "process-refresh-requests": "tsx scripts/process-refresh-requests.ts",
     "firebase:init": "node scripts/init-firestore.mjs",
     "firebase:deploy": "firebase deploy"
   },

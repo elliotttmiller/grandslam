@@ -2,6 +2,7 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import admin, { ServiceAccount } from 'firebase-admin';
+import { fileURLToPath } from 'url';
 import { buildBracketFromDraw, applyByesToBracket, Player } from '../src/lib/bracket-utils';
 import { getMadrid2026OfficialDrawSlots } from '../src/lib/madrid-2026-data';
 
@@ -86,7 +87,12 @@ async function refreshMadridDraw() {
   console.log('Madrid official draw refresh completed. Firestore tournaments/madrid updated.');
 }
 
-refreshMadridDraw().catch((error) => {
-  console.error('Failed to refresh Madrid draw:', error);
-  process.exit(1);
-});
+export { refreshMadridDraw };
+
+const __filename = fileURLToPath(import.meta.url);
+if (process.argv[1] === __filename) {
+  refreshMadridDraw().catch((error) => {
+    console.error('Failed to refresh Madrid draw:', error);
+    process.exit(1);
+  });
+}

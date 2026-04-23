@@ -6,6 +6,7 @@ import { cn, parseDateSafe } from '@/lib/utils';
 import { fetchMastersTournamentDetails, CACHE_KEY_MASTERS_PREFIX, CACHE_KEY_MASTERS_DRAW_PREFIX, type MastersTournamentDetails } from '@/services/geminiService';
 import { authRemoveItem } from '@/lib/auth-storage';
 import { syncWriteScraperStatus } from '@/services/tournamentSyncService';
+import { requestTournamentRefresh } from '@/services/tournamentSyncService';
 import { type MastersTournament, surfaceColor } from '@/lib/masters-tournaments';
 
 interface MastersTournamentModalProps {
@@ -38,19 +39,23 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
 
   const handleRefresh = () => {
     if (!tournament) return;
-    // Clear both the tournament details cache and the draw cache so fresh data is fetched
-    syncWriteScraperStatus(tournament.id, tournament.name, 'running', 'Refreshing tournament detail cache.');
-    authRemoveItem(`${CACHE_KEY_MASTERS_PREFIX}${tournament.id}`);
-    authRemoveItem(`${CACHE_KEY_MASTERS_DRAW_PREFIX}${tournament.id}`);
-    setDetails(null);
+    // Request a server-side tournament refresh rather than polling continuously.
+    syncWriteScraperStatus(tournament.id, tournament.name, 'pending', 'Refresh requested. Waiting for server processing.');
     setError(null);
     setLoading(true);
-    fetchMastersTournamentDetails(tournament.id, tournament.name)
-      .then(setDetails)
-      .catch(() => setError('Failed to refresh. Please try again.'))
+    requestTournamentRefresh(tournament.id, tournament.name)
+      .then((success) => {
+        if (!success) {
+          setError('Failed to request refresh. Please try again.');
+          syncWriteScraperStatus(tournament.id, tournament.name, 'failed', 'Failed to request tournament refresh.');
+        }
+      })
+      .catch(() => {
+        setError('Failed to request refresh. Please try again.');
+        syncWriteScraperStatus(tournament.id, tournament.name, 'failed', 'Failed to request tournament refresh.');
+      })
       .finally(() => {
         setLoading(false);
-        syncWriteScraperStatus(tournament.id, tournament.name, 'complete', 'Tournament refresh completed.');
       });
   };
 

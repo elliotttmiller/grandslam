@@ -147,6 +147,41 @@ export async function syncWriteScraperStatus(
   }
 }
 
+export async function requestTournamentRefresh(
+  tournamentId: string,
+  tournamentName: string,
+): Promise<boolean> {
+  try {
+    const user = getAuth().currentUser;
+    if (!user) {
+      console.warn('Cannot request tournament refresh: user is not signed in.');
+      return false;
+    }
+
+    const requestDoc = doc(getDb(), 'system', `refresh_request_${tournamentId}`);
+    const existing = await getDoc(requestDoc);
+    const currentStatus = existing.exists() ? existing.data()?.status : null;
+
+    if (currentStatus === 'pending' || currentStatus === 'running') {
+      return true;
+    }
+
+    await setDoc(requestDoc, {
+      tournamentId,
+      tournamentName,
+      requestedBy: user.uid,
+      status: 'pending',
+      requestedAt: new Date().toISOString(),
+      updatedAt: serverTimestamp(),
+      message: 'Refresh requested by user.',
+    }, { merge: true });
+    return true;
+  } catch (error) {
+    console.error('Failed to request tournament refresh:', error);
+    return false;
+  }
+}
+
 export function subscribeToScraperStatus(
   tournamentId: string,
   onUpdate: (status: ScraperStatus | null) => void,
