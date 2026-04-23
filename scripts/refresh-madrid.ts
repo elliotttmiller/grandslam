@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
-import admin from 'firebase-admin';
+import admin, { ServiceAccount } from 'firebase-admin';
 import { buildBracketFromDraw, applyByesToBracket, Player } from '../src/lib/bracket-utils';
 import { getMadrid2026OfficialDrawSlots } from '../src/lib/madrid-2026-data';
 
@@ -9,6 +9,14 @@ interface ServiceAccountKey {
   project_id: string;
   client_email: string;
   private_key: string;
+}
+
+function toServiceAccount(serviceAccount: ServiceAccountKey): ServiceAccount {
+  return {
+    projectId: serviceAccount.project_id,
+    clientEmail: serviceAccount.client_email,
+    privateKey: serviceAccount.private_key,
+  };
 }
 
 function parseServiceAccountJson(value: string): ServiceAccountKey {
@@ -43,7 +51,7 @@ async function initFirestore() {
   if (admin.apps.length === 0) {
     const serviceAccount = loadServiceAccount();
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
+      credential: admin.credential.cert(toServiceAccount(serviceAccount)),
       projectId: serviceAccount.project_id,
     });
   }

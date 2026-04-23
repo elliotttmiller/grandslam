@@ -21,7 +21,7 @@ View your app in AI Studio: https://ai.studio/apps/ace42580-93d4-4140-8d83-7eb10
    - `VITE_GOOGLE_CREDENTIALS_JSON="YOUR_VERTEX_AI_API_KEY"`
 3. Run the app:
    `npm run dev`
-
+-
 ## Firebase Setup (required for cross-device pool sharing)
 
 Bracket Pools use Firebase Firestore to sync between devices.  Two one-time
