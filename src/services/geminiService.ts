@@ -1173,13 +1173,13 @@ ${drawSizeNote}
 Rules:
 - If an official draw is published (even if released very recently), set "drawStatus" to "official".
 - If genuinely not yet published, set "drawStatus" to "predicted" and return an empty "drawPlayers" array.
- - For "official", return exactly ${targetDrawSize} "drawPlayers" items ordered from slot 1 (top of bracket) to slot ${targetDrawSize} (bottom).
- - For 96-player Masters draws, preserve the official 128-slot order exactly as published in the ATP posting PDF. Seeded players must occupy BYE slots in round 1, and first-round matchups must appear in the official top-to-bottom sequence.
- - Each slot object must include:
-   - "slot": integer 1..${targetDrawSize}
-   - "name": player's full name, OR use the exact format "Winner: Player A vs Player B" only for unresolved placeholders when the first-round match winner is not yet known.
-   - "seed": integer tournament seed when known (1-32), else null
-   - "country": ISO 3166-1 alpha-3 3-letter code when known, else null
+- For "official", return exactly ${targetDrawSize} "drawPlayers" items ordered from slot 1 (top of bracket) to slot ${targetDrawSize} (bottom).
+- For 96-player Masters draws, preserve the official 128-slot order exactly as published in the ATP posting PDF. Seeded players must occupy BYE slots in round 1, and first-round matchups must appear in the official top-to-bottom sequence.
+- Each slot object must include:
+  - "slot": integer 1..${targetDrawSize}
+  - "name": player's full name, OR use the exact format "Winner: Player A vs Player B" only for unresolved placeholders when the first-round match winner is not yet known.
+  - "seed": integer tournament seed when known (1-32), else null
+  - "country": ISO 3166-1 alpha-3 3-letter code when known, else null
 - Keep slot ordering aligned with the official bracket (top-to-bottom).
 - Return only JSON (no markdown).
 
