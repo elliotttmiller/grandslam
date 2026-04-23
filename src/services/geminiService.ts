@@ -4,13 +4,57 @@ import { authGetItem, authSetItem } from '@/lib/auth-storage';
 import { getMastersTournamentById } from '@/lib/masters-tournaments';
 import { getMadrid2026OfficialDrawSlots, getMadrid2026Seedings } from '@/lib/madrid-2026-data';
 
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+// ── Vertex AI / Gemini API configuration ────────────────────────────────────
+// Vertex AI mode is enabled by setting VITE_GOOGLE_GENAI_USE_VERTEXAI=True.
+// In browser runtimes the @google/genai SDK requires an API key for auth;
+// VITE_GOOGLE_CREDENTIALS_JSON should hold a Google Cloud API key string with
+// the Vertex AI API enabled.  Service-account JSON is only valid in Node.js
+// server environments (project/location options are ignored in browsers).
+const useVertexAI =
+  import.meta.env.VITE_GOOGLE_GENAI_USE_VERTEXAI === 'True' ||
+  import.meta.env.VITE_GOOGLE_GENAI_USE_VERTEXAI === 'true';
 
-if (!apiKey) {
-  console.warn('VITE_GEMINI_API_KEY is not set. Gemini features will not work.');
+function resolveApiKey(): string {
+  if (useVertexAI) {
+    const credentialsRaw = import.meta.env.VITE_GOOGLE_CREDENTIALS_JSON;
+    if (credentialsRaw) {
+      const trimmed = credentialsRaw.trim();
+      // Accept a plain API key string or a JSON object with an "api_key" field.
+      if (!trimmed.startsWith('{')) return trimmed;
+      try {
+        const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+        if (typeof parsed.api_key === 'string') return parsed.api_key;
+      } catch { /* fall through */ }
+      console.warn(
+        'VITE_GOOGLE_CREDENTIALS_JSON appears to be a service-account JSON. ' +
+        'Browser-based Vertex AI requires a Google Cloud API key, not a service-account key. ' +
+        'Falling back to VITE_GEMINI_API_KEY.'
+      );
+    }
+  }
+  return import.meta.env.VITE_GEMINI_API_KEY || '';
 }
 
-const ai = new GoogleGenAI({ apiKey: apiKey || '' });
+const resolvedApiKey = resolveApiKey();
+
+if (!resolvedApiKey) {
+  console.warn(
+    useVertexAI
+      ? 'No API key configured for Vertex AI. ' +
+        'Set VITE_GOOGLE_CREDENTIALS_JSON to a Google Cloud API key with the Vertex AI API enabled.'
+      : 'VITE_GEMINI_API_KEY is not set. AI features will not work.'
+  );
+}
+
+// Initialize the SDK. When useVertexAI is true, requests are routed through the
+// Vertex AI endpoint (https://LOCATION-aiplatform.googleapis.com) and authenticated
+// via the provided Google Cloud API key. When false, the standard Gemini API endpoint
+// is used (https://generativelanguage.googleapis.com).
+const ai = new GoogleGenAI(
+  useVertexAI
+    ? { apiKey: resolvedApiKey || '', vertexai: true }
+    : { apiKey: resolvedApiKey || '' }
+);
 
 function formatLocalDateIso(date: Date): string {
   const year = date.getFullYear();
@@ -21,9 +65,8 @@ function formatLocalDateIso(date: Date): string {
 
 const TODAY_STR = formatLocalDateIso(new Date());
 const TODAY_DATE = new Date();
-const GROUNDING_MODEL = "gemini-2.5-flash";
-const PRIMARY_MODEL = "gemini-3.1-flash-lite-preview";
-const FALLBACK_MODEL = "gemini-2.5-flash";
+// Universal model for all AI inference (Vertex AI + Gemini API compatible).
+const MODEL = "gemini-2.5-flash";
 const MAX_MASTERS_SEEDS = 32;
 let aiAvailable = true;
 
@@ -34,7 +77,7 @@ function handleAiError(err: unknown) {
     const code = e?.code ?? (e?.error?.code) ?? '';
     if (String(code).includes('RESOURCE_EXHAUSTED') || /prepayment credits are depleted/i.test(msg)) {
       aiAvailable = false;
-      console.error('AI quota exhausted — disabling AI calls for this session.');
+      console.error('Vertex AI quota exhausted — disabling AI calls for this session.');
     }
   } catch (e) {
     // ignore
@@ -274,10 +317,10 @@ export async function fetchTournamentsWithDates() {
 
   // If AI quota is known exhausted, skip model calls and fall back immediately
   if (aiAvailable) {
-    // Tier 1: Grounded Search
+    // Tier 1: Grounded Search — real-time data via Google Search.
     try {
       const response = await ai.models.generateContent({
-        model: GROUNDING_MODEL,
+        model: MODEL,
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] },
       });
@@ -288,40 +331,22 @@ export async function fetchTournamentsWithDates() {
     }
   }
 
-  // Tier 2: Primary Model (Structured)
+  // Tier 2: Structured output — reliable JSON from model knowledge.
   if ((!data || data.length === 0) && aiAvailable) {
     try {
       const response = await ai.models.generateContent({
-        model: PRIMARY_MODEL,
+        model: MODEL,
         contents: prompt,
         config: {
           responseMimeType: "application/json",
           responseSchema: schema,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
         },
       });
       data = JSON.parse(response.text || "[]");
     } catch (e) {
       handleAiError(e);
-      console.warn("Tier 2 (Primary) error:", e);
-    }
-  }
-
-  // Tier 3: Fallback Model (Structured)
-  if ((!data || data.length === 0) && aiAvailable) {
-    try {
-      const response = await ai.models.generateContent({
-        model: FALLBACK_MODEL,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: schema,
-        },
-      });
-      data = JSON.parse(response.text || "[]");
-    } catch (e) {
-      handleAiError(e);
-      console.warn("Tier 3 (Fallback) error:", e);
+      console.warn("Tier 2 (Structured) error:", e);
     }
   }
 
@@ -351,7 +376,7 @@ export async function fetchTournamentsWithDates() {
     return data as TournamentData[];
   }
 
-  console.error("All AI models failed to fetch tournaments with dates.");
+  console.error("Vertex AI model failed to fetch tournaments with dates.");
   // Fallback to basic list if all AI tiers fail
   return fallback;
 }
@@ -388,10 +413,10 @@ export async function fetchTournamentPlayers(tournamentName: string) {
   let data: any[] = [];
 
   if (aiAvailable) {
-    // Tier 1: Grounded Search
+    // Tier 1: Grounded Search — real-time seedings via Google Search.
     try {
       const response = await ai.models.generateContent({
-        model: GROUNDING_MODEL,
+        model: MODEL,
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] },
       });
@@ -406,15 +431,15 @@ export async function fetchTournamentPlayers(tournamentName: string) {
       console.warn("Tier 1 (Grounded) error:", e);
     }
 
-    // Tier 2: Primary Model (Structured)
+    // Tier 2: Structured output — reliable JSON from model knowledge.
     try {
       const response = await ai.models.generateContent({
-        model: PRIMARY_MODEL,
+        model: MODEL,
         contents: prompt,
         config: {
           responseMimeType: "application/json",
           responseSchema: schema,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
         },
       });
       data = JSON.parse(response.text || "[]");
@@ -422,35 +447,14 @@ export async function fetchTournamentPlayers(tournamentName: string) {
         localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
         return data;
       }
-      console.warn(`Tier 2 (Primary) failed: returned ${data?.length} players instead of 32.`);
+      console.warn(`Tier 2 (Structured) failed: returned ${data?.length} players instead of 32.`);
     } catch (e) {
       handleAiError(e);
-      console.warn("Tier 2 (Primary) error:", e);
-    }
-
-    // Tier 3: Fallback Model (Structured)
-    try {
-      const response = await ai.models.generateContent({
-        model: FALLBACK_MODEL,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: schema,
-        },
-      });
-      data = JSON.parse(response.text || "[]");
-      if (data && data.length === 32) {
-        localStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
-        return data;
-      }
-      console.warn(`Tier 3 (Fallback) failed: returned ${data?.length} players instead of 32.`);
-    } catch (e) {
-      handleAiError(e);
-      console.warn("Tier 3 (Fallback) error:", e);
+      console.warn("Tier 2 (Structured) error:", e);
     }
   }
-  
-  console.warn("All AI models failed to generate exactly 32 players. Using fallback player list.");
+
+  console.warn("Vertex AI model failed to generate exactly 32 players. Using fallback player list.");
   return FALLBACK_PLAYERS;
 }
 
@@ -774,11 +778,11 @@ Do not include any markdown formatting. Return only the JSON object.`;
 
   let data: MastersTournamentDetails | null = null;
 
-  // Tier 1: Grounded Search (most accurate real-time data).
+  // Tier 1: Grounded Search — real-time data via Google Search.
   // Uses extractJsonObject for robust extraction — the grounded model wraps JSON in prose.
   try {
     const response = await ai.models.generateContent({
-      model: GROUNDING_MODEL,
+      model: MODEL,
       contents: prompt,
       config: { tools: [{ googleSearch: {} }] },
     });
@@ -787,11 +791,11 @@ Do not include any markdown formatting. Return only the JSON object.`;
     console.warn('Masters Tier 1 (Grounded) error:', e);
   }
 
-  // Tier 2: Primary Model (Structured output)
+  // Tier 2: Structured output — reliable JSON from model knowledge.
   if (!data || !data.seedings?.length) {
     try {
       const response = await ai.models.generateContent({
-        model: PRIMARY_MODEL,
+        model: MODEL,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -801,24 +805,7 @@ Do not include any markdown formatting. Return only the JSON object.`;
       });
       data = JSON.parse(response.text || 'null');
     } catch (e) {
-      console.warn('Masters Tier 2 (Primary) error:', e);
-    }
-  }
-
-  // Tier 3: Fallback Model
-  if (!data || !data.seedings?.length) {
-    try {
-      const response = await ai.models.generateContent({
-        model: FALLBACK_MODEL,
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: schema,
-        },
-      });
-      data = JSON.parse(response.text || 'null');
-    } catch (e) {
-      console.warn('Masters Tier 3 (Fallback) error:', e);
+      console.warn('Masters Tier 2 (Structured) error:', e);
     }
   }
 
@@ -1036,7 +1023,7 @@ Output JSON object shape:
   // Tier 1: Grounded Search — uses extractJsonObject for robust extraction from prose-wrapped responses.
   try {
     const response = await ai.models.generateContent({
-      model: GROUNDING_MODEL,
+      model: MODEL,
       contents: prompt,
       config: { tools: [{ googleSearch: {} }] },
     });
@@ -1045,10 +1032,11 @@ Output JSON object shape:
     console.warn('Masters draw Tier 1 (Grounded) error:', e);
   }
 
+  // Tier 2: Structured output — reliable JSON from model knowledge.
   if (!data || !Array.isArray(data.drawPlayers)) {
     try {
       const response = await ai.models.generateContent({
-        model: PRIMARY_MODEL,
+        model: MODEL,
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -1058,23 +1046,7 @@ Output JSON object shape:
       });
       data = JSON.parse(response.text || 'null');
     } catch (e) {
-      console.warn('Masters draw Tier 2 (Primary) error:', e);
-    }
-  }
-
-  if (!data || !Array.isArray(data.drawPlayers)) {
-    try {
-      const response = await ai.models.generateContent({
-        model: FALLBACK_MODEL,
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: schema,
-        },
-      });
-      data = JSON.parse(response.text || 'null');
-    } catch (e) {
-      console.warn('Masters draw Tier 3 (Fallback) error:', e);
+      console.warn('Masters draw Tier 2 (Structured) error:', e);
     }
   }
 
@@ -1211,10 +1183,10 @@ Return only JSON, no markdown.`;
 
   let data: { currentRound: number; completedResults: LiveMatchResult[] } | null = null;
 
-  // Tier 1: Grounded Search for live results
+  // Tier 1: Grounded Search for live results — real-time match data via Google Search.
   try {
     const response = await ai.models.generateContent({
-      model: GROUNDING_MODEL,
+      model: MODEL,
       contents: prompt,
       config: { tools: [{ googleSearch: {} }] },
     });
@@ -1226,17 +1198,17 @@ Return only JSON, no markdown.`;
     console.warn('Live results Tier 1 (Grounded) error:', e);
   }
 
-  // Tier 2: Fallback model with structured output
+  // Tier 2: Structured output — reliable JSON from model knowledge.
   if (!data) {
     try {
       const response = await ai.models.generateContent({
-        model: FALLBACK_MODEL,
+        model: MODEL,
         contents: prompt,
         config: { responseMimeType: 'application/json', responseSchema: schema },
       });
       data = JSON.parse(response.text || 'null');
     } catch (e) {
-      console.warn('Live results Tier 2 (Fallback) error:', e);
+      console.warn('Live results Tier 2 (Structured) error:', e);
     }
   }
 

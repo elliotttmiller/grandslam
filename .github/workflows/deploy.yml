@@ -36,9 +36,14 @@ jobs:
           # Derive the base path from the actual repository name so this workflow
           # works correctly even if the repository is renamed or forked.
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
-          # VITE_GEMINI_API_KEY is injected from the repository secret at build time.
-          # Vite's loadEnv only picks up VITE_-prefixed variables, so the prefix is required
-          # for the key to be available in the compiled client bundle.
+          # Vertex AI configuration — injected from repository secrets at build time
+          # so Vite can bake them into the client bundle (VITE_-prefix required).
+          VITE_GOOGLE_GENAI_USE_VERTEXAI: ${{ secrets.GOOGLE_GENAI_USE_VERTEXAI }}
+          VITE_GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
+          VITE_GOOGLE_CLOUD_LOCATION: ${{ secrets.GOOGLE_CLOUD_LOCATION }}
+          VITE_GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          # Legacy Gemini API key — kept as a fallback for browser auth if
+          # VITE_GOOGLE_CREDENTIALS_JSON is not a plain API key string.
           VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: npm run build
 
