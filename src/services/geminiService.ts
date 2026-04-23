@@ -404,6 +404,13 @@ export async function fetchTournamentsWithDates() {
 
     const firestoreData = await loadTournamentMetadataFromFirestore();
     if (firestoreData && firestoreData.length > 0) {
+      const fetchedIds = new Set(firestoreData.map(t => t.id));
+      const missingMasters = MASTERS_TOURNAMENT_METADATA.filter(t => !fetchedIds.has(t.id));
+      if (missingMasters.length > 0) {
+        persistTournamentMetadataToFirestore([...firestoreData, ...missingMasters]).catch((error) => {
+          console.warn('Failed to persist missing Masters metadata to Firestore:', error);
+        });
+      }
       writeAuthCacheWithTimestamp(CACHE_KEY_TOURNAMENTS, firestoreData);
       return firestoreData;
     }
@@ -517,6 +524,12 @@ export async function fetchTournamentsWithDates() {
 
   console.error("Vertex AI model failed to fetch tournaments with dates.");
     writeAuthCacheWithTimestamp(CACHE_KEY_TOURNAMENTS, fallback);
+    persistTournamentMetadataToFirestore([
+      ...fallback,
+      ...MASTERS_TOURNAMENT_METADATA,
+    ]).catch((error) => {
+      console.warn('Failed to persist fallback tournament metadata to Firestore:', error);
+    });
   // Fallback to basic list if all AI tiers fail
   return fallback;
   });
@@ -1057,29 +1070,11 @@ export async function fetchMastersOfficialDrawPlayers(
 
   const isMadrid2026 = tournamentId === 'madrid' && currentYear === 2026;
 
-  if (isMadrid2026) {
-    const drawSlots = getMadrid2026OfficialDrawSlots();
-    const normalizedSlots = normalizeMastersOfficialDrawSlots(drawSlots);
-    if (normalizedSlots.length === 64) {
-      const hardcodedData: MastersOfficialDrawResponse = {
-        drawStatus: 'official',
-        notes: 'Official 2026 Mutua Madrid Open draw (hardcoded).',
-        drawPlayers: normalizedSlots,
-      };
-      writeAuthCacheWithTimestamp(cacheKey, hardcodedData);
-      return normalizedSlots.map((p) => ({
-        name: p.name,
-        seed: p.seed,
-        country: p.country,
-      }));
-    }
-  }
-
   const cached = readAuthCacheIfFresh<MastersOfficialDrawResponse>(cacheKey, drawCacheExpiry);
   let cachedOfficialSlots: MastersOfficialDrawSlot[] | null = null;
   if (cached?.drawStatus === 'official') {
     const cachedSlots = normalizeMastersOfficialDrawSlots(cached.drawPlayers);
-    if (cachedSlots.length === 64) {
+    if (cachedSlots.length >= 64) {
       cachedOfficialSlots = cachedSlots;
       // During draw-released/live we still re-fetch for freshness, but keep cached official
       // data as a fallback if the live fetch fails.
@@ -1107,7 +1102,7 @@ export async function fetchMastersOfficialDrawPlayers(
   if (tournamentId === 'madrid' && currentYear === 2026 && isOfficialDataExpectedPhase(phase)) {
     const drawSlots = getMadrid2026OfficialDrawSlots();
     const normalizedSlots = normalizeMastersOfficialDrawSlots(drawSlots);
-    if (normalizedSlots.length === 64) {
+    if (normalizedSlots.length >= 64) {
       const fallbackData: MastersOfficialDrawResponse = {
         drawStatus: 'official',
         notes: 'Official 2026 Mutua Madrid Open draw (hardcoded).',
@@ -1148,31 +1143,43 @@ export async function fetchMastersOfficialDrawPlayers(
   // 96-player draw format hint for tournaments that use it (Madrid, Rome).
   const is96PlayerDraw = tournamentId === 'madrid' || tournamentId === 'rome';
   const drawFormatNote = is96PlayerDraw
-    ? `FORMAT NOTE: This is a 96-player draw where the top 32 seeds have first-round byes. Map it to 64 bracket slots:
-- Slot 1: Seed 1 (first-round bye — plays the winner of the adjacent first-round match)
-- Slot 2: "Winner: [Player A] vs [Player B]" — the first-round match that Seed 1 will face in Round 2
-- Continue pairing each seeded/bye player with their first-round challenger through slot 64.
-If both players in a bracket slot are named (no bye), list both; do not use the "Winner:" format.`
+    ? `FORMAT NOTE: This is a 96-player draw where the top 32 seeds have first-round byes. Return the full 128-slot draw from round 1 through the final. In round 1, seeded players should be paired with BYE placeholders and non-seeded players should be paired with their actual first-round opponents.
+If both players in a bracket slot are named (no bye), list both. For the paired qualifiers, use the actual matchup names rather than compressing the draw.`
     : '';
+
+  const drawUrlConfig = TOURNAMENT_DRAW_URLS[tournamentId];
+  const sourceHint = drawUrlConfig?.protennisliveCode
+    ? `PREFER the official ATP posting PDF at https://www.protennislive.com/posting/${year}/${drawUrlConfig.protennisliveCode}/mds.pdf as the authoritative source for the draw ordering.`
+    : '';
+
+  const targetDrawSize = is96PlayerDraw ? 128 : 64;
+  const drawSizeNote = is96PlayerDraw
+    ? 'This tournament uses a 96-player Masters format. Return exactly 128 draw slots, including BYE placeholders for the seeded byes in round 1.'
+    : 'Return exactly 64 draw slots.';
 
   const phaseInstruction = (phase === 'draw-released' || phase === 'live')
     ? `CRITICAL: Today is ${TODAY_STR}. The draw has been published — set "drawStatus" to "official". Do NOT return "predicted" if you find draw information from any source published in the last 14 days.`
     : '';
 
-  const prompt = `${drawImminentNote}${phaseInstruction ? ' ' + phaseInstruction : ''} Find the official ATP men's singles main-draw bracket for "${tournamentName}" (${year}) and transform it into the app's 64-slot representation.
+  const prompt = `${drawImminentNote}${phaseInstruction ? ' ' + phaseInstruction : ''} Find the official ATP men's singles main-draw bracket for "${tournamentName}" (${year}) and transform it into the app's ${targetDrawSize}-slot representation.
 
 ${urlHints}
 ${drawFormatNote}
 
+${sourceHint}
+
+${drawSizeNote}
+
 Rules:
 - If an official draw is published (even if released very recently), set "drawStatus" to "official".
 - If genuinely not yet published, set "drawStatus" to "predicted" and return an empty "drawPlayers" array.
-- For "official", return exactly 64 "drawPlayers" items ordered from slot 1 (top of bracket) to slot 64 (bottom).
-- Each slot object must include:
-  - "slot": integer 1..64
-  - "name": player's full name, OR use the exact format "Winner: Player A vs Player B" for a slot that will be filled by the winner of a first-round match.
-  - "seed": integer tournament seed when known (1-32), else null
-  - "country": ISO 3166-1 alpha-3 3-letter code when known, else null
+ - For "official", return exactly ${targetDrawSize} "drawPlayers" items ordered from slot 1 (top of bracket) to slot ${targetDrawSize} (bottom).
+ - For 96-player Masters draws, preserve the official 128-slot order exactly as published in the ATP posting PDF. Seeded players must occupy BYE slots in round 1, and first-round matchups must appear in the official top-to-bottom sequence.
+ - Each slot object must include:
+   - "slot": integer 1..${targetDrawSize}
+   - "name": player's full name, OR use the exact format "Winner: Player A vs Player B" only for unresolved placeholders when the first-round match winner is not yet known.
+   - "seed": integer tournament seed when known (1-32), else null
+   - "country": ISO 3166-1 alpha-3 3-letter code when known, else null
 - Keep slot ordering aligned with the official bracket (top-to-bottom).
 - Return only JSON (no markdown).
 
@@ -1267,7 +1274,7 @@ Output JSON object shape:
       const fallbackData: MastersOfficialDrawResponse = {
         drawStatus: 'official',
         notes: 'Official 2026 Mutua Madrid Open draw (hardcoded fallback).',
-        drawPlayers: drawSlots.map((p, i) => ({ slot: i + 1, name: p.name, seed: p.seed, country: p.country })),
+        drawPlayers: drawSlots,
       };
       writeAuthCacheWithTimestamp(cacheKey, fallbackData);
       return drawSlots;

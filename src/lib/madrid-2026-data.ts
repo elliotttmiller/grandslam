@@ -250,8 +250,9 @@ export function getMadrid2026Draw(): Player[] {
  * Returns the official 2026 Madrid draw in the format expected by
  * fetchMastersOfficialDrawPlayers — 128 slot objects with name/seed/country.
  */
-export function getMadrid2026OfficialDrawSlots(): Array<{ name: string; seed?: number; country?: string }> {
-  return MADRID_2026_DRAW.map((player) => ({
+export function getMadrid2026OfficialDrawSlots(): Array<{ slot: number; name: string; seed?: number; country?: string }> {
+  return MADRID_2026_DRAW.map((player, index) => ({
+    slot: index + 1,
     name: player.name,
     seed: player.seed,
     country: player.country,
