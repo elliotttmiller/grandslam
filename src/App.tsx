@@ -543,15 +543,17 @@ export default function App() {
     setLoadingTournaments(true);
     try {
       const data = await fetchTournamentsWithDates();
-      const grandSlams: TournamentData[] = data.map(t => ({ ...t, type: 'grand-slam' as const }));
-      const mastersTournaments: TournamentData[] = MASTERS_TOURNAMENTS.map(t => ({
-        id: t.id,
-        name: t.name,
-        startDate: t.approxStart,
-        endDate: t.approxEnd,
-        type: 'masters' as const,
-      }));
-      const sorted = [...grandSlams, ...mastersTournaments].sort(sortByUpcomingFirst);
+      const fetchedIds = new Set(data.map(t => t.id));
+      const mastersTournaments: TournamentData[] = MASTERS_TOURNAMENTS
+        .filter(t => !fetchedIds.has(t.id))
+        .map(t => ({
+          id: t.id,
+          name: t.name,
+          startDate: t.approxStart,
+          endDate: t.approxEnd,
+          type: 'masters' as const,
+        }));
+      const sorted = [...data, ...mastersTournaments].sort(sortByUpcomingFirst);
       setTournaments(sorted);
     } catch (error) {
       console.error('Failed to refresh tournaments:', error);

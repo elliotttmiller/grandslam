@@ -32,6 +32,20 @@ function resolveApiKey(): string {
   return '';
 }
 
+function removeUndefined<T>(obj: T): T {
+  if (Array.isArray(obj)) {
+    return obj.map(removeUndefined) as T;
+  }
+  if (obj !== null && typeof obj === 'object') {
+    return Object.fromEntries(
+      Object.entries(obj)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, removeUndefined(v)]),
+    ) as T;
+  }
+  return obj;
+}
+
 const resolvedApiKey = resolveApiKey();
 
 if (!resolvedApiKey) {
@@ -324,7 +338,7 @@ async function loadTournamentMetadataFromFirestore(): Promise<TournamentData[] |
         const raw = docSnap.data() as Record<string, unknown>;
         return {
           id: typeof raw.tournamentId === 'string' ? raw.tournamentId : typeof raw.id === 'string' ? raw.id : undefined,
-          name: typeof raw.name === 'string' ? raw.name : undefined,
+          name: typeof raw.name === 'string' ? raw.name : typeof raw.tournamentName === 'string' ? raw.tournamentName : undefined,
           startDate: typeof raw.startDate === 'string' ? raw.startDate : undefined,
           endDate: typeof raw.endDate === 'string' ? raw.endDate : undefined,
           logo: typeof raw.logo === 'string' ? raw.logo : undefined,
@@ -361,15 +375,19 @@ async function loadTournamentMetadataFromFirestore(): Promise<TournamentData[] |
 async function persistTournamentMetadataToFirestore(tournaments: TournamentData[]): Promise<void> {
   try {
     await Promise.all(tournaments.map((tournament) => {
-      return setDoc(doc(getDb(), TOURNAMENTS_FIRESTORE_COLLECTION, tournament.id), {
-        tournamentId: tournament.id,
-        tournamentName: tournament.name,
-        startDate: tournament.startDate,
-        endDate: tournament.endDate,
-        logo: tournament.logo ?? TOURNAMENT_LOGOS[tournament.id],
-        type: tournament.type ?? 'grand-slam',
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
+      return setDoc(doc(getDb(), TOURNAMENTS_FIRESTORE_COLLECTION, tournament.id),
+        removeUndefined({
+          tournamentId: tournament.id,
+          name: tournament.name,
+          tournamentName: tournament.name,
+          startDate: tournament.startDate,
+          endDate: tournament.endDate,
+          logo: tournament.logo ?? TOURNAMENT_LOGOS[tournament.id],
+          type: tournament.type ?? 'grand-slam',
+          updatedAt: serverTimestamp(),
+        }),
+        { merge: true }
+      );
     }));
   } catch (error) {
     console.warn('Failed to persist tournament metadata to Firestore:', error);
