@@ -17,11 +17,9 @@ export default defineConfig(({mode}) => {
     base: basePath,
     plugins: [react(), tailwindcss()],
     define: {
-      'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY),
       'import.meta.env.VITE_APP_URL': JSON.stringify(env.VITE_APP_URL || 'https://elliotttmiller.github.io/grandslam/'),
       'import.meta.env.VITE_GOOGLE_CLOUD_PROJECT': JSON.stringify(env.VITE_GOOGLE_CLOUD_PROJECT),
       'import.meta.env.VITE_GOOGLE_CLOUD_LOCATION': JSON.stringify(env.VITE_GOOGLE_CLOUD_LOCATION || 'global'),
-      'import.meta.env.VITE_GOOGLE_GENAI_USE_VERTEXAI': JSON.stringify(env.VITE_GOOGLE_GENAI_USE_VERTEXAI),
       'import.meta.env.VITE_GOOGLE_CREDENTIALS_JSON': JSON.stringify(env.VITE_GOOGLE_CREDENTIALS_JSON),
     },
     resolve: {

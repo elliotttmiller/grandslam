@@ -17,6 +17,8 @@ import {
   syncDeletePool,
   syncUpdateOfficialMatches,
 } from '@/services/poolSyncService';
+import { refreshMastersPoolMatches } from '@/services/livePoolUpdates';
+import { subscribeToTournamentState, type TournamentState } from '@/services/tournamentSyncService';
 import { advancePlayer, getRoundName, isByeMatch } from '@/lib/bracket-utils';
 import { getUserId } from '@/lib/user-identity';
 import { tournamentColor } from '@/lib/tournament-colors';
@@ -56,6 +58,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
   const [importError, setImportError] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
+  const [tournamentState, setTournamentState] = useState<TournamentState | null>(null);
 
   // Local pool state — initialised from the prop, kept fresh via onSnapshot.
   const [poolData, setPoolData] = useState<Pool>(pool);
@@ -89,6 +92,17 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
     return unsubscribe;
   }, [pool.id]);
 
+  useEffect(() => {
+    if (!poolData?.tournamentId) return;
+    const unsubscribe = subscribeToTournamentState(poolData.tournamentId, (state) => {
+      setTournamentState(state);
+      if (!state?.officialMatches?.length) return;
+      if (JSON.stringify(state.officialMatches) === JSON.stringify(poolData.officialMatches)) return;
+      setPoolData(prev => ({ ...prev, officialMatches: state.officialMatches }));
+    });
+    return unsubscribe;
+  }, [poolData?.tournamentId]);
+
   // Re-read pool data from localStorage whenever the simulator applies a new
   // round of results (simulatorVersion increments via onPoolChanged).
   useEffect(() => {
@@ -116,6 +130,27 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
     if (e.userId && e.userId === currentUserId) return true;
     return false;
   }, [isAuthed, authUser, currentUserId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function refreshLiveMatches() {
+      if (!poolData?.tournamentId || !poolData?.tournamentName) return;
+      const updatedMatches = await refreshMastersPoolMatches(poolData.tournamentId, poolData.tournamentName);
+      if (!updatedMatches) return;
+      if (JSON.stringify(updatedMatches) === JSON.stringify(poolData.officialMatches)) return;
+      if (cancelled) return;
+      updateOfficialMatches(poolData.id, updatedMatches);
+      setPoolData(prev => ({ ...prev, officialMatches: updatedMatches }));
+      if (cancelled) return;
+      onPoolUpdate?.();
+      const canSync = authUser && !authUser.isAnonymous && (poolData.createdBy === authUser.uid || poolData.ownerId === authUser.uid);
+      if (canSync) {
+        await syncUpdateOfficialMatches(poolData.id, updatedMatches);
+      }
+    }
+    refreshLiveMatches();
+    return () => { cancelled = true; };
+  }, [poolData.id, poolData.tournamentId, poolData.tournamentName, poolData.officialMatches, authUser, onPoolUpdate]);
 
   // Total bracket matches in this pool (Grand Slam = 127, Masters = 63)
   const totalBracketMatches = useMemo(

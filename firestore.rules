@@ -43,5 +43,20 @@ service cloud.firestore {
         );
       allow delete: if isOwner(resource.data);
     }
+
+    match /tournaments/{tournamentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isOwner(resource.data);
+      allow delete: if isOwner(resource.data);
+    }
+
+    match /system/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.requestedBy == request.auth.uid;
+      allow update: if isSignedIn()
+        && resource.data.requestedBy == request.auth.uid
+        && request.resource.data.requestedBy == request.auth.uid;
+    }
   }
 }

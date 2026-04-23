@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { cn, parseDateSafe } from '@/lib/utils';
 import { fetchMastersTournamentDetails, CACHE_KEY_MASTERS_PREFIX, CACHE_KEY_MASTERS_DRAW_PREFIX, type MastersTournamentDetails } from '@/services/geminiService';
 import { authRemoveItem } from '@/lib/auth-storage';
+import { syncWriteScraperStatus } from '@/services/tournamentSyncService';
 import { type MastersTournament, surfaceColor } from '@/lib/masters-tournaments';
 
 interface MastersTournamentModalProps {
@@ -16,7 +17,6 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
   const [details, setDetails] = useState<MastersTournamentDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
     if (!tournament) return;
     setDetails(null);
@@ -39,6 +39,7 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
   const handleRefresh = () => {
     if (!tournament) return;
     // Clear both the tournament details cache and the draw cache so fresh data is fetched
+    syncWriteScraperStatus(tournament.id, tournament.name, 'running', 'Refreshing tournament detail cache.');
     authRemoveItem(`${CACHE_KEY_MASTERS_PREFIX}${tournament.id}`);
     authRemoveItem(`${CACHE_KEY_MASTERS_DRAW_PREFIX}${tournament.id}`);
     setDetails(null);
@@ -47,7 +48,10 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
     fetchMastersTournamentDetails(tournament.id, tournament.name)
       .then(setDetails)
       .catch(() => setError('Failed to refresh. Please try again.'))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        syncWriteScraperStatus(tournament.id, tournament.name, 'complete', 'Tournament refresh completed.');
+      });
   };
 
   const formatDate = (iso: string) => {
@@ -77,7 +81,7 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[60]"
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm z-60"
             aria-hidden="true"
           />
 
@@ -90,7 +94,7 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[94vw] max-w-[520px] max-h-[88vh] bg-card border border-white/10 rounded-2xl shadow-2xl z-[60] flex flex-col overflow-hidden"
+            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[94vw] max-w-130 max-h-[88vh] bg-card border border-white/10 rounded-2xl shadow-2xl z-60 flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 border-b border-white/[0.07] shrink-0">
@@ -165,7 +169,7 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
                   {/* Key info cards */}
                   <div className="grid grid-cols-2 gap-2.5 px-5 pt-4 pb-2">
                     {/* Dates */}
-                    <div className="flex flex-col gap-1 p-3 rounded-xl bg-white/[0.04] border border-white/[0.07]">
+                    <div className="flex flex-col gap-1 p-3 rounded-xl bg-white/4 border border-white/[0.07]">
                       <div className="flex items-center gap-1.5 text-white/40 mb-0.5">
                         <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
                         <span className="text-[10px] font-black uppercase tracking-widest">Dates</span>
@@ -179,7 +183,7 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
                     </div>
 
                     {/* Location */}
-                    <div className="flex flex-col gap-1 p-3 rounded-xl bg-white/[0.04] border border-white/[0.07]">
+                    <div className="flex flex-col gap-1 p-3 rounded-xl bg-white/4 border border-white/[0.07]">
                       <div className="flex items-center gap-1.5 text-white/40 mb-0.5">
                         <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
                         <span className="text-[10px] font-black uppercase tracking-widest">Location</span>
@@ -189,7 +193,7 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
                     </div>
 
                     {/* Surface */}
-                    <div className="flex flex-col gap-1 p-3 rounded-xl bg-white/[0.04] border border-white/[0.07]">
+                    <div className="flex flex-col gap-1 p-3 rounded-xl bg-white/4 border border-white/[0.07]">
                       <div className="flex items-center gap-1.5 text-white/40 mb-0.5">
                         <Layers className="h-3.5 w-3.5" aria-hidden="true" />
                         <span className="text-[10px] font-black uppercase tracking-widest">Surface</span>
@@ -199,7 +203,7 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
                     </div>
 
                     {/* Prize money */}
-                    <div className="flex flex-col gap-1 p-3 rounded-xl bg-white/[0.04] border border-white/[0.07]">
+                    <div className="flex flex-col gap-1 p-3 rounded-xl bg-white/4 border border-white/[0.07]">
                       <div className="flex items-center gap-1.5 text-white/40 mb-0.5">
                         <DollarSign className="h-3.5 w-3.5" aria-hidden="true" />
                         <span className="text-[10px] font-black uppercase tracking-widest">Prize Money</span>
@@ -244,7 +248,7 @@ export function MastersTournamentModal({ tournament, onClose }: MastersTournamen
                           key={`${player.seed}-${player.name}`}
                           className={cn(
                             'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors',
-                            idx % 2 === 0 ? 'bg-white/[0.025]' : '',
+                            idx % 2 === 0 ? 'bg-white/2.5' : '',
                           )}
                         >
                           {/* Seed number */}

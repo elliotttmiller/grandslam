@@ -4,58 +4,50 @@ import { authGetItem, authSetItem } from '@/lib/auth-storage';
 import { getMastersTournamentById } from '@/lib/masters-tournaments';
 import { getMadrid2026OfficialDrawSlots, getMadrid2026Seedings } from '@/lib/madrid-2026-data';
 
-// ── Vertex AI / Gemini API configuration ────────────────────────────────────
-// Vertex AI mode is enabled by setting VITE_GOOGLE_GENAI_USE_VERTEXAI=True.
-// In browser runtimes the @google/genai SDK requires an API key for auth;
-// VITE_GOOGLE_CREDENTIALS_JSON should hold a Google Cloud API key string with
-// the Vertex AI API enabled.  Service-account JSON is only valid in Node.js
-// server environments (project/location options are ignored in browsers).
-const useVertexAI =
-  import.meta.env.VITE_GOOGLE_GENAI_USE_VERTEXAI === 'True' ||
-  import.meta.env.VITE_GOOGLE_GENAI_USE_VERTEXAI === 'true';
+// ── Vertex AI API configuration ───────────────────────────────────────────
+// This app no longer supports a Gemini API key fallback in the browser.
+// The @google/genai SDK must be configured with a browser-compatible
+// Vertex AI API key via VITE_GOOGLE_CREDENTIALS_JSON.
+const vertexAIProject = import.meta.env.VITE_GOOGLE_CLOUD_PROJECT;
+const vertexAILocation = import.meta.env.VITE_GOOGLE_CLOUD_LOCATION || 'global';
 
 function resolveApiKey(): string {
-  if (useVertexAI) {
-    const credentialsRaw = import.meta.env.VITE_GOOGLE_CREDENTIALS_JSON;
-    if (!credentialsRaw) return '';
-    const trimmed = credentialsRaw.trim();
-    if (!trimmed) return '';
-    // Accept a plain API key string or a JSON object with an "api_key" field.
-    if (!trimmed.startsWith('{')) return trimmed;
-    try {
-      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-      if (typeof parsed.api_key === 'string') return parsed.api_key;
-    } catch { /* fall through */ }
-    console.warn(
-      'VITE_GOOGLE_CREDENTIALS_JSON appears to contain service-account JSON or unsupported browser credentials. ' +
-      'Browser-based Vertex AI requires a plain Google Cloud API key string or a JSON object with an "api_key" field. ' +
-      'Do not use service-account credentials in client-side builds.'
-    );
-    return '';
-  }
-  return import.meta.env.VITE_GEMINI_API_KEY || '';
+  const credentialsRaw = import.meta.env.VITE_GOOGLE_CREDENTIALS_JSON;
+  if (!credentialsRaw) return '';
+  const trimmed = credentialsRaw.trim();
+  if (!trimmed) return '';
+  // Accept a plain API key string or a JSON object with an "api_key" field.
+  if (!trimmed.startsWith('{')) return trimmed;
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    if (typeof parsed.api_key === 'string') return parsed.api_key;
+  } catch { /* fall through */ }
+  console.warn(
+    'VITE_GOOGLE_CREDENTIALS_JSON appears to contain service-account JSON or unsupported browser credentials. ' +
+    'Browser-based Vertex AI requires a plain Google Cloud API key string or a JSON object with an "api_key" field. ' +
+    'Do not use service-account credentials in client-side builds.'
+  );
+  return '';
 }
 
 const resolvedApiKey = resolveApiKey();
 
 if (!resolvedApiKey) {
   console.warn(
-    useVertexAI
-      ? 'No API key configured for Vertex AI. ' +
-        'Set VITE_GOOGLE_CREDENTIALS_JSON to a Google Cloud API key with the Vertex AI API enabled. ' +
-        'For browser builds, this must be a browser-compatible API key string (or JSON object containing api_key), not service-account JSON.'
-      : 'VITE_GEMINI_API_KEY is not set. AI features will not work.'
+      'No API key configured for Vertex AI. ' +
+      'Set VITE_GOOGLE_CREDENTIALS_JSON to a Google Cloud API key with the Vertex AI API enabled. ' +
+      'For browser builds, this must be a browser-compatible API key string (or JSON object containing api_key).'
   );
 }
 
-// Initialize the SDK. When useVertexAI is true, requests are routed through the
-// Vertex AI endpoint (https://LOCATION-aiplatform.googleapis.com) and authenticated
-// via the provided Google Cloud API key. When false, the standard Gemini API endpoint
-// is used (https://generativelanguage.googleapis.com).
+// Initialize the SDK using Vertex AI.
 const ai = new GoogleGenAI(
-  useVertexAI
-    ? { apiKey: resolvedApiKey || '', vertexai: true }
-    : { apiKey: resolvedApiKey || '' }
+  {
+    apiKey: resolvedApiKey || '',
+    vertexai: true,
+    ...(vertexAIProject ? { project: vertexAIProject } : {}),
+    ...(vertexAILocation ? { location: vertexAILocation } : {}),
+  }
 );
 
 function formatLocalDateIso(date: Date): string {

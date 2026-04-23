@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useBracketCanvas } from './hooks/useBracketCanvas';
-import { fetchTournamentPlayers, fetchTournamentsWithDates, fetchMastersDrawPlayers, fetchMastersOfficialDrawPlayers, fetchMastersTournamentResults, getTournamentPhase, TournamentData, CACHE_KEY_TOURNAMENTS, CACHE_KEY_MASTERS_PREFIX, CACHE_KEY_MASTERS_DRAW_PREFIX } from './services/geminiService';
+import { fetchTournamentPlayers, fetchTournamentsWithDates, fetchMastersDrawPlayers, fetchMastersOfficialDrawPlayers, fetchMastersTournamentResults, getTournamentPhase, TournamentData, TournamentPhase, CACHE_KEY_TOURNAMENTS, CACHE_KEY_MASTERS_PREFIX, CACHE_KEY_MASTERS_DRAW_PREFIX } from './services/geminiService';
 import { generateBracket, generateMastersBracket, buildBracketFromDraw, advancePlayer, applyLiveResults, applyByesToBracket, isByeMatch, Match, Player, getRoundName, getRoundFullName } from './lib/bracket-utils';
 import { BracketTree, MatchCard } from './components/Bracket';
 import { calculateBracketScore, calculateCalendarSlamBonus, calculateSeasonScore, BracketScore } from './lib/scoring';
@@ -32,12 +32,12 @@ import { AuthGate } from './components/AuthGate';
 import { MastersTournamentModal } from './components/MastersTournamentModal';
 import { DevPanel } from './components/DevPanel';
 import { MASTERS_TOURNAMENTS, GRAND_SLAM_STATIC_INFO, surfaceColor, type MastersTournament } from './lib/masters-tournaments';
+import { syncUpsertTournamentState } from './services/tournamentSyncService';
 import {
   MADRID_2025_TEST_POOL_OPTION_ID,
   MADRID_TEST_POOL_ID,
   generateTestMadridBracket,
 } from './lib/test-tournament-data';
-import { getMadrid2026Draw } from './lib/madrid-2026-data';
 import type { Pool } from './lib/pool-types';
 
 import type { User } from 'firebase/auth';
@@ -579,14 +579,9 @@ export default function App() {
           return;
         }
 
-        if (selectedTournament === 'madrid') {
-          const drawPlayers = getMadrid2026Draw();
-          initialMatches = buildBracketFromDraw(drawPlayers);
-          initialMatches = applyByesToBracket(initialMatches);
-          setMatches(initialMatches);
-          setZoom(0.7);
-          return;
-        }
+        // Madrid is handled by the Masters draw flow below so we can use live official
+        // draw data when available and fall back to predicted brackets only when
+        // the official draw is genuinely not published.
 
         const tournament = tournaments.find(t => t.id === selectedTournament);
         const isMasters = tournament?.type === 'masters';
@@ -679,17 +674,15 @@ export default function App() {
       return generateTestMadridBracket();
     }
 
-    if (tournamentId === 'madrid') {
-      const drawPlayers = getMadrid2026Draw();
-      return applyByesToBracket(buildBracketFromDraw(drawPlayers));
-    }
     const isMasters = MASTERS_TOURNAMENTS.some(t => t.id === tournamentId);
     if (isMasters) {
       const mastersMeta = MASTERS_TOURNAMENTS.find(t => t.id === tournamentId);
-      const phase = getTournamentPhase(mastersMeta?.approxStart, mastersMeta?.approxEnd);
+      const phase: TournamentPhase = getTournamentPhase(mastersMeta?.approxStart, mastersMeta?.approxEnd);
       const officialRequired = phase !== 'pre-draw';
       // Masters 1000: use official draw once released; only predict before draw release.
       const officialDrawPlayers = await fetchMastersOfficialDrawPlayers(tournamentId, tournamentName);
+      let generatedMatches: Match[];
+      let drawStatus: 'official' | 'predicted' = 'predicted';
       if (officialDrawPlayers && officialDrawPlayers.length >= 64) {
         const drawPlayers: Player[] = officialDrawPlayers.map((p, i) => ({
           id: `p${i + 1}`,
@@ -698,20 +691,35 @@ export default function App() {
           country: p.country,
         }));
         const b = buildBracketFromDraw(drawPlayers);
-        return applyByesToBracket(b);
+        const bracket = applyByesToBracket(b);
+        generatedMatches = bracket;
+        drawStatus = 'official';
+        if (phase === 'live') {
+          const year = Number(tournamentName.match(/\b(19|20)\d{2}\b/)?.[0] ?? new Date().getFullYear());
+          const liveResults = await fetchMastersTournamentResults(tournamentId, tournamentName, year);
+          if (liveResults.length > 0) {
+            generatedMatches = applyLiveResults(bracket, liveResults);
+          }
+        }
+      } else {
+        if (officialRequired) {
+          throw new Error(`Official draw unavailable for ${tournamentName} (${phase} phase).`);
+        }
+        const aiPlayers = await fetchMastersDrawPlayers(tournamentId, tournamentName);
+        const players: Player[] = aiPlayers.map((p, i) => ({
+          id: `p${i + 1}`,
+          name: p.name,
+          seed: p.seed,
+          country: p.country,
+        }));
+        const b = generateMastersBracket(players);
+        generatedMatches = applyByesToBracket(b);
+        drawStatus = 'predicted';
       }
-      if (officialRequired) {
-        throw new Error(`Official draw unavailable for ${tournamentName} (${phase} phase).`);
+      if (authUser && !authUser.isAnonymous) {
+        await syncUpsertTournamentState(tournamentId, tournamentName, generatedMatches, drawStatus);
       }
-      const aiPlayers = await fetchMastersDrawPlayers(tournamentId, tournamentName);
-      const players: Player[] = aiPlayers.map((p, i) => ({
-        id: `p${i + 1}`,
-        name: p.name,
-        seed: p.seed,
-        country: p.country,
-      }));
-      const b = generateMastersBracket(players);
-      return applyByesToBracket(b);
+      return generatedMatches;
     }
     // Grand Slam: 128-player bracket
     const aiPlayers = await fetchTournamentPlayers(tournamentName);
@@ -726,7 +734,11 @@ export default function App() {
       const qNum = i - seededCount;
       players.push({ id: `q${qNum}`, name: `Qualifier ${qNum}`, seed: undefined, country: '' });
     }
-    return generateBracket(players);
+    const generatedMatches = generateBracket(players);
+    if (authUser && !authUser.isAnonymous) {
+      await syncUpsertTournamentState(tournamentId, tournamentName, generatedMatches, 'predicted');
+    }
+    return generatedMatches;
   };
 
   const handleCreatePool = async (
