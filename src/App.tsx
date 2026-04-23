@@ -455,17 +455,18 @@ export default function App() {
       setLoadingTournaments(true);
       try {
         const data = await fetchTournamentsWithDates();
-        // Tag Grand Slams and merge with static Masters 1000 entries
-        const grandSlams: TournamentData[] = data.map(t => ({ ...t, type: 'grand-slam' as const }));
-        const mastersTournaments: TournamentData[] = MASTERS_TOURNAMENTS.map(t => ({
-          id: t.id,
-          name: t.name,
-          startDate: t.approxStart,
-          endDate: t.approxEnd,
-          type: 'masters' as const,
-        }));
+        const fetchedIds = new Set(data.map(t => t.id));
+        const mastersTournaments: TournamentData[] = MASTERS_TOURNAMENTS
+          .filter(t => !fetchedIds.has(t.id))
+          .map(t => ({
+            id: t.id,
+            name: t.name,
+            startDate: t.approxStart,
+            endDate: t.approxEnd,
+            type: 'masters' as const,
+          }));
         // Sort: closest upcoming first, then past tournaments most-recent first
-        const sorted = [...grandSlams, ...mastersTournaments].sort(sortByUpcomingFirst);
+        const sorted = [...data, ...mastersTournaments].sort(sortByUpcomingFirst);
         
         setTournaments(sorted);
         
@@ -473,7 +474,7 @@ export default function App() {
         const params = new URLSearchParams(window.location.search);
         const shared = params.get('shared');
         // Default to first Grand Slam (not a Masters) for the bracket viewer
-        let initialTournamentId = grandSlams.length > 0 ? grandSlams[0].id : null;
+  let initialTournamentId = data.length > 0 ? data[0].id : null;
         
         if (shared) {
           try {

@@ -78,6 +78,9 @@ async function refreshMadridDraw() {
   await tournamentRef.set({
     tournamentId: 'madrid',
     tournamentName: 'Mutua Madrid Open',
+    startDate: '2026-04-22',
+    endDate: '2026-05-03',
+    logo: 'https://elliotttmiller.github.io/grandslam/Mutua_Madrid_Open_Logo.png',
     officialMatches: bracket,
     drawStatus: 'official',
     lastRefreshedAt: new Date().toISOString(),

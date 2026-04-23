@@ -1,7 +1,9 @@
 /// <reference types="vite/client" />
 import { GoogleGenAI, Type } from "@google/genai";
 import { authGetItem, authSetItem } from '@/lib/auth-storage';
-import { getMastersTournamentById } from '@/lib/masters-tournaments';
+import { collection, doc, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getDb } from '@/lib/firebase';
+import { getMastersTournamentById, MASTERS_TOURNAMENTS } from '@/lib/masters-tournaments';
 import { getMadrid2026OfficialDrawSlots, getMadrid2026Seedings } from '@/lib/madrid-2026-data';
 
 // ── Vertex AI API configuration ───────────────────────────────────────────
@@ -117,6 +119,11 @@ function buildDrawImminenceNote(startDate: string | undefined, daysToStart: numb
   return `IMPORTANT: Today is ${TODAY_STR} and this tournament's main draw starts on ${startDate}. ` +
     `The official draw has almost certainly been released already (ATP draws are published 1-2 days before the main draw begins). ` +
     `Please search live ATP Tour sources and mark the status as "official" if you find draw information from any source published in the last 14 days.`;
+}
+
+function isMastersImminent(startDate: string | undefined): boolean {
+  if (!startDate) return false;
+  return daysUntil(startDate) <= 7;
 }
 
 // ── Phase-aware cache TTL constants ────────────────────────────────────────────
@@ -289,12 +296,98 @@ const TOURNAMENT_LOGOS: Record<string, string> = {
   'uso': `${BASE_URL}new-US-Open-logo-png-large-size.png`,
 };
 
+const TOURNAMENTS_FIRESTORE_COLLECTION = 'tournaments';
+const REQUIRED_GRAND_SLAM_IDS = ['ao', 'rg', 'wim', 'uso'];
+const REQUIRED_MASTERS_IDS = MASTERS_TOURNAMENTS.map(t => t.id);
+const KNOWN_TOURNAMENT_IDS = [...REQUIRED_GRAND_SLAM_IDS, ...REQUIRED_MASTERS_IDS];
+
+function inferTournamentType(id: string, rawType?: unknown): 'grand-slam' | 'masters' {
+  if (rawType === 'masters') return 'masters';
+  if (rawType === 'grand-slam') return 'grand-slam';
+  return REQUIRED_MASTERS_IDS.includes(id) ? 'masters' : 'grand-slam';
+}
+
+const MASTERS_TOURNAMENT_METADATA: TournamentData[] = MASTERS_TOURNAMENTS.map((tournament) => ({
+  id: tournament.id,
+  name: tournament.name,
+  startDate: tournament.approxStart,
+  endDate: tournament.approxEnd,
+  logo: TOURNAMENT_LOGOS[tournament.id],
+  type: 'masters' as const,
+}));
+
+async function loadTournamentMetadataFromFirestore(): Promise<TournamentData[] | null> {
+  try {
+    const snapshot = await getDocs(collection(getDb(), TOURNAMENTS_FIRESTORE_COLLECTION));
+    const tournaments = snapshot.docs
+      .map((docSnap) => {
+        const raw = docSnap.data() as Record<string, unknown>;
+        return {
+          id: typeof raw.tournamentId === 'string' ? raw.tournamentId : typeof raw.id === 'string' ? raw.id : undefined,
+          name: typeof raw.name === 'string' ? raw.name : undefined,
+          startDate: typeof raw.startDate === 'string' ? raw.startDate : undefined,
+          endDate: typeof raw.endDate === 'string' ? raw.endDate : undefined,
+          logo: typeof raw.logo === 'string' ? raw.logo : undefined,
+          type: typeof raw.type === 'string' ? raw.type : undefined,
+        } as { id?: string; name?: string; startDate?: string; endDate?: string; logo?: string; type?: string };
+      })
+      .filter((data): data is { id: string; name: string; startDate: string; endDate: string; logo?: string; type?: string } => {
+        return typeof data.id === 'string'
+          && typeof data.name === 'string'
+          && typeof data.startDate === 'string'
+          && typeof data.endDate === 'string'
+          && KNOWN_TOURNAMENT_IDS.includes(data.id);
+      })
+      .map((data) => ({
+        id: data.id,
+        name: data.name,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        logo: data.logo ?? TOURNAMENT_LOGOS[data.id],
+        type: inferTournamentType(data.id, data.type),
+      }));
+    if (tournaments.length >= REQUIRED_GRAND_SLAM_IDS.length) {
+      return tournaments.sort((a, b) => {
+        if (a.type === b.type) return 0;
+        return a.type === 'grand-slam' ? -1 : 1;
+      });
+    }
+  } catch (error) {
+    console.warn('Failed to load tournament metadata from Firestore:', error);
+  }
+  return null;
+}
+
+async function persistTournamentMetadataToFirestore(tournaments: TournamentData[]): Promise<void> {
+  try {
+    await Promise.all(tournaments.map((tournament) => {
+      return setDoc(doc(getDb(), TOURNAMENTS_FIRESTORE_COLLECTION, tournament.id), {
+        tournamentId: tournament.id,
+        tournamentName: tournament.name,
+        startDate: tournament.startDate,
+        endDate: tournament.endDate,
+        logo: tournament.logo ?? TOURNAMENT_LOGOS[tournament.id],
+        type: tournament.type ?? 'grand-slam',
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    }));
+  } catch (error) {
+    console.warn('Failed to persist tournament metadata to Firestore:', error);
+  }
+}
+
 export async function fetchTournamentsWithDates() {
   return cachedInflight('fetchTournamentsWithDates', async () => {
     // Check user-scoped cache first (short-lived so dates stay fresh).
     const cached = readAuthCacheIfFresh<TournamentData[]>(CACHE_KEY_TOURNAMENTS, LIVE_DATA_CACHE_EXPIRY);
     if (cached && cached.length > 0) {
       return cached;
+    }
+
+    const firestoreData = await loadTournamentMetadataFromFirestore();
+    if (firestoreData && firestoreData.length > 0) {
+      writeAuthCacheWithTimestamp(CACHE_KEY_TOURNAMENTS, firestoreData);
+      return firestoreData;
     }
 
     if (!aiAvailable) {
@@ -382,6 +475,15 @@ export async function fetchTournamentsWithDates() {
       ...t,
       logo: TOURNAMENT_LOGOS[t.id] || t.logo
     }));
+    const allMetadata = [...data];
+    for (const mastersTournament of MASTERS_TOURNAMENT_METADATA) {
+      if (!allMetadata.some(t => t.id === mastersTournament.id)) {
+        allMetadata.push(mastersTournament);
+      }
+    }
+    persistTournamentMetadataToFirestore(allMetadata).catch((error) => {
+      console.warn('Failed to persist tournaments to Firestore:', error);
+    });
     // Ensure all four Grand Slams are present; backfill any missing from fallback
     const REQUIRED_IDS = ['ao', 'rg', 'wim', 'uso'];
     for (const fb of fallback) {
@@ -762,6 +864,14 @@ export async function fetchMastersTournamentDetails(
   const drawReleaseContext = buildDrawImminenceNote(staticTournament?.approxStart, daysToStart);
   const urlHints = buildTournamentUrlHints(tournamentId, currentYear);
 
+  const isImminent = isMastersImminent(staticTournament?.approxStart) || phase === 'live';
+
+  if (!isImminent) {
+    const fallback = normalizeMastersDetails(null, tournamentId, tournamentName);
+    writeAuthCacheWithTimestamp(cacheKey, fallback);
+    return fallback;
+  }
+
   const prompt = `${drawReleaseContext} Find the most accurate and up-to-date information about the ${currentYear} ATP Masters 1000 men's singles tournament: "${tournamentName}".
 ${urlHints ? urlHints + '\n' : ''}
 Return a JSON object with these fields:
@@ -920,6 +1030,9 @@ export async function fetchMastersOfficialDrawPlayers(
   const staticMeta = getMastersTournamentById(tournamentId);
   const phase = getTournamentPhase(staticMeta?.approxStart, staticMeta?.approxEnd);
 
+  const daysToStartImminent = staticMeta?.approxStart ? daysUntil(staticMeta.approxStart) : 999;
+  const isImminent = daysToStartImminent <= 7 || phase === 'live';
+
   // Versioned cache key includes year-month to auto-invalidate across tournament editions.
   const cacheKey = drawCacheKey(tournamentId, staticMeta?.approxStart);
   const drawCacheExpiry = phaseCacheTtl(phase);
@@ -960,6 +1073,17 @@ export async function fetchMastersOfficialDrawPlayers(
         }));
       }
     }
+  }
+
+  if (!isImminent) {
+    if (cachedOfficialSlots?.length === 64) {
+      return cachedOfficialSlots.map((p) => ({
+        name: p.name,
+        seed: p.seed,
+        country: p.country,
+      }));
+    }
+    return null;
   }
 
   if (tournamentId === 'madrid' && currentYear === 2026 && isOfficialDataExpectedPhase(phase)) {
