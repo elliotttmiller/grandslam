@@ -17,20 +17,21 @@ const useVertexAI =
 function resolveApiKey(): string {
   if (useVertexAI) {
     const credentialsRaw = import.meta.env.VITE_GOOGLE_CREDENTIALS_JSON;
-    if (credentialsRaw) {
-      const trimmed = credentialsRaw.trim();
-      // Accept a plain API key string or a JSON object with an "api_key" field.
-      if (!trimmed.startsWith('{')) return trimmed;
-      try {
-        const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-        if (typeof parsed.api_key === 'string') return parsed.api_key;
-      } catch { /* fall through */ }
-      console.warn(
-        'VITE_GOOGLE_CREDENTIALS_JSON appears to be a service-account JSON. ' +
-        'Browser-based Vertex AI requires a Google Cloud API key, not a service-account key. ' +
-        'Falling back to VITE_GEMINI_API_KEY.'
-      );
-    }
+    if (!credentialsRaw) return '';
+    const trimmed = credentialsRaw.trim();
+    if (!trimmed) return '';
+    // Accept a plain API key string or a JSON object with an "api_key" field.
+    if (!trimmed.startsWith('{')) return trimmed;
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+      if (typeof parsed.api_key === 'string') return parsed.api_key;
+    } catch { /* fall through */ }
+    console.warn(
+      'VITE_GOOGLE_CREDENTIALS_JSON appears to contain service-account JSON or unsupported browser credentials. ' +
+      'Browser-based Vertex AI requires a plain Google Cloud API key string or a JSON object with an "api_key" field. ' +
+      'Do not use service-account credentials in client-side builds.'
+    );
+    return '';
   }
   return import.meta.env.VITE_GEMINI_API_KEY || '';
 }
@@ -41,7 +42,8 @@ if (!resolvedApiKey) {
   console.warn(
     useVertexAI
       ? 'No API key configured for Vertex AI. ' +
-        'Set VITE_GOOGLE_CREDENTIALS_JSON to a Google Cloud API key with the Vertex AI API enabled.'
+        'Set VITE_GOOGLE_CREDENTIALS_JSON to a Google Cloud API key with the Vertex AI API enabled. ' +
+        'For browser builds, this must be a browser-compatible API key string (or JSON object containing api_key), not service-account JSON.'
       : 'VITE_GEMINI_API_KEY is not set. AI features will not work.'
   );
 }

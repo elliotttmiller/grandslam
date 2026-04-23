@@ -38,13 +38,12 @@ jobs:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
           # Vertex AI configuration — injected from repository secrets at build time
           # so Vite can bake them into the client bundle (VITE_-prefix required).
-          VITE_GOOGLE_GENAI_USE_VERTEXAI: ${{ secrets.GOOGLE_GENAI_USE_VERTEXAI }}
-          VITE_GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
-          VITE_GOOGLE_CLOUD_LOCATION: ${{ secrets.GOOGLE_CLOUD_LOCATION }}
-          VITE_GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-          # Legacy Gemini API key — kept as a fallback for browser auth if
-          # VITE_GOOGLE_CREDENTIALS_JSON is not a plain API key string.
-          VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VITE_GOOGLE_GENAI_USE_VERTEXAI: ${{ secrets.VITE_GOOGLE_GENAI_USE_VERTEXAI }}
+          VITE_GOOGLE_CLOUD_PROJECT: ${{ secrets.VITE_GOOGLE_CLOUD_PROJECT }}
+          VITE_GOOGLE_CLOUD_LOCATION: ${{ secrets.VITE_GOOGLE_CLOUD_LOCATION }}
+          VITE_GOOGLE_CREDENTIALS_JSON: ${{ secrets.VITE_GOOGLE_CREDENTIALS_JSON }}
+          # Legacy Gemini API key can be added as a repo secret named
+          # VITE_GEMINI_API_KEY if you need a fallback for non-Vertex Gemini auth.
         run: npm run build
 
       - name: Setup Pages
