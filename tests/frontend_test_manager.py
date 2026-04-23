@@ -22,11 +22,15 @@ class FrontendTestManager:
         self._playwright = None
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
+        self.console_messages: list[str] = []
+        self.page_errors: list[str] = []
 
     def __enter__(self) -> FrontendTestManager:
         self._playwright = sync_playwright().start()
         self.browser = self._playwright.chromium.launch(headless=self.headless)
         self.page = self.browser.new_page()
+        self.page.on('console', self._on_console)
+        self.page.on('pageerror', self._on_page_error)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -36,6 +40,19 @@ class FrontendTestManager:
             self.browser.close()
         if self._playwright:
             self._playwright.stop()
+
+    def _on_console(self, message):
+        text = f"CONSOLE [{message.type}] {message.text}"
+        self.console_messages.append(text)
+
+    def _on_page_error(self, error):
+        self.page_errors.append(str(error))
+
+    def get_console_messages(self) -> list[str]:
+        return list(self.console_messages)
+
+    def get_page_errors(self) -> list[str]:
+        return list(self.page_errors)
 
     def goto(self, path: str = '/', timeout: int = 30000) -> Page:
         if not self.page:

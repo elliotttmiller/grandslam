@@ -636,7 +636,11 @@ export function PoolHub({ onNavigate, tournaments, onCreatePool, initialJoinCode
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: 8 }}
               transition={{ duration: 0.18 }}
-              className="fixed inset-4 z-50 max-w-4xl mx-auto bg-card border border-white/10 rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[calc(100vh-2rem)] flex flex-col"
+              className="fixed left-4 right-4 bottom-4 z-50 max-w-4xl mx-auto bg-card border border-white/10 rounded-2xl shadow-2xl p-0 overflow-hidden flex flex-col"
+              style={{
+                top: 'calc(var(--header-height) + 1rem)',
+                maxHeight: 'calc(100vh - var(--header-height) - 2rem)',
+              }}
             >
               {(() => {
                 const pool = getPool(selectedPoolId!);
