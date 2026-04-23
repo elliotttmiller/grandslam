@@ -45,8 +45,6 @@ const ai = new GoogleGenAI(
   {
     apiKey: resolvedApiKey || '',
     vertexai: true,
-    ...(vertexAIProject ? { project: vertexAIProject } : {}),
-    ...(vertexAILocation ? { location: vertexAILocation } : {}),
   }
 );
 
