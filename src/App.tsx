@@ -1481,7 +1481,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Main Content - View Router */}
-      <div className="fixed top-(--header-height) left-0 right-0 bottom-0 flex flex-col overflow-hidden">
+  <div className="fixed left-0 right-0 bottom-0 flex flex-col overflow-hidden" style={{ top: 'var(--header-height)' }}>
         {/* Back navigation strip — shown below the fixed header whenever there is history to go back to */}
         {canNavigateBack && (
           <div className="flex-none px-2 pt-2 pb-1">
