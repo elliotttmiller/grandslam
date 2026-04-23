@@ -50,10 +50,11 @@ if (!resolvedApiKey) {
 // Vertex AI endpoint (https://LOCATION-aiplatform.googleapis.com) and authenticated
 // via the provided Google Cloud API key. When false, the standard Gemini API endpoint
 // is used (https://generativelanguage.googleapis.com).
-const ai = new GoogleGenAI({
-  apiKey: resolvedApiKey || '',
-  ...(useVertexAI && { vertexai: true }),
-});
+const ai = new GoogleGenAI(
+  useVertexAI
+    ? { apiKey: resolvedApiKey || '', vertexai: true }
+    : { apiKey: resolvedApiKey || '' }
+);
 
 function formatLocalDateIso(date: Date): string {
   const year = date.getFullYear();
