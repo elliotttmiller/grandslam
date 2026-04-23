@@ -353,7 +353,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 h-full overflow-y-auto overflow-x-hidden">
+    <div className="flex flex-col flex-1 min-h-0 h-full overflow-x-hidden safe-bottom">
       {/* Header */}
       <div className="flex-none px-5 py-4 border-b border-border/25 bg-card/30">
         <div className="max-w-4xl mx-auto">
@@ -438,7 +438,7 @@ export function PoolLeaderboard({ pool, onNavigate, onPoolUpdate, authUser, onRe
         </div>
       </div>
 
-      <div className="flex-1 px-5 pt-5 pb-24">
+  <div className="flex-1 px-4 sm:px-5 pt-5 pb-24">
         <div className="max-w-4xl mx-auto flex flex-col gap-5">
 
           {/* Stats strip */}

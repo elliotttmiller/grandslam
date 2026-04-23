@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { authGetItem, authSetItem } from '@/lib/auth-storage';
 import { getMastersTournamentById } from '@/lib/masters-tournaments';
 import { getMadrid2026OfficialDrawSlots, getMadrid2026Seedings } from '@/lib/madrid-2026-data';
@@ -62,12 +62,28 @@ const MODEL = "gemini-2.5-flash";
 const MAX_MASTERS_SEEDS = 32;
 let aiAvailable = true;
 
+const inFlightRequests = new Map<string, Promise<unknown>>();
+
+function cachedInflight<T>(key: string, executor: () => Promise<T>): Promise<T> {
+  const existing = inFlightRequests.get(key);
+  if (existing) {
+    return existing as Promise<T>;
+  }
+  const promise = executor().finally(() => {
+    if (inFlightRequests.get(key) === promise) {
+      inFlightRequests.delete(key);
+    }
+  });
+  inFlightRequests.set(key, promise);
+  return promise;
+}
+
 function handleAiError(err: unknown) {
   try {
     const e = err as any;
     const msg = e?.message ?? '';
-    const code = e?.code ?? (e?.error?.code) ?? '';
-    if (String(code).includes('RESOURCE_EXHAUSTED') || /prepayment credits are depleted/i.test(msg)) {
+    const code = String(e?.code ?? e?.error?.code ?? '');
+    if (code === '429' || String(code).includes('RESOURCE_EXHAUSTED') || /prepayment credits are depleted/i.test(msg) || /quota/i.test(msg)) {
       aiAvailable = false;
       console.error('Vertex AI quota exhausted — disabling AI calls for this session.');
     }
@@ -274,11 +290,23 @@ const TOURNAMENT_LOGOS: Record<string, string> = {
 };
 
 export async function fetchTournamentsWithDates() {
-  // Check user-scoped cache first (short-lived so dates stay fresh).
-  const cached = readAuthCacheIfFresh<TournamentData[]>(CACHE_KEY_TOURNAMENTS, LIVE_DATA_CACHE_EXPIRY);
-  if (cached && cached.length > 0) {
-    return cached;
-  }
+  return cachedInflight('fetchTournamentsWithDates', async () => {
+    // Check user-scoped cache first (short-lived so dates stay fresh).
+    const cached = readAuthCacheIfFresh<TournamentData[]>(CACHE_KEY_TOURNAMENTS, LIVE_DATA_CACHE_EXPIRY);
+    if (cached && cached.length > 0) {
+      return cached;
+    }
+
+    if (!aiAvailable) {
+      const fallback: TournamentData[] = [
+        { id: 'ao', name: 'Australian Open', startDate: '2026-01-12', endDate: '2026-01-25', logo: TOURNAMENT_LOGOS['ao'] },
+        { id: 'rg', name: 'French Open', startDate: '2026-05-24', endDate: '2026-06-07', logo: TOURNAMENT_LOGOS['rg'] },
+        { id: 'wim', name: 'Wimbledon', startDate: '2026-06-29', endDate: '2026-07-12', logo: TOURNAMENT_LOGOS['wim'] },
+        { id: 'uso', name: 'US Open', startDate: '2026-08-31', endDate: '2026-09-13', logo: TOURNAMENT_LOGOS['uso'] },
+      ];
+      writeAuthCacheWithTimestamp(CACHE_KEY_TOURNAMENTS, fallback);
+      return fallback;
+    }
 
   const prompt = `Today is ${TODAY_STR}. Find the dates for the NEXT upcoming edition of the four Grand Slam tennis tournaments (Australian Open, French Open/Roland Garros, Wimbledon, US Open) relative to today. 
   Return a JSON array of exactly 4 objects with:
@@ -332,7 +360,6 @@ export async function fetchTournamentsWithDates() {
         config: {
           responseMimeType: "application/json",
           responseSchema: schema,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
         },
       });
       data = JSON.parse(response.text || "[]");
@@ -369,25 +396,33 @@ export async function fetchTournamentsWithDates() {
   }
 
   console.error("Vertex AI model failed to fetch tournaments with dates.");
+    writeAuthCacheWithTimestamp(CACHE_KEY_TOURNAMENTS, fallback);
   // Fallback to basic list if all AI tiers fail
   return fallback;
+  });
 }
 
 export async function fetchTournamentPlayers(tournamentName: string) {
   const cacheKey = `${CACHE_KEY_PLAYERS_PREFIX}${tournamentName.replace(/\s+/g, '_').toLowerCase()}`;
   
-  // Check cache first
-  const cached = localStorage.getItem(cacheKey);
-  if (cached) {
-    const { data, timestamp } = JSON.parse(cached);
-    if (Date.now() - timestamp < CACHE_EXPIRY) {
-      return data;
+  return cachedInflight(`fetchTournamentPlayers:${cacheKey}`, async () => {
+    // Check cache first
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_EXPIRY) {
+        return data;
+      }
     }
-  }
 
-  const prompt = `Today is ${TODAY_STR}. Search for the actual, real-time top 32 seeded players for the ${tournamentName} edition closest to today. 
-  If official seedings aren't published yet, generate a professional pre-tournament predicted bracket from current world rankings with surface-based adjustments.
-  Return the result strictly as a JSON array of exactly 32 objects, each with 'name' (string), 'seed' (number), and 'country' (string). Do not include any markdown formatting or extra text outside the JSON array.`;
+    if (!aiAvailable) {
+      localStorage.setItem(cacheKey, JSON.stringify({ data: FALLBACK_PLAYERS, timestamp: Date.now() }));
+      return FALLBACK_PLAYERS;
+    }
+
+    const prompt = `Today is ${TODAY_STR}. Search for the actual, real-time top 32 seeded players for the ${tournamentName} edition closest to today. 
+    If official seedings aren't published yet, generate a professional pre-tournament predicted bracket from current world rankings with surface-based adjustments.
+    Return the result strictly as a JSON array of exactly 32 objects, each with 'name' (string), 'seed' (number), and 'country' (string). Do not include any markdown formatting or extra text outside the JSON array.`;
 
   const schema = {
     type: Type.ARRAY,
@@ -431,7 +466,6 @@ export async function fetchTournamentPlayers(tournamentName: string) {
         config: {
           responseMimeType: "application/json",
           responseSchema: schema,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
         },
       });
       data = JSON.parse(response.text || "[]");
@@ -447,7 +481,9 @@ export async function fetchTournamentPlayers(tournamentName: string) {
   }
 
   console.warn("Vertex AI model failed to generate exactly 32 players. Using fallback player list.");
+  localStorage.setItem(cacheKey, JSON.stringify({ data: FALLBACK_PLAYERS, timestamp: Date.now() }));
   return FALLBACK_PLAYERS;
+  });
 }
 
 // Fallback top-32 ATP seeds (approximate current rankings, updated periodically)
@@ -716,6 +752,12 @@ export async function fetchMastersTournamentDetails(
     return hardcoded;
   }
 
+  if (!aiAvailable) {
+    const fallback = normalizeMastersDetails(null, tournamentId, tournamentName);
+    writeAuthCacheWithTimestamp(cacheKey, fallback);
+    return fallback;
+  }
+
   const daysToStart = staticTournament?.approxStart ? daysUntil(staticTournament.approxStart) : 999;
   const drawReleaseContext = buildDrawImminenceNote(staticTournament?.approxStart, daysToStart);
   const urlHints = buildTournamentUrlHints(tournamentId, currentYear);
@@ -792,7 +834,6 @@ Do not include any markdown formatting. Return only the JSON object.`;
         config: {
           responseMimeType: 'application/json',
           responseSchema: schema,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
         },
       });
       data = JSON.parse(response.text || 'null');
@@ -939,6 +980,17 @@ export async function fetchMastersOfficialDrawPlayers(
     }
   }
 
+  if (!aiAvailable) {
+    if (cachedOfficialSlots?.length === 64) {
+      return cachedOfficialSlots.map((p) => ({
+        name: p.name,
+        seed: p.seed,
+        country: p.country,
+      }));
+    }
+    return null;
+  }
+
   const approxStart = staticMeta?.approxStart;
   const daysToStart = approxStart ? daysUntil(approxStart) : 999;
   const parsedYear = approxStart && /^\d{4}-\d{2}-\d{2}$/.test(approxStart)
@@ -1033,7 +1085,6 @@ Output JSON object shape:
         config: {
           responseMimeType: 'application/json',
           responseSchema: schema,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
         },
       });
       data = JSON.parse(response.text || 'null');

@@ -1554,7 +1554,7 @@ export default function App() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 18 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
-                className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+                className="absolute inset-0 overflow-y-auto overflow-x-hidden safe-bottom"
               >
                 {poolSyncFailed && (
                   <p className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2.5 mx-4 mt-4">

@@ -1,7 +1,10 @@
 import os
 import pytest
 
-from .frontend_test_manager import FrontendTestManager
+try:
+    from .frontend_test_manager import FrontendTestManager
+except ImportError:
+    from frontend_test_manager import FrontendTestManager
 
 FRONTEND_URL = os.getenv('FRONTEND_TEST_URL', 'http://localhost:3000')
 
